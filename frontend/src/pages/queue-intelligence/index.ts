@@ -1,0 +1,1 @@
+export { QueueIntelligencePage } from "./QueueIntelligencePage";

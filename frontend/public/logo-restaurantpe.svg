@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 107 19" fill="none">
+  <path d="M4 2h6a7 7 0 0 1 7 7v1a7 7 0 0 1-7 7H4V2Z" fill="var(--primary, oklch(0.62 0.20 255))" />
+  <path d="M7 5.5h3a3.5 3.5 0 0 1 0 7H7v-7Z" fill="#fff" />
+  <text x="22" y="14" font-family="Montserrat, sans-serif" font-size="11" font-weight="600" fill="var(--black-85, oklch(0.35 0 0))" letter-spacing="0.5">RESTAURANT.PE</text>
+</svg>

@@ -1,0 +1,1 @@
+export { InfrastructureHealthPage } from "./InfrastructureHealthPage";

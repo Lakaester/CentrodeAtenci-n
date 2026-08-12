@@ -1,0 +1,21 @@
+// ============================================================
+//  Prisma - Conexión a PostgreSQL
+//  La plataforma consulta la vista public.v_unificado con SQL
+//  crudo (prisma.$queryRaw), por eso NO se modela la vista.
+//  El modelo "GenerateAnchor" de abajo es solo un ancla tecnica
+//  para que prisma generate no falle (Prisma exige al menos un
+//  modelo). NO se usa en ninguna consulta ni representa tabla real.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GenerateAnchor {
+  id Int @id
+}

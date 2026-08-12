@@ -1,0 +1,1 @@
+export { GlobalAlertCenterPage } from "./GlobalAlertCenterPage";

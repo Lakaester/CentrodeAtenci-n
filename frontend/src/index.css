@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* PRIMARY */
+  --primary: oklch(0.62 0.20 255);
+  --primary-85: oklch(0.66 0.18 255);
+  --primary-65: oklch(0.70 0.16 255);
+  --primary-45: oklch(0.76 0.13 255);
+  --primary-25: oklch(0.82 0.10 255);
+  --primary-10: oklch(0.90 0.06 255);
+  --primary-5: oklch(0.96 0.03 255);
+
+  /* SUCCESS */
+  --success: oklch(0.70 0.16 145);
+  --success-85: oklch(0.74 0.14 145);
+  --success-65: oklch(0.78 0.12 145);
+  --success-45: oklch(0.84 0.09 145);
+  --success-25: oklch(0.88 0.07 145);
+  --success-10: oklch(0.93 0.04 145);
+  --success-5: oklch(0.97 0.02 145);
+
+  /* WARNING */
+  --warning: oklch(0.72 0.18 50);
+  --warning-85: oklch(0.76 0.16 50);
+  --warning-65: oklch(0.80 0.14 50);
+  --warning-45: oklch(0.86 0.10 50);
+  --warning-25: oklch(0.90 0.08 50);
+  --warning-10: oklch(0.93 0.06 50);
+  --warning-5: oklch(0.96 0.04 50);
+
+  /* YELLOW */
+  --yellow: oklch(0.78 0.18 80);
+  --yellow-85: oklch(0.82 0.16 80);
+  --yellow-65: oklch(0.86 0.14 80);
+  --yellow-45: oklch(0.90 0.11 80);
+  --yellow-25: oklch(0.93 0.09 80);
+  --yellow-10: oklch(0.96 0.06 80);
+  --yellow-5: oklch(0.98 0.04 80);
+
+  /* DANGER */
+  --danger: oklch(0.63 0.22 25);
+  --danger-85: oklch(0.67 0.20 25);
+  --danger-65: oklch(0.72 0.18 25);
+  --danger-45: oklch(0.78 0.14 25);
+  --danger-25: oklch(0.84 0.10 25);
+  --danger-10: oklch(0.90 0.07 25);
+  --danger-5: oklch(0.96 0.04 25);
+
+  /* AQUA */
+  --aqua: oklch(0.75 0.16 170);
+  --aqua-85: oklch(0.78 0.14 170);
+  --aqua-65: oklch(0.82 0.12 170);
+  --aqua-45: oklch(0.88 0.09 170);
+  --aqua-25: oklch(0.92 0.07 170);
+  --aqua-10: oklch(0.95 0.05 170);
+  --aqua-5: oklch(0.98 0.03 170);
+
+  /* MAGENTA */
+  --magenta: oklch(0.65 0.25 350);
+  --magenta-85: oklch(0.69 0.23 350);
+  --magenta-65: oklch(0.73 0.20 350);
+  --magenta-45: oklch(0.80 0.16 350);
+  --magenta-25: oklch(0.86 0.12 350);
+  --magenta-10: oklch(0.92 0.08 350);
+  --magenta-5: oklch(0.96 0.05 350);
+
+  /* PURPLE */
+  --purple: oklch(0.65 0.22 280);
+  --purple-85: oklch(0.69 0.20 280);
+  --purple-65: oklch(0.73 0.18 280);
+  --purple-45: oklch(0.80 0.14 280);
+  --purple-25: oklch(0.86 0.10 280);
+  --purple-10: oklch(0.92 0.07 280);
+  --purple-5: oklch(0.96 0.04 280);
+
+  /* LIGHT */
+  --light: oklch(0.97 0.01 250);
+  --light-10: oklch(0.98 0.008 250);
+  --light-5: oklch(0.99 0.005 250);
+
+  /* DARK */
+  --dark: oklch(0.25 0 0);
+  --dark-45: oklch(0.45 0 0);
+  --dark-25: oklch(0.60 0 0);
+  --dark-10: oklch(0.75 0 0);
+
+  /* GREYS / BLACK */
+  --black: oklch(0.25 0 0);
+  --black-85: oklch(0.35 0 0);
+  --black-65: oklch(0.45 0 0);
+  --black-45: oklch(0.60 0 0);
+  --black-25: oklch(0.75 0 0);
+  --black-10: oklch(0.88 0 0);
+  --black-5: oklch(0.94 0 0);
+
+  --white: oklch(1 0 0);
+
+  --border: oklch(0.88 0 0);
+  --radius: 4px;
+  --ring: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--light);
+  color: var(--black-85);
+  font-family: 'Montserrat', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+[role="combobox"] {
+  background-color: var(--white) !important;
+  box-shadow: none !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: none !important;
+}

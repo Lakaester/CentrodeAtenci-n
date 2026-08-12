@@ -1,0 +1,16 @@
+import type { InternalNoteDTO } from "../dto/internalNote.dto";
+
+const n = Date.now();
+
+export const MOCK_NOTE_DTOS: InternalNoteDTO[] = [
+  { id: "N-001", ticketId: "Q-003", author: "María López",   authorRole: "Asesor",     content: "El cliente reportó que el enlace de pago no funciona. Se escaló a desarrollo.", createdAt: new Date(n - 5 * 60000).toISOString(),      visibility: "team",      category: "technical",     isPinned: true,  status: "activa" },
+  { id: "N-002", ticketId: "C-001", author: "Carlos Ruiz",    authorRole: "Asesor",     content: "Pendiente de confirmación del área de facturación antes de responder.", createdAt: new Date(n - 15 * 60000).toISOString(),     visibility: "team",      category: "follow-up",     isPinned: true,  status: "activa" },
+  { id: "N-003", ticketId: "Q-001", author: "Supervisor",     authorRole: "Supervisor", content: "Revisar SLA de este ticket. Tiene prioridad alta por cliente VIP.",      createdAt: new Date(n - 30 * 60000).toISOString(),     visibility: "supervisor", category: "internal",      isPinned: false, status: "activa" },
+  { id: "N-004", ticketId: "C-002", author: "Ana Martínez",   authorRole: "Asesor",     content: "Se contactó al cliente vía correo. Está esperando respuesta del área técnica.", createdAt: new Date(n - 60 * 60000).toISOString(),     visibility: "team",      category: "customer",      isPinned: false, status: "activa" },
+  { id: "N-005", ticketId: "S-001", author: "Jorge Castillo", authorRole: "Asesor",     content: "Investigación en curso: el error parece estar relacionado con la versión 2.4.0.", createdAt: new Date(n - 120 * 60000).toISOString(),    visibility: "team",      category: "investigation", isPinned: false, status: "activa" },
+  { id: "N-006", ticketId: "Q-004", author: "Sofía Vega",     authorRole: "Asesor",     content: "Se solicitó comprobante de pago. Cliente enviará documentación mañana.", createdAt: new Date(n - 180 * 60000).toISOString(),    visibility: "private",   category: "customer",      isPinned: false, status: "activa" },
+  { id: "N-007", ticketId: "C-003", author: "María López",    authorRole: "Asesor",     content: "Actualización: el departamento de billing confirmó el cargo correcto.",     createdAt: new Date(n - 240 * 60000).toISOString(),    visibility: "team",      category: "billing",       isPinned: false, status: "activa" },
+  { id: "N-008", ticketId: "GEN-01", author: "Diego Ramos",   authorRole: "Asesor",     content: "Recordatorio: la reunión semanal del equipo es mañana a las 10:00.",       createdAt: new Date(n - 360 * 60000).toISOString(),    visibility: "team",      category: "general",       isPinned: false, status: "activa" },
+  { id: "N-009", ticketId: "Q-002", author: "Carlos Ruiz",    authorRole: "Asesor",     content: "Cliente solicita cambio de plan. Se derivó al equipo de ventas.",          createdAt: new Date(n - 480 * 60000).toISOString(),    visibility: "team",      category: "follow-up",     isPinned: false, status: "archivada" },
+  { id: "N-010", ticketId: "Q-005", author: "Supervisor",     authorRole: "Supervisor", content: "Caso cerrado. Registrar en base de conocimiento la solución aplicada.",   createdAt: new Date(n - 600 * 60000).toISOString(),    visibility: "supervisor", category: "internal",      isPinned: false, status: "archivada" },
+];
