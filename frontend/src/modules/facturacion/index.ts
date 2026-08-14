@@ -1,0 +1,4 @@
+export { useIntervencionActiva, useHistorial, useHistorialCliente, useCrearIntervencion, usePausarIntervencion, useReanudarIntervencion, useFinalizarIntervencion, useActualizarIntervencion, useRegistrarActividad, useEstadosConfig, useSubcategoriasConfig, useCrearEstado, useCrearSubcategoria, useActualizarEstadoConfig, useActualizarSubcategoriaConfig, useFacturacionSource } from "./hooks/useFacturacion";
+export { facturacionService } from "./services/facturacionService";
+export type { CrearIntervencionInput, FinalizarInput, ConfigItem, FacturacionSourceStatus, FacturacionProveedor, FacturacionDominioPendiente, FacturacionAlerta, FacturacionDetalleCaso } from "./services/facturacionService";
+export type { IntervencionDetalle, IntervencionRow, PausaRow, ActividadRow, IntervencionStatus } from "./types";

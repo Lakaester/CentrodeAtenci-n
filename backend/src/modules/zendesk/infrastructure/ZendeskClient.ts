@@ -18,6 +18,17 @@ const zdTicketSchema = z.object({
   group_id: z.number().nullable().optional().default(null),
   tags: z.array(z.string()).optional().default([]),
   custom_fields: z.array(z.object({ id: z.number(), value: z.any() })).optional().default([]),
+  via: z.object({
+    channel: z.string().optional(),
+    source: z.object({
+      rel: z.string().nullable().optional(),
+      from: z.object({
+        ticket_id: z.number().nullable().optional(),
+        subject: z.string().optional(),
+      }).optional(),
+    }).optional(),
+  }).nullable().optional().default(null),
+  followup_ids: z.array(z.number()).optional().default([]),
 });
 
 const zdUserSchema = z.object({

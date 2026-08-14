@@ -714,7 +714,8 @@
     "empresa": null,
     "pais": null,
     "dominios": [
-      "restaurantezonni.restaurant.pe"
+      "restaurantezonni.restaurant.pe",
+      "taiko.restaurant.pe"
     ],
     "categorias": [],
     "subcategorias": [],
@@ -723,7 +724,7 @@
     "ultimoContacto": "2026-07-22T21:07:00.101Z",
     "ultimoTicket": null,
     "fechaCreacion": "2026-07-22T21:07:00.101Z",
-    "fechaActualizacion": "2026-07-22T21:07:00.110Z",
+    "fechaActualizacion": "2026-08-14T20:48:21.319Z",
     "activo": true
   },
   {
@@ -1014,7 +1015,9 @@
     "telefonos": [],
     "empresa": null,
     "pais": null,
-    "dominios": [],
+    "dominios": [
+      "polleriagallo.restaurant.pe"
+    ],
     "categorias": [],
     "subcategorias": [],
     "totalTickets": 0,
@@ -1022,7 +1025,7 @@
     "ultimoContacto": "2026-08-12T17:12:29.669Z",
     "ultimoTicket": null,
     "fechaCreacion": "2026-08-12T17:12:29.669Z",
-    "fechaActualizacion": "2026-08-12T17:12:29.669Z",
+    "fechaActualizacion": "2026-08-13T21:58:08.140Z",
     "activo": true
   },
   {
@@ -1052,7 +1055,9 @@
     "telefonos": [],
     "empresa": null,
     "pais": null,
-    "dominios": [],
+    "dominios": [
+      "cachinaaqp.quipupos.com"
+    ],
     "categorias": [],
     "subcategorias": [],
     "totalTickets": 0,
@@ -1060,7 +1065,7 @@
     "ultimoContacto": "2026-08-12T17:27:59.735Z",
     "ultimoTicket": null,
     "fechaCreacion": "2026-08-12T17:27:59.735Z",
-    "fechaActualizacion": "2026-08-12T17:27:59.735Z",
+    "fechaActualizacion": "2026-08-13T22:06:35.403Z",
     "activo": true
   },
   {
@@ -1071,7 +1076,9 @@
     "telefonos": [],
     "empresa": null,
     "pais": null,
-    "dominios": [],
+    "dominios": [
+      "desertcafebar.restaurant.pe"
+    ],
     "categorias": [],
     "subcategorias": [],
     "totalTickets": 0,
@@ -1079,7 +1086,7 @@
     "ultimoContacto": "2026-08-12T17:28:13.823Z",
     "ultimoTicket": null,
     "fechaCreacion": "2026-08-12T17:28:13.823Z",
-    "fechaActualizacion": "2026-08-12T17:28:13.823Z",
+    "fechaActualizacion": "2026-08-12T20:43:28.027Z",
     "activo": true
   },
   {
@@ -1122,6 +1129,149 @@
     "ultimoTicket": null,
     "fechaCreacion": "2026-08-12T17:29:07.866Z",
     "fechaActualizacion": "2026-08-12T17:29:07.868Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786567357116_7bzj",
+    "nombre": "Operaciones Lucida",
+    "correoPrincipal": "operaciones@lucida.one",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-12T20:42:37.116Z",
+    "ultimoContacto": "2026-08-12T20:42:37.116Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-12T20:42:37.116Z",
+    "fechaActualizacion": "2026-08-12T20:42:37.116Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786567363608_sqhr",
+    "nombre": "Gabriel Salinas",
+    "correoPrincipal": "gaensama@hotmail.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "elbalcondelmarisco.restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-12T20:42:43.608Z",
+    "ultimoContacto": "2026-08-12T20:42:43.608Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-12T20:42:43.608Z",
+    "fechaActualizacion": "2026-08-13T17:59:32.467Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786657762856_efv6",
+    "nombre": "Aseibert",
+    "correoPrincipal": "aseibert@grandplay.gt",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "grandplay.restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-13T21:49:22.856Z",
+    "ultimoContacto": "2026-08-13T21:49:22.856Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-13T21:49:22.856Z",
+    "fechaActualizacion": "2026-08-13T21:49:22.860Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786720061518_3ra0",
+    "nombre": "Contabilidad4",
+    "correoPrincipal": "contabilidad4@xipetexmex.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-14T15:07:41.518Z",
+    "ultimoContacto": "2026-08-14T15:07:41.518Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-14T15:07:41.518Z",
+    "fechaActualizacion": "2026-08-14T15:07:41.518Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786740514465_ba4s",
+    "nombre": "Bonanza Food",
+    "correoPrincipal": "bonanza.foodsac@gmail.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "bonanzaculinary.restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-14T20:48:34.465Z",
+    "ultimoContacto": "2026-08-14T20:48:34.465Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-14T20:48:34.465Z",
+    "fechaActualizacion": "2026-08-14T20:48:34.467Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786740545459_nw32",
+    "nombre": "Alejandra Vasquez",
+    "correoPrincipal": "administracion1@elpandelachola.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "pandelachola,restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-14T20:49:05.459Z",
+    "ultimoContacto": "2026-08-14T20:49:05.459Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-14T20:49:05.459Z",
+    "fechaActualizacion": "2026-08-14T20:49:05.461Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1786740547922_d45g",
+    "nombre": "Vmoncada",
+    "correoPrincipal": "vmoncada@grancarbon.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "grancarbon.quipupos.com"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-08-14T20:49:07.922Z",
+    "ultimoContacto": "2026-08-14T20:49:07.922Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-08-14T20:49:07.922Z",
+    "fechaActualizacion": "2026-08-14T20:49:07.923Z",
     "activo": true
   }
 ]

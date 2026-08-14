@@ -184,11 +184,12 @@
   {
     "email": "soporte@lucida.cr",
     "dominios": [
-      "restaurantezonni.restaurant.pe"
+      "restaurantezonni.restaurant.pe",
+      "taiko.restaurant.pe"
     ],
     "primerContacto": "2026-07-22T21:07:00.113Z",
-    "ultimoContacto": "2026-07-22T21:10:20.813Z",
-    "totalTickets": 3
+    "ultimoContacto": "2026-08-14T20:48:21.326Z",
+    "totalTickets": 4
   },
   {
     "email": "nachopps.fresh@gmail.com",
@@ -269,6 +270,78 @@
     ],
     "primerContacto": "2026-08-12T17:29:07.870Z",
     "ultimoContacto": "2026-08-12T17:29:07.870Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "desertnasca@gmail.com",
+    "dominios": [
+      "desertcafebar.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-12T20:43:28.034Z",
+    "ultimoContacto": "2026-08-12T20:44:05.366Z",
+    "totalTickets": 3
+  },
+  {
+    "email": "gaensama@hotmail.com",
+    "dominios": [
+      "elbalcondelmarisco.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-13T17:59:32.474Z",
+    "ultimoContacto": "2026-08-13T17:59:32.474Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "aseibert@grandplay.gt",
+    "dominios": [
+      "grandplay.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-13T21:49:22.864Z",
+    "ultimoContacto": "2026-08-13T22:00:35.763Z",
+    "totalTickets": 7
+  },
+  {
+    "email": "logistica@gallo.pe",
+    "dominios": [
+      "polleriagallo.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-13T21:58:08.144Z",
+    "ultimoContacto": "2026-08-13T21:58:08.144Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "asesor10@asesorescontablesaym.com",
+    "dominios": [
+      "cachinaaqp.quipupos.com"
+    ],
+    "primerContacto": "2026-08-13T22:06:35.408Z",
+    "ultimoContacto": "2026-08-13T22:51:54.599Z",
+    "totalTickets": 14
+  },
+  {
+    "email": "bonanza.foodsac@gmail.com",
+    "dominios": [
+      "bonanzaculinary.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-14T20:48:34.469Z",
+    "ultimoContacto": "2026-08-14T20:48:34.469Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "administracion1@elpandelachola.com",
+    "dominios": [
+      "pandelachola,restaurant.pe"
+    ],
+    "primerContacto": "2026-08-14T20:49:05.462Z",
+    "ultimoContacto": "2026-08-14T20:49:05.462Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "vmoncada@grancarbon.com",
+    "dominios": [
+      "grancarbon.quipupos.com"
+    ],
+    "primerContacto": "2026-08-14T20:49:07.925Z",
+    "ultimoContacto": "2026-08-14T20:49:07.925Z",
     "totalTickets": 1
   }
 ]

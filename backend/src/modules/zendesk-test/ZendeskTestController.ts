@@ -141,7 +141,11 @@ export const zendeskTestController = {
       if (email && subcategoria) {
         CustomerMemory.registrarCategoria(email, categoria, subcategoria);
       }
-      res.json({ ok: true, data: result });
+
+      // Integración Quejas y Devoluciones: si la categoría es QUEJA o DEVOLUCIÓN,
+      // crear o reutilizar el caso (sin duplicados por ticket+tipo ni por hilo follow_up).
+      const casoCreado = await crearCasoDesdeCategoria(req, String(id), categoria, subcategoria, autor);
+      res.json({ ok: true, data: { ...result, caso: casoCreado?.caso ?? null, casoReutilizado: casoCreado?.reutilizado ?? false } });
     } catch (err) { next(err); }
   },
 
@@ -299,3 +303,69 @@ export const zendeskTestController = {
     } catch (err) { next(err); }
   },
 };
+
+/** Crea (o reutiliza) un caso de Quejas y Devoluciones cuando la categoría del ticket es QUEJA o DEVOLUCIÓN. */
+async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria: string, subcategoria: string, autor: string) {
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const cat = norm(categoria);
+  const sub = norm(subcategoria);
+
+  if (cat !== "queja" && cat !== "devolucion" && cat !== "gestion") return null;
+  if (cat === "gestion" && !(sub.includes("queja") || sub.includes("devolucion"))) return null;
+
+  const tipo = (cat === "queja" || sub.includes("queja")) ? "queja" : "devolucion";
+
+  // Derivar clasificación de queja desde la subcategoría cuando sea posible.
+  let clasificacion = null;
+  if (tipo === "queja") {
+    if (sub.includes("servicio")) clasificacion = "Servicio";
+    else if (sub.includes("producto")) clasificacion = "Producto";
+    else if (sub.includes("otro")) clasificacion = "Otro";
+  }
+
+  // Identificador relacional del hilo: consultamos el ticket real en Zendesk
+  // para obtener via.source.from.ticket_id (rel === "follow_up") y el dominio
+  // del ticket (custom field), fuente confiable para el caso Q/D.
+  let ticketPadreId: string | null = null;
+  let dominioTicket: string | null = null;
+  let paisTicket: string | null = null;
+  const numId = Number(ticketId);
+  if (!isNaN(numId)) {
+    try {
+      const detalle = await ticketService.obtenerTicket(numId);
+      ticketPadreId = detalle?.ticketPadreId ?? null;
+      dominioTicket = detalle?.dominio ?? null;
+      paisTicket = detalle?.pais ?? null;
+    } catch {
+      // Si no se puede consultar, continuar sin ticket padre.
+    }
+  }
+
+  const { qdService } = await import("../../services/quejasDevoluciones.service");
+  try {
+    // El dominio se toma del ticket real; solo si el cliente lo envía explícito
+    // en el body se prefiere ese valor (ambos son válidos si no están vacíos).
+    const dominio = (req.body as any)?.dominio?.trim() ? String((req.body as any).dominio).trim() : dominioTicket;
+    const resultado = await qdService.crearDesdeCategorizacion({
+      ticketId,
+      ticketPadreId,
+      tipo,
+      asesor: autor,
+      dominio,
+      pais: (req.body as any)?.pais ?? paisTicket,
+      estado: "Pendiente de conciliación",
+      ...(clasificacion ? { clasificacion } : {}),
+    }, autor);
+    return resultado;
+  } catch (err: any) {
+    // Si ya existe un caso para este ticket+tipo, no fallar la categorización.
+    if (err?.code === "CASO_DUPLICADO") return null;
+    // Sin dominio identificado: no crear caso incompleto; registrar el pendiente.
+    if (err?.code === "DOMINIO_REQUERIDO") {
+      console.warn(`[QD] Caso pendiente por falta de dominio del ticket #${ticketId}`);
+      return null;
+    }
+    console.error(`[QD] No se pudo crear caso desde categorización: ${err?.message}`);
+    return null;
+  }
+}

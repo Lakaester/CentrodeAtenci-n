@@ -1,10 +1,12 @@
 import { useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { ConversationPanel } from "./ConversationPanel";
 import { ConversationSkeleton } from "./ConversationSkeleton";
 import { ReplyEditor } from "@/components/editor";
 import { api } from "@/lib/api";
+import { QdTicketIndicator } from "@/modules/quejas-devoluciones/components/QdTicketIndicator";
 
 function htmlToText(html: string): string {
   const d = document.createElement("div");
@@ -88,6 +90,7 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
   const [sending, setSending] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [casoReutilizado, setCasoReutilizado] = useState<{ numero: string; tipo: string; id: string } | null>(null);
   const [attachFiles, setAttachFiles] = useState<{ name: string; base64: string; contentType: string }[]>([]);
   const [dragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +104,15 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
       const result = res.data as any;
       if (result?.data?.nuevoEstado && ticket) {
         ticket.ticketOriginalStatus = result.data.nuevoEstado;
+      }
+      // Si la categorización detectó un caso Q/D existente (hilo relacionado),
+      // informar al asesor sin interrumpir la atención.
+      if (endpoint === "categorize" && result?.data?.casoReutilizado && result?.data?.caso) {
+        setCasoReutilizado({
+          numero: result.data.caso.numero,
+          tipo: result.data.caso.tipo,
+          id: result.data.caso.id,
+        });
       }
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -216,13 +228,28 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
           <Badge variant={eVariant}>{eLabel}</Badge>
           <Badge variant={p.variant}>{p.label}</Badge>
           <Badge variant="correo">Correo</Badge>
-          <span className="ml-auto font-mono text-[9px] text-black-45">#{ticket.ticketOriginalId}</span>
+          <span className="ml-auto flex items-center gap-1.5">
+            <QdTicketIndicator ticketId={ticket.ticketOriginalId} />
+            <span className="font-mono text-[9px] text-black-45">#{ticket.ticketOriginalId}</span>
+          </span>
         </div>
         <h2 className="mt-1 text-[13px] font-semibold text-black-85 leading-snug">{ticket.asunto}</h2>
         <div className="mt-1 flex items-center gap-2 text-[10px] text-black-45">
           <span className="font-medium text-black-85">{ticket.clienteNombre}</span>
           {ticket.clienteEmail && <span className="text-black-25">· {ticket.clienteEmail}</span>}
         </div>
+        {casoReutilizado && (
+          <div className="mt-2 flex items-center gap-2 rounded bg-primary-5 px-2 py-1.5 text-[10px] text-primary">
+            <span>
+              Esta atención está relacionada con {casoReutilizado.tipo === "queja" ? "la queja" : "la devolución"}{" "}
+              <strong>{casoReutilizado.numero}</strong>.
+            </span>
+            <Link to="/quejas-devoluciones" className="ml-auto shrink-0 font-medium text-primary underline hover:text-primary-85">
+              Ver caso
+            </Link>
+            <button type="button" onClick={() => setCasoReutilizado(null)} className="shrink-0 text-black-45 hover:text-black-65" title="Descartar">x</button>
+          </div>
+        )}
       </div>
 
       <ConversationPanel comentarios={comentarios} loading={loading} />

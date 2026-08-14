@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { User, Globe, BarChart3, Target, Wrench, BookOpen, Activity, CheckSquare, Plus, Layers } from "lucide-react";
+import { User, Globe, BarChart3, Target, Wrench, BookOpen, Activity, CheckSquare, Plus, Layers, Stethoscope } from "lucide-react";
 import { categoriaDesdeSubcategoria } from "./CategoryData";
 import type { CustomerInfo, TicketDetail } from "@/hooks/useTicketDetail";
 import { useCustomerHistory } from "@/hooks/useCustomerHistory";
 import { api } from "@/lib/api";
+import { HistoriaClientePanel } from "./HistoriaClientePanel";
 
 interface Props {
   customer: CustomerInfo | null;
@@ -70,6 +71,14 @@ export function PanelOperativo({ customer, ticket, clienteCope, onOpenTicket }: 
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-y-auto">
+      <div className="border-b border-black-10">
+        <button type="button" className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-medium text-black-45 hover:bg-light">
+          <span className="text-primary"><Stethoscope size={11} /></span>
+          <span className="uppercase tracking-wider">Historia del Cliente</span>
+        </button>
+        <HistoriaClientePanel />
+      </div>
+
       <Modulo titulo="Informacion del cliente" icon={<User size={11} />} defaultOpen>
         <Info label="Nombre">{clienteCope?.nombre ?? customer?.nombre ?? <ND />}</Info>
         <Info label="Correo ppal.">{clienteCope?.correoPrincipal || customer?.correo || <ND />}</Info>

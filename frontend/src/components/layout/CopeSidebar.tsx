@@ -1,19 +1,23 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Users, BarChart3, BookOpen, Settings, LogOut, X, type LucideIcon } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Inbox, ReceiptText, Users, BarChart3, BookOpen, Settings, LogOut, X, RefreshCcw, type LucideIcon } from "lucide-react";
+import { useAuth, authService } from "@/modules/auth";
 
 interface SidebarItem {
   path: string;
   label: string;
   icon: LucideIcon;
+  modulo: string;
 }
 
 const ITEMS: SidebarItem[] = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/atenciones", label: "Atenciones", icon: Inbox },
-  { path: "/clientes", label: "Clientes", icon: Users },
-  { path: "/reportes", label: "Reportes", icon: BarChart3 },
-  { path: "/admin/guias", label: "Conocimiento", icon: BookOpen },
-  { path: "/configuracion", label: "Configuracion", icon: Settings },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, modulo: "Dashboard" },
+  { path: "/atenciones", label: "Atenciones", icon: Inbox, modulo: "Atenciones" },
+  { path: "/control-facturacion", label: "Control de Facturación", icon: ReceiptText, modulo: "Control de Facturación" },
+  { path: "/quejas-devoluciones", label: "Quejas y Dev.", icon: RefreshCcw, modulo: "Quejas y Devoluciones" },
+  { path: "/clientes", label: "Clientes", icon: Users, modulo: "Clientes" },
+  { path: "/reportes", label: "Reportes", icon: BarChart3, modulo: "Reportes" },
+  { path: "/admin/guias", label: "Conocimiento", icon: BookOpen, modulo: "Conocimiento" },
+  { path: "/configuracion", label: "Configuración", icon: Settings, modulo: "Configuración" },
 ];
 
 interface Props {
@@ -23,6 +27,17 @@ interface Props {
 
 export function CopeSidebar({ mobileOpen, onClose }: Props) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  // Comportamiento visual: solo mostrar módulos con permiso. La seguridad real la aplica el backend.
+  const visibles = ITEMS.filter((item) => authService.moduloVisible(user, item.modulo));
+
+  const cerrarSesion = async () => {
+    onClose();
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <aside
@@ -43,9 +58,15 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
         </button>
       </div>
 
+      {/* Logo (escritorio) */}
+      <div className="hidden lg:flex flex-col items-center justify-center border-b border-black-5 py-3 px-1 shrink-0">
+        <img src="/logos/restaurantpe-logo-2024-02.png" alt="Restaurant.pe" className="h-[16px] w-auto" />
+        <span className="mt-1 text-[9px] font-bold text-primary uppercase tracking-widest">COPE</span>
+      </div>
+
       {/* Navigation */}
       <nav className="flex-1 flex flex-col">
-        {ITEMS.map((item) => {
+        {visibles.map((item) => {
           const active = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
           return (
             <div key={item.path}>
@@ -72,7 +93,7 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
       {/* Logout */}
       <div className="border-t border-black-5 shrink-0">
         <button
-          onClick={() => console.log("Logout")}
+          onClick={cerrarSesion}
           className="flex flex-col items-center gap-1 w-full py-3 px-1 text-black-45 hover:bg-danger-5 hover:text-danger transition-colors text-center"
         >
           <LogOut className="h-5 w-5" />

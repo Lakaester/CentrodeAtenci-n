@@ -26,6 +26,18 @@ export class ZendeskTicketService {
       }
     }
 
+    // Identificador relacional de hilo: via.source.rel === "follow_up" indica
+    // que este ticket responde a un ticket previo (via.source.from.ticket_id).
+    const esFollowUp = ticket.via?.source?.rel === "follow_up";
+    const ticketPadreId = esFollowUp ? ticket.via?.source?.from?.ticket_id : null;
+
+    // Dominio y país desde custom fields (mismos ids que AtencionCompletaService).
+    const cfMap = new Map((ticket.custom_fields ?? []).map((cf: any) => [cf.id, cf.value]));
+    const dominioVal = cfMap.get(40769061038615);
+    const paisVal = cfMap.get(1500005211481);
+    const dominio = dominioVal && String(dominioVal).trim() ? String(dominioVal).trim() : null;
+    const pais = paisVal && String(paisVal).trim() ? String(paisVal).trim() : null;
+
     return {
       id: String(ticket.id),
       ticketOriginalId: String(ticket.id),
@@ -40,6 +52,10 @@ export class ZendeskTicketService {
       createdAt: ticket.created_at,
       updatedAt: ticket.updated_at,
       tags: ticket.tags,
+      esFollowUp,
+      ticketPadreId: ticketPadreId != null ? String(ticketPadreId) : null,
+      dominio,
+      pais,
       url: `https://${process.env.ZENDESK_SUBDOMAIN}.zendesk.com/agent/tickets/${ticket.id}`,
     };
   }

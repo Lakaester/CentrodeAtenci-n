@@ -85,6 +85,14 @@ export const CATEGORY_HIERARCHY: Record<string, SubcatEntry[]> = {
     { label: "Duplicado o spam", value: "duplicado_o_spam" },
     { label: "No contestó", value: "no_contestó" },
   ],
+  "QUEJA": [
+    { label: "Servicio", value: "queja_servicio" },
+    { label: "Producto", value: "queja_producto" },
+    { label: "Otro", value: "queja_otro" },
+  ],
+  "DEVOLUCIÓN": [
+    { label: "Solicitud de devolución", value: "solicitud_de_devolución" },
+  ],
 };
 
 /** Map display name → Zendesk internal value */
