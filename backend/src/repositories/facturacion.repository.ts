@@ -13,6 +13,7 @@ export interface CrearIntervencionInput {
   boletasPendientes?: number | null;
   subcategoriaId?: string | null;
   estadoId?: string | null;
+  casoId?: string | null;
 }
 
 export interface FinalizarInput {
@@ -30,12 +31,12 @@ export const facturacionRepository = {
     const rows = await prisma.$queryRaw<IntervencionRow[]>`
       INSERT INTO facturacion_intervenciones
         (id, asesor, unidad_negocio_id, cliente_nombre, ruc, dominio, proveedor,
-         facturas_pendientes, boletas_pendientes, subcategoria_id, estado_id, status)
+         facturas_pendientes, boletas_pendientes, subcategoria_id, estado_id, status, caso_id)
       VALUES
         (${id}, ${input.asesor}, ${input.unidadNegocioId ?? null}, ${input.clienteNombre ?? null},
          ${input.ruc ?? null}, ${input.dominio}, ${input.proveedor ?? null},
          ${input.facturasPendientes ?? null}, ${input.boletasPendientes ?? null},
-         ${input.subcategoriaId ?? null}, ${input.estadoId ?? null}, 'EN_DIAGNOSTICO')
+         ${input.subcategoriaId ?? null}, ${input.estadoId ?? null}, 'EN_DIAGNOSTICO', ${input.casoId ?? null})
       RETURNING *
     `;
     return rows[0];

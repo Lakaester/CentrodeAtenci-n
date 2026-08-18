@@ -79,3 +79,35 @@ export function fmtFecha(v: string | null | undefined): string {
 export function fmtNps(v: number | null | undefined): string {
   return v != null ? String(v) : "—";
 }
+
+/** Normaliza un dominio para comparación (lowercase, trim, sin protocolo, sin trailing slash). */
+export function normalizarDominio(d: string | null | undefined): string {
+  if (!d) return "";
+  return d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+}
+
+/**
+ * Nombre del local con fallback EXPLÍCITO: si no hay nombre, usa
+ * `nombreFallback` (p. ej. de incidencias) si existe, y si no el subdominio
+ * derivado, marcado visualmente. NO inventa nombres.
+ */
+export function nombreLocal(l: { nombre?: string | null; link_dominio?: string | null; dominio?: string }, nombreFallback?: string | null): React.ReactNode {
+  if (l.nombre && String(l.nombre).trim()) return String(l.nombre);
+  if (nombreFallback && String(nombreFallback).trim()) {
+    return (
+      <span className="text-black-85">
+        {String(nombreFallback)}
+        <span className="ml-0.5 text-[8px] italic text-black-25">(incidencias)</span>
+      </span>
+    );
+  }
+  const dom = normalizarDominio(l.link_dominio || l.dominio);
+  if (!dom) return <ND />;
+  const sub = dom.split(".")[0] || dom;
+  return (
+    <span className="text-black-65">
+      {sub}
+      <span className="ml-0.5 text-[8px] italic text-black-25">(del dominio)</span>
+    </span>
+  );
+}

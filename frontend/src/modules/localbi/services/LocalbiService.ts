@@ -2,6 +2,8 @@ import { api } from "@/lib/api";
 import type {
   LocalbiHistoriaClinica,
   LocalbiBusquedaSalida,
+  ActividadDominio,
+  SoporteOnlineResult,
 } from "../types/localbi";
 
 export type LocalbiApiResult<T> =
@@ -33,5 +35,17 @@ export const localbiService = {
   async obtenerHistoria(unidadNegocio: string): Promise<LocalbiApiResult<LocalbiHistoriaClinica>> {
     const res = await api.get(`/localbi/historia/${encodeURIComponent(unidadNegocio)}`);
     return toResult<LocalbiHistoriaClinica>(res);
+  },
+
+  /** Actividad real de COPE (v_unificado_norm) por dominios. */
+  async actividad(dominios: string[]): Promise<ActividadDominio[]> {
+    const res = await api.get("/localbi/actividad", { params: { dominios: dominios.join(",") } });
+    return res.data.data ?? [];
+  },
+
+  /** Soporte en Línea (public.incidencias) por dominios y período. */
+  async soporte(dominios: string[], periodo?: string): Promise<SoporteOnlineResult> {
+    const res = await api.get("/localbi/soporte", { params: { dominios: dominios.join(","), periodo: periodo ?? undefined } });
+    return res.data.data ?? { porDominio: [], nombreLocalPorDominio: {}, totalIncidencias: 0 };
   },
 };

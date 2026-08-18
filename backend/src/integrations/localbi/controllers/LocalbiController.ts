@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { LocalbiService } from "../services/LocalbiService";
+import { actividadCopeService } from "../services/ActividadCopeService";
+import { soporteOnlineService } from "../services/SoporteOnlineService";
 
 const service = new LocalbiService();
 
@@ -74,5 +76,38 @@ export const localbiController = {
     } catch (err) {
       next(err);
     }
+  },
+
+  /** GET /actividad?dominios=a,b,c — actividad real de COPE (v_unificado_norm) por dominios. */
+  async actividad(req: Request, res: Response, next: NextFunction) {
+    try {
+      const raw = req.query.dominios as string | undefined;
+      const dominios = (raw ?? "").split(",").map((d) => d.trim()).filter(Boolean);
+      if (dominios.length === 0) {
+        return res.status(400).json({ ok: false, error: "dominios requerido (lista separada por comas)" });
+      }
+      if (dominios.length > 100) {
+        return res.status(400).json({ ok: false, error: "demasiados dominios (máx 100)" });
+      }
+      const data = await actividadCopeService.obtenerActividadPorDominios(dominios, 30);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  /** GET /soporte?dominios=a,b,c&periodo=30 — Soporte en Línea (public.incidencias) por dominios. */
+  async soporte(req: Request, res: Response, next: NextFunction) {
+    try {
+      const raw = req.query.dominios as string | undefined;
+      const dominios = (raw ?? "").split(",").map((d) => d.trim()).filter(Boolean);
+      if (dominios.length === 0) {
+        return res.status(400).json({ ok: false, error: "dominios requerido (lista separada por comas)" });
+      }
+      if (dominios.length > 100) {
+        return res.status(400).json({ ok: false, error: "demasiados dominios (máx 100)" });
+      }
+      const periodo = (req.query.periodo as string | undefined) || undefined;
+      const data = await soporteOnlineService.obtenerSoporteOnline(dominios, periodo);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
   },
 };

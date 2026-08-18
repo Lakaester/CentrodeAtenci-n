@@ -13,7 +13,7 @@ const envSchema = z.object({
   BACKEND_PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL es obligatorio"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
-  LOCALBI_BASE_URL: z.string().default("https://restaurantpe.restaurant.pe/restaurant"),
+  LOCALBI_BASE_URL: z.string().default("https://microservices.restaurant.pe/backendrestaurantpe"),
   LOCALBI_MODE: z.enum(["public", "private"]).default("private"),
   LOCALBI_TOKEN: z.string().default(""),
   BOOTSTRAP_ADMIN_EMAIL: z.string().optional(),

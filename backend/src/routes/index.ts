@@ -10,6 +10,7 @@ import { herramientaRouter } from "./herramienta.routes";
 import { zendeskTestRouter } from "../modules/zendesk-test/ZendeskTestRoutes";
 import { printerRouter } from "../integrations/printer/routes/printer.routes";
 import { localbiRouter } from "../integrations/localbi/routes/localbi.routes";
+import { tareabiRouter } from "../integrations/tareabi/routes/tareabi.routes";
 import { facturacionRouter } from "./facturacion.routes";
 import { facturacionConfigRouter } from "./facturacion.config.routes";
 import { adminConfigRouter } from "./admin.config.routes";
@@ -50,6 +51,7 @@ apiRouter.use("/zendesk", zendeskTestRouter);
 apiRouter.use("/printer", printerRouter);
 // Rutas sensibles protegidas: requieren sesión autenticada.
 apiRouter.use("/localbi", requireAuth, localbiRouter);
+apiRouter.use("/tareabi", requireAuth, tareabiRouter);
 apiRouter.use("/control-facturacion", requireAuth, facturacionRouter);
 apiRouter.use("/control-facturacion/config", requireAuth, facturacionConfigRouter);
 apiRouter.use("/config", requireAuth, requirePermission("Configuracion", "administrar"), adminConfigRouter);

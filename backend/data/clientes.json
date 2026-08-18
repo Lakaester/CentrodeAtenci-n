@@ -278,8 +278,8 @@
       "desertcafebar.restaurant.pe"
     ],
     "primerContacto": "2026-08-12T20:43:28.034Z",
-    "ultimoContacto": "2026-08-12T20:44:05.366Z",
-    "totalTickets": 3
+    "ultimoContacto": "2026-08-17T16:19:51.091Z",
+    "totalTickets": 4
   },
   {
     "email": "gaensama@hotmail.com",
@@ -342,6 +342,42 @@
     ],
     "primerContacto": "2026-08-14T20:49:07.925Z",
     "ultimoContacto": "2026-08-14T20:49:07.925Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "creperasanmiguel@gmail.com",
+    "dominios": [
+      "lacreperashakescoffee.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-17T22:28:49.222Z",
+    "ultimoContacto": "2026-08-17T22:29:11.140Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "jbahamonde@grupofusen.pe",
+    "dominios": [
+      "barrassanramon.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T13:07:44.424Z",
+    "ultimoContacto": "2026-08-18T16:12:50.345Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "r.vicente@adv.com.pe",
+    "dominios": [
+      "lalena.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T13:22:27.549Z",
+    "ultimoContacto": "2026-08-18T13:27:17.748Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "borgorossopizzeria@gmail.com",
+    "dominios": [
+      "borgorossosac.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T14:50:44.859Z",
+    "ultimoContacto": "2026-08-18T14:50:44.859Z",
     "totalTickets": 1
   }
 ]

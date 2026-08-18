@@ -1,5 +1,18 @@
 import { api } from "@/lib/api";
-import type { IntervencionDetalle } from "../types";
+import type { IntervencionDetalle, FacturacionCaso, CasoDetalle, CasoSnapshot, CategoriaItem, SubcategoriaItem } from "../types";
+
+export interface FiltrosCasos {
+  desde?: string;
+  hasta?: string;
+  asesor?: string;
+  proveedor?: string;
+  dominio?: string;
+  ruc?: string;
+  estado?: string;
+  categoria?: string;
+  subcategoria?: string;
+  resultado?: string;
+}
 
 export interface ConfigItem {
   id: string;
@@ -164,5 +177,70 @@ export const facturacionService = {
   async sourceStatus(): Promise<FacturacionSourceStatus> {
     const res = await api.get("/control-facturacion/source/status");
     return res.data;
+  },
+
+  // ── Casos operativos ──
+
+  async listarCasos(filtros: FiltrosCasos = {}, limite = 200): Promise<FacturacionCaso[]> {
+    const res = await api.get("/control-facturacion/casos", { params: { ...filtros, limite } });
+    return res.data.data ?? [];
+  },
+
+  async detalleCaso(id: string): Promise<CasoDetalle> {
+    const res = await api.get(`/control-facturacion/casos/${id}`);
+    return res.data.data;
+  },
+
+  async casoPorDominio(dominio: string): Promise<CasoDetalle> {
+    const res = await api.get("/control-facturacion/casos/por-dominio", { params: { dominio } });
+    return res.data.data;
+  },
+
+  async snapshotsCaso(id: string): Promise<CasoSnapshot[]> {
+    const res = await api.get(`/control-facturacion/casos/${id}/snapshots`);
+    return res.data.data ?? [];
+  },
+
+  async asignarCaso(id: string, asesor: string): Promise<FacturacionCaso> {
+    const res = await api.post(`/control-facturacion/casos/${id}/asignar`, { asesor });
+    return res.data.data;
+  },
+
+  async cambiarEstadoCaso(id: string, estado: string): Promise<FacturacionCaso> {
+    const res = await api.post(`/control-facturacion/casos/${id}/estado`, { estado });
+    return res.data.data;
+  },
+
+  async categorizarCaso(id: string, categoriaId: string | null, subcategoriaId: string | null): Promise<FacturacionCaso> {
+    const res = await api.patch(`/control-facturacion/casos/${id}/categoria`, { categoriaId, subcategoriaId });
+    return res.data.data;
+  },
+
+  async registrarSnapshotCaso(id: string, input: { facturas?: number | null; boletas?: number | null; total?: number | null; origen?: string }): Promise<{ snapshot: CasoSnapshot; estadoOperativo: string }> {
+    const res = await api.post(`/control-facturacion/casos/${id}/snapshots`, input);
+    return res.data.data;
+  },
+
+  async categorias(): Promise<CategoriaItem[]> {
+    const res = await api.get("/control-facturacion/casos/categorias");
+    return res.data.data ?? [];
+  },
+
+  async subcategoriasDeCategoria(categoriaId: string): Promise<SubcategoriaItem[]> {
+    const res = await api.get(`/control-facturacion/casos/categorias/${categoriaId}/subcategorias`);
+    return res.data.data ?? [];
+  },
+
+  async exportarCasos(filtros: FiltrosCasos = {}): Promise<{ blob: Blob; nombre: string; total: number }> {
+    const params = new URLSearchParams();
+    Object.entries(filtros).forEach(([k, v]) => {
+      if (v != null && v !== "") params.set(k, String(v));
+    });
+    const res = await api.get(`/control-facturacion/exportar?${params.toString()}`, { responseType: "blob" });
+    const disposicion = String(res.headers?.["content-disposition"] ?? "");
+    const m = disposicion.match(/filename="?([^";]+)"?/i);
+    const nombre = m?.[1] ?? "ControlFacturacion.xlsx";
+    const total = Number(res.headers?.["x-export-total"] ?? 0);
+    return { blob: res.data as Blob, nombre, total };
   },
 };

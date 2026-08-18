@@ -3,15 +3,19 @@ import { Users, Search, X } from "lucide-react";
 import { useLocalbiSearch } from "@/modules/localbi";
 import { HistoriaClinicaView } from "@/modules/localbi/components/HistoriaClinicaView";
 import { SegmentoBadge, fmtMoneda } from "@/modules/localbi/components/HistoriaClinicaUI";
+import { Pagination } from "@/components/ui/Pagination";
 import type { LocalbiUnidadNegocio } from "@/modules/localbi";
 import { cn } from "@/lib/utils";
 
 export default function Clientes() {
   const [seleccion, setSeleccion] = useState<LocalbiUnidadNegocio | null>(null);
-  const { busqueda, setBusqueda, result, isLoading } = useLocalbiSearch();
+  const { busqueda, setBusqueda, pagina, setPagina, result, isLoading } = useLocalbiSearch();
 
   const hayBusqueda = busqueda.trim().length > 0;
-  const sinResultados = !isLoading && (result?.status === "success" || result?.status === "warning") && result.data.unidades.length === 0;
+  const total = result?.status === "success" || result?.status === "warning" ? result.data.totalRegistros : 0;
+  const clientes = result?.status === "success" || result?.status === "warning" ? result.data.unidades : [];
+  const limit = result?.status === "success" || result?.status === "warning" ? result.data.limite : 20;
+  const sinResultados = !isLoading && (result?.status === "success" || result?.status === "warning") && clientes.length === 0;
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
@@ -37,12 +41,13 @@ export default function Clientes() {
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar unidad de negocio..."
+                onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
+                placeholder="Buscar por nombre o unidad..."
+                aria-label="Buscar cliente por nombre o unidad de negocio"
                 className="h-8 w-full rounded border border-black-10 bg-white py-1.5 pl-8 pr-7 text-[11px] text-black-85 placeholder:text-black-25 focus:border-primary focus:outline-none"
               />
               {busqueda && (
-                <button type="button" onClick={() => setBusqueda("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-black-45 hover:text-black-65">
+                <button type="button" onClick={() => { setBusqueda(""); setPagina(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-black-45 hover:text-black-65">
                   <X size={13} />
                 </button>
               )}
@@ -80,7 +85,7 @@ export default function Clientes() {
                     <p className="mt-1 text-[10px] text-black-25">No encontramos unidades de negocio que coincidan con tu búsqueda.</p>
                   </div>
                 ) : (
-                  result.data.unidades.map((u) => {
+                  clientes.map((u) => {
                     const activa = seleccion?.unidad_negocio === u.unidad_negocio;
                     return (
                       <button
@@ -109,6 +114,16 @@ export default function Clientes() {
               </div>
             )}
           </div>
+
+          <div className="shrink-0 border-t border-black-10">
+            <Pagination
+              pagina={pagina}
+              total={total}
+              porPagina={limit}
+              onCambiar={setPagina}
+              etiqueta="clientes"
+            />
+          </div>
         </div>
 
         <div className="flex-1 min-w-0 overflow-y-auto bg-light">
@@ -134,4 +149,3 @@ export default function Clientes() {
     </div>
   );
 }
-

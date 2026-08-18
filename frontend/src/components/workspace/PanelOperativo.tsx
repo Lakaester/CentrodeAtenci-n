@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { User, Globe, BarChart3, Target, Wrench, BookOpen, Activity, CheckSquare, Plus, Layers, Stethoscope } from "lucide-react";
 import { categoriaDesdeSubcategoria } from "./CategoryData";
 import type { CustomerInfo, TicketDetail } from "@/hooks/useTicketDetail";
 import { useCustomerHistory } from "@/hooks/useCustomerHistory";
 import { api } from "@/lib/api";
+import { localbiService } from "@/modules/localbi/services/LocalbiService";
 import { HistoriaClientePanel } from "./HistoriaClientePanel";
 
 interface Props {
@@ -49,6 +50,27 @@ export function PanelOperativo({ customer, ticket, clienteCope, onOpenTicket }: 
 
   const dominioActual = ticket?.dominio;
 
+  // Auto-detección de la unidad de negocio desde el dominio de la atención.
+  // Resuelve dominio → unidad SOLO si la búsqueda devuelve un resultado inequívoco.
+  // Si no hay dominio, hay varios resultados o ninguno → queda el selector manual.
+  const [unidadDetectada, setUnidadDetectada] = useState<{ unidad_negocio: string; nombre?: string } | null>(null);
+  useEffect(() => {
+    let activo = true;
+    setUnidadDetectada(null);
+    if (!dominioActual || !dominioActual.trim()) return;
+    localbiService
+      .buscarUnidades(dominioActual.trim(), 1, 50)
+      .then((res) => {
+        if (!activo) return;
+        if ((res.status === "success" || res.status === "warning") && res.data.unidades.length === 1) {
+          const u = res.data.unidades[0];
+          setUnidadDetectada({ unidad_negocio: u.unidad_negocio, nombre: u.nombre });
+        }
+      })
+      .catch(() => { /* sin unidad detectable: se mantiene el selector manual */ });
+    return () => { activo = false; };
+  }, [dominioActual]);
+
   const guardarDominio = async () => {
     if (!nuevoDominio.trim() || !ticket?.ticketOriginalId) return;
     setGuardando(true);
@@ -76,7 +98,7 @@ export function PanelOperativo({ customer, ticket, clienteCope, onOpenTicket }: 
           <span className="text-primary"><Stethoscope size={11} /></span>
           <span className="uppercase tracking-wider">Historia del Cliente</span>
         </button>
-        <HistoriaClientePanel />
+        <HistoriaClientePanel unidadInicial={unidadDetectada} />
       </div>
 
       <Modulo titulo="Informacion del cliente" icon={<User size={11} />} defaultOpen>

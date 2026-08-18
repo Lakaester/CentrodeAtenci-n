@@ -111,3 +111,83 @@ export interface LocalbiBusquedaSalida {
   pagina: number;
   limite: number;
 }
+
+/** Actividad real de COPE (v_unificado_norm) enriquecida por dominio. */
+export interface ActividadAgrupada {
+  nombre: string;
+  cantidad: number;
+}
+
+export interface ActividadResumen {
+  total: number;
+  canales: ActividadAgrupada[];
+  categorias: ActividadAgrupada[];
+  subcategorias: ActividadAgrupada[];
+  asesores: ActividadAgrupada[];
+  estados: ActividadAgrupada[];
+  primera_atencion: string | null;
+  ultima_atencion: string | null;
+}
+
+export interface AtencionActividad {
+  localbi_id: string | null;
+  dominio: string | null;
+  canal: string | null;
+  categoria: string | null;
+  subcategoria: string | null;
+  asesor: string | null;
+  estado: string | null;
+  fecha: string;
+  contacto: string | null;
+  numero: string | null;
+}
+
+export interface ActividadDominio {
+  dominio: string;
+  resumen: ActividadResumen;
+  ultimasAtenciones: AtencionActividad[];
+}
+
+/** Soporte en Línea (public.incidencias). */
+export interface Incidencia {
+  id_incidencia: string;
+  ticket_timestamp: string;
+  descripcion: string | null;
+  suscripcion: string | null;
+  local_nombre: string | null;
+  categorizacion: string | null;
+  estado: string | null;
+  solucion: string | null;
+  asesor_nombre: string | null;
+  tiempo_espera_minutos: number | null;
+  tiempo_solucion_minutos: number | null;
+  incidenciacliente_localpais: string | null;
+  tipoproblema: string | null;
+  subtipoproblema: string | null;
+  incidenciacliente_kam: string | null;
+}
+
+export interface SoporteResumen {
+  total: number;
+  abiertas: number;
+  cerradas: number;
+  primera_incidencia: string | null;
+  ultima_incidencia: string | null;
+  prom_espera_min: number | null;
+  prom_solucion_min: number | null;
+  categorias: ActividadAgrupada[];
+  estados: ActividadAgrupada[];
+  porLocal: ActividadAgrupada[];
+}
+
+export interface SoporteOnlineDominio {
+  dominio: string;
+  resumen: SoporteResumen;
+  ultimasIncidencias: Incidencia[];
+}
+
+export interface SoporteOnlineResult {
+  porDominio: SoporteOnlineDominio[];
+  nombreLocalPorDominio: Record<string, string>;
+  totalIncidencias: number;
+}

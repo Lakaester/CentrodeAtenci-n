@@ -46,6 +46,8 @@ const finalizarSchema = z.object({
   subcategoriaId: z.string().nullable().optional(),
   estadoId: z.string().nullable().optional(),
   mensajeError: z.string().nullable().optional(),
+  facturasPendientes: z.number().int().nullable().optional(),
+  boletasPendientes: z.number().int().nullable().optional(),
 });
 
 const actualizarSchema = z.object({
@@ -152,6 +154,8 @@ export const facturacionController = {
         subcategoriaId: parsed.data.subcategoriaId ?? null,
         estadoId: parsed.data.estadoId ?? null,
         mensajeError: parsed.data.mensajeError ?? null,
+        facturasPendientes: parsed.data.facturasPendientes ?? null,
+        boletasPendientes: parsed.data.boletasPendientes ?? null,
       });
       res.json({ ok: true, data });
     } catch (err) {

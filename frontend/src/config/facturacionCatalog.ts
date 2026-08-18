@@ -44,6 +44,25 @@ export const MOTIVOS_PAUSA = [
 
 export type MotivoPausa = (typeof MOTIVOS_PAUSA)[number];
 
+/**
+ * Máquina de estados operativos del caso (espejo del backend).
+ * El backend sigue siendo la autoridad; esto solo sirve para mostrar
+ * las transiciones válidas al asesor en la UI.
+ */
+export const TRANSICIONES_ESTADO_OPERATIVO: Record<string, string[]> = {
+  PENDIENTE: ["ASIGNADO"],
+  ASIGNADO: ["EN_DIAGNOSTICO", "PAUSADO", "CANCELADO"],
+  EN_DIAGNOSTICO: ["EN_SOLUCION", "PAUSADO", "DERIVADO", "CANCELADO"],
+  EN_SOLUCION: ["PAUSADO", "DERIVADO", "NO_RESUELTO", "RESUELTO"],
+  PAUSADO: ["EN_DIAGNOSTICO", "EN_SOLUCION", "CANCELADO"],
+  NO_RESUELTO: ["ASIGNADO", "EN_DIAGNOSTICO"],
+  DERIVADO: ["EN_DIAGNOSTICO", "RESUELTO", "NO_RESUELTO"],
+  RESUELTO: [],
+  CANCELADO: [],
+};
+
+export const ESTADOS_OPERATIVOS = Object.keys(TRANSICIONES_ESTADO_OPERATIVO);
+
 export interface DiagnosticoFacturacion {
   asesor: string;
   atencionRelacionada: string;

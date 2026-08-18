@@ -1,25 +1,39 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { useLocalbiSearch, useHistoriaClinica } from "@/modules/localbi";
+import { useLocalbiSearch } from "@/modules/localbi";
 import { HistoriaClinicaView } from "@/modules/localbi/components/HistoriaClinicaView";
 import type { LocalbiUnidadNegocio } from "@/modules/localbi";
 
-export function HistoriaClientePanel() {
+interface Preseleccion {
+  unidad_negocio: string;
+  nombre?: string;
+}
+
+interface Props {
+  /** Unidad de negocio detectada automáticamente desde la atención (opcional). */
+  unidadInicial?: Preseleccion | null;
+}
+
+export function HistoriaClientePanel({ unidadInicial }: Props) {
   const [seleccion, setSeleccion] = useState<LocalbiUnidadNegocio | null>(null);
   const [buscando, setBuscando] = useState(false);
   const { busqueda, setBusqueda, result, isLoading } = useLocalbiSearch();
-  useHistoriaClinica(seleccion?.unidad_negocio ?? null);
 
-  if (seleccion) {
+  // Prioridad: selección manual del usuario > unidad detectada automáticamente.
+  const unidadActual = seleccion ?? (unidadInicial
+    ? { unidad_negocio: unidadInicial.unidad_negocio, nombre: unidadInicial.nombre ?? unidadInicial.unidad_negocio } as LocalbiUnidadNegocio
+    : null);
+
+  if (unidadActual) {
     return (
       <div>
         <div className="flex items-center justify-between px-2.5 py-1">
-          <span className="truncate text-[10px] font-semibold text-black-85">{seleccion.nombre}</span>
+          <span className="truncate text-[10px] font-semibold text-black-85">{unidadActual.nombre || unidadActual.unidad_negocio}</span>
           <button type="button" onClick={() => setSeleccion(null)} className="text-[9px] text-primary hover:underline">
             Cambiar
           </button>
         </div>
-        <HistoriaClinicaView unidadNegocio={seleccion.unidad_negocio} />
+        <HistoriaClinicaView unidadNegocio={unidadActual.unidad_negocio} />
       </div>
     );
   }
@@ -46,7 +60,7 @@ export function HistoriaClientePanel() {
           <div className="mt-1 max-h-56 overflow-y-auto">
             {isLoading && <p className="p-2 text-[10px] text-black-25">Buscando…</p>}
             {!isLoading && result?.status === "not_configured" && (
-              <p className="p-2 text-[10px] text-warning-65">{result.mensaje}</p>
+              <p className="p-2 text-[10px] text-warning-65">Historia del cliente no disponible: falta configurar la credencial de LocalBI.</p>
             )}
             {!isLoading && result?.status === "unavailable" && (
               <p className="p-2 text-[10px] text-danger">{result.mensaje}</p>

@@ -9,7 +9,7 @@
  * No recalcula ni transforma valores de la fuente.
  */
 import { env } from "../../../config/env";
-import { LocalbiClient } from "../client/LocalbiClient";
+import { LocalbiClient, LocalbiHttpError, LocalbiInvalidResponse, LocalbiTimeout } from "../client/LocalbiClient";
 import type {
   LocalbiEnvelope,
   LocalbiHistoriaClinica,
@@ -50,6 +50,15 @@ export class LocalbiService {
     return { status: "error", mensajes: envelope.mensajes ?? ["Error en Localbi"] };
   }
 
+  /** Traduce un error del cliente a un mensaje claro (sin datos sensibles). */
+  private mensajeDeError(err: unknown): string {
+    if (err instanceof LocalbiHttpError) return err.message;
+    if (err instanceof LocalbiTimeout) return err.message;
+    if (err instanceof LocalbiInvalidResponse) return err.message;
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Localbi no disponible: ${msg}`;
+  }
+
   async buscarUnidades(busqueda: string, pagina = 1, limite = 50): Promise<LocalbiResult<BusquedaSalida>> {
     const auth = this.checkAuth();
     if (auth) return auth;
@@ -83,8 +92,7 @@ export class LocalbiService {
       }
       return { status: "error", mensajes: resp.mensajes ?? ["Error en Localbi"] };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { status: "unavailable", mensaje: `Localbi no disponible: ${msg}` };
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
     }
   }
 
@@ -96,8 +104,7 @@ export class LocalbiService {
       const envelope = await this.client.getHistoriaClinicaPorPath(unidadNegocio);
       return this.classifyEnvelope(envelope);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { status: "unavailable", mensaje: `Localbi no disponible: ${msg}` };
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
     }
   }
 

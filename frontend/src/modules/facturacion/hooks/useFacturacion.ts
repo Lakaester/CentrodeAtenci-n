@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { facturacionService, type CrearIntervencionInput, type FinalizarInput } from "../services/facturacionService";
+import { facturacionService, type CrearIntervencionInput, type FinalizarInput, type FiltrosCasos } from "../services/facturacionService";
 import type { IntervencionDetalle } from "../types";
 
 const KEY_ACTIVA = ["facturacion", "activa"];
 const KEY_LISTA = ["facturacion", "intervenciones"];
 const KEY_CONFIG = ["facturacion", "config"];
+const KEY_CASOS = ["facturacion", "casos"];
 
 export function useEstadosConfig() {
   return useQuery({
@@ -151,4 +152,100 @@ export function useRegistrarActividad() {
 
 export function useCronometro(activa: IntervencionDetalle | null | undefined) {
   return activa;
+}
+
+// ── Casos operativos ──
+
+export function useCasos(filtros: FiltrosCasos = {}) {
+  return useQuery({
+    queryKey: [...KEY_CASOS, "lista", filtros],
+    queryFn: () => facturacionService.listarCasos(filtros),
+    staleTime: 20_000,
+    retry: 1,
+  });
+}
+
+export function useCasoDetalle(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY_CASOS, "detalle", id],
+    queryFn: () => facturacionService.detalleCaso(id as string),
+    enabled: Boolean(id),
+    staleTime: 20_000,
+    retry: 0,
+  });
+}
+
+export function useSnapshotsCaso(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY_CASOS, "snapshots", id],
+    queryFn: () => facturacionService.snapshotsCaso(id as string),
+    enabled: Boolean(id),
+    staleTime: 20_000,
+    retry: 0,
+  });
+}
+
+export function useCategorias() {
+  return useQuery({
+    queryKey: ["facturacion", "categorias"],
+    queryFn: () => facturacionService.categorias(),
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
+export function useSubcategoriasDeCategoria(categoriaId: string | null) {
+  return useQuery({
+    queryKey: ["facturacion", "subcategorias", categoriaId],
+    queryFn: () => facturacionService.subcategoriasDeCategoria(categoriaId ?? ""),
+    enabled: Boolean(categoriaId),
+    staleTime: 60_000,
+    retry: 1,
+  });
+}
+
+function invalidarCasos(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: KEY_CASOS });
+  qc.invalidateQueries({ queryKey: KEY_ACTIVA });
+  qc.invalidateQueries({ queryKey: KEY_LISTA });
+}
+
+export function useAsignarCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, asesor }: { id: string; asesor: string }) => facturacionService.asignarCaso(id, asesor),
+    onSuccess: () => invalidarCasos(qc),
+  });
+}
+
+export function useCambiarEstadoCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, estado }: { id: string; estado: string }) => facturacionService.cambiarEstadoCaso(id, estado),
+    onSuccess: () => invalidarCasos(qc),
+  });
+}
+
+export function useCategorizarCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, categoriaId, subcategoriaId }: { id: string; categoriaId: string | null; subcategoriaId: string | null }) =>
+      facturacionService.categorizarCaso(id, categoriaId, subcategoriaId),
+    onSuccess: () => invalidarCasos(qc),
+  });
+}
+
+export function useRegistrarSnapshotCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { facturas?: number | null; boletas?: number | null; total?: number | null; origen?: string } }) =>
+      facturacionService.registrarSnapshotCaso(id, input),
+    onSuccess: () => invalidarCasos(qc),
+  });
+}
+
+export function useExportarCasos() {
+  return useMutation({
+    mutationFn: (filtros: FiltrosCasos = {}) => facturacionService.exportarCasos(filtros),
+  });
 }
