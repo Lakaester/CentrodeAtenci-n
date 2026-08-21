@@ -15,6 +15,7 @@ const casoBase = {
   area: z.string().nullable().optional(),
   motivo: z.string().nullable().optional(),
   observacion: z.string().nullable().optional(),
+  moneda: z.enum(["PEN", "USD"]).nullable().optional(),
 };
 
 const crearSchema = z.discriminatedUnion("tipo", [
@@ -40,6 +41,7 @@ const actualizarSchema = z.object({
   pais: z.string().nullable().optional(),
   estado: z.string().nullable().optional(),
   resultado: z.string().nullable().optional(),
+  moneda: z.enum(["PEN", "USD"]).nullable().optional(),
   area: z.string().nullable().optional(),
   motivo: z.string().nullable().optional(),
   montoPagado: z.number().nonnegative().nullable().optional(),
@@ -95,6 +97,58 @@ export const qdController = {
       const interaccion = await qdService.asociarInteraccion(req.params.id, ticketId, usuarioDe(req));
       if (!interaccion) {
         return res.json({ ok: true, data: null, mensaje: "Este ticket ya está asociado al caso" });
+      }
+      res.status(201).json({ ok: true, data: interaccion });
+    } catch (err) { handle(res, err); }
+  },
+
+  /** Asigna/actualiza manualmente el dominio de un caso. Auditable. NO fusiona casos. */
+  async asignarDominio(req: Request, res: Response, next: NextFunction) {
+    try {
+      const dominio = req.body?.dominio == null ? null : String(req.body.dominio).trim() || null;
+      const caso = await qdService.asignarDominio(req.params.id, dominio, usuarioDe(req));
+      res.json({ ok: true, data: caso });
+    } catch (err) { handle(res, err); }
+  },
+
+  /** Cierra manualmente un caso. */
+  async cerrarCaso(req: Request, res: Response, next: NextFunction) {
+    try {
+      const caso = await qdService.cerrarCaso(req.params.id, usuarioDe(req));
+      res.json({ ok: true, data: caso });
+    } catch (err) { handle(res, err); }
+  },
+
+  /** Reabre manualmente un caso cerrado. */
+  async reabrirCaso(req: Request, res: Response, next: NextFunction) {
+    try {
+      const caso = await qdService.reabrirCaso(req.params.id, usuarioDe(req));
+      res.json({ ok: true, data: caso });
+    } catch (err) { handle(res, err); }
+  },
+
+  /** Consolida varios casos secundarios en un caso principal. */
+  async consolidarCasos(req: Request, res: Response, next: NextFunction) {
+    try {
+      const principalId = String(req.body?.principalId ?? "").trim();
+      const idsSecundarios = Array.isArray(req.body?.casosIds) ? req.body.casosIds.map(String) : [];
+      const motivo = req.body?.motivo == null ? null : String(req.body.motivo).trim() || null;
+      if (!principalId) return res.status(400).json({ ok: false, error: "principalId requerido" });
+      if (idsSecundarios.length === 0) return res.status(400).json({ ok: false, error: "casosIds requerido" });
+      const r = await qdService.consolidarCasos(principalId, idsSecundarios, usuarioDe(req), motivo);
+      res.json({ ok: true, data: r });
+    } catch (err) { handle(res, err); }
+  },
+
+  /** Vincula un ticket existente a un caso como contacto. */
+  async vincularTicket(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ticketId = (req.body?.ticketId as string)?.trim();
+      if (!ticketId) return res.status(400).json({ ok: false, error: "ticketId requerido" });
+      const canal = req.body?.canal == null ? null : String(req.body.canal);
+      const interaccion = await qdService.vincularTicket(req.params.id, ticketId, usuarioDe(req), canal);
+      if (!interaccion) {
+        return res.json({ ok: true, data: null, mensaje: "Este ticket ya está vinculado al caso" });
       }
       res.status(201).json({ ok: true, data: interaccion });
     } catch (err) { handle(res, err); }
@@ -164,6 +218,23 @@ export const qdController = {
     } catch (err) { handle(res, err); }
   },
 
+  /**
+   * Carga retroactiva (BACKFILL) del histórico real de Quejas y Devoluciones.
+   * Body: { desde: "YYYY-MM-DD", hasta: "YYYY-MM-DD" }.
+   * Idempotente: re-ejecutar el mismo rango no duplica casos.
+   */
+  async backfill(req: Request, res: Response, next: NextFunction) {
+    try {
+      const desde = String(req.body?.desde ?? "").trim();
+      const hasta = String(req.body?.hasta ?? "").trim();
+      if (!desde || !hasta) {
+        return res.status(400).json({ ok: false, error: "Se requieren 'desde' y 'hasta' (YYYY-MM-DD)" });
+      }
+      const resultado = await qdService.backfillQuejasDevoluciones(desde, hasta);
+      res.json({ ok: true, data: resultado });
+    } catch (err) { handle(res, err); }
+  },
+
   async listarEstados(_req: Request, res: Response, next: NextFunction) {
     try { res.json({ ok: true, data: await qdService.listarEstados() }); } catch (err) { next(err); }
   },
@@ -178,6 +249,11 @@ export const qdController = {
   },
   async listarTiposQueja(_req: Request, res: Response, next: NextFunction) {
     try { res.json({ ok: true, data: await qdService.listarTiposQueja() }); } catch (err) { next(err); }
+  },
+
+  /** Catálogo de dominios homologados (solo lectura). */
+  async listarDominios(_req: Request, res: Response, next: NextFunction) {
+    try { res.json({ ok: true, data: await qdService.listarDominios() }); } catch (err) { next(err); }
   },
 
   // ── CRUD de catálogos ──

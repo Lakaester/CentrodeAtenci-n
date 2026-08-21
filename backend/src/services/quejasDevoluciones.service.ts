@@ -1,9 +1,21 @@
 import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow } from "../repositories/quejasDevoluciones.repository";
-import { DomainError, ApplicationError } from "../core/errors/types";
+import { reconstruirCasosBackfill, normalizarDominio, type ReconstruccionResultado } from "./quejasCasos.service";
+import { DomainError } from "../core/errors/types";
 
 function calcularMontoDevuelto(montoPagado: number | null | undefined, porcentaje: number | null | undefined): number | null {
   if (montoPagado == null || porcentaje == null) return null;
   return Math.round(montoPagado * (porcentaje / 100) * 100) / 100;
+}
+
+/**
+ * Calcula el porcentaje conciliado a partir del monto solicitado y el monto
+ * real a devolver, redondeado a 2 decimales y acotado a 0–100. Devuelve null
+ * si no se puede derivar (faltan datos o el solicitado es 0).
+ */
+function calcularPorcentajeDesdeMontos(montoPagado: number | null | undefined, montoDevuelto: number | null | undefined): number | null {
+  if (montoPagado == null || montoDevuelto == null || montoPagado === 0) return null;
+  const pct = (montoDevuelto / montoPagado) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct * 100) / 100));
 }
 
 function validarCaso(input: CrearCasoInput) {
@@ -49,6 +61,35 @@ function validarCaso(input: CrearCasoInput) {
 export const qdService = {
   async listar(tipo: "devolucion" | "queja") {
     return qdRepository.listar(tipo);
+  },
+
+  /**
+   * Carga retroactiva (BACKFILL) de Quejas y Devoluciones.
+   *
+   * Reconstruye los casos reales a partir del histórico de public.v_unificado_norm
+   * aplicando la regla de evidencia del modelo CASO → N TICKETS:
+   *   1. Relación explícita follow_up de Zendesk (prioridad 1).
+   *   2. Identidad real + dominio normalizado + tipo (prioridad 2).
+   *   3. Sin relación → caso independiente.
+   *
+   * Es IDEMPOTENTE: borra los casos BACKFILL previos y reconstruye con la misma
+   * evidencia, generando el mismo resultado cada vez.
+   *
+   * @param desde fecha de inicio (YYYY-MM-DD)
+   * @param hasta fecha de fin (YYYY-MM-DD)
+   */
+  async backfillQuejasDevoluciones(desde: string, hasta: string): Promise<ReconstruccionResultado & { omitidos: number; encontrados: number }> {
+    const inicio = new Date(desde + "T00:00:00");
+    const fin = new Date(hasta + "T00:00:00");
+    if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
+      throw new DomainError("Fechas inválidas. Formato esperado: YYYY-MM-DD", "FECHAS_INVALIDAS");
+    }
+    if (inicio > fin) {
+      throw new DomainError("La fecha de inicio no puede ser posterior a la de fin", "FECHAS_INVALIDAS");
+    }
+
+    const r = await reconstruirCasosBackfill(desde, hasta);
+    return { ...r, encontrados: r.ticketsHistoricos, omitidos: 0 };
   },
 
   async porId(id: string): Promise<{ caso: QdCasoRow; interacciones: QdInteraccionRow[]; auditoria: unknown[] } | null> {
@@ -118,6 +159,22 @@ export const qdService = {
       }
     }
 
+    // 2.5) Caso ABIERTO relacionado: si el ticket tiene dominio y existe un caso
+    //      abierto del mismo dominio + tipo, vincular el ticket a ese caso.
+    //      NO se usa ventana temporal rígida: el caso permanece abierto hasta
+    //      que el asesor lo cierre manualmente.
+    if (input.dominio && !input.ticketPadreId) {
+      const casoAbierto = await qdRepository.buscarCasoAbiertoParaTicket({ tipo, dominio: input.dominio });
+      if (casoAbierto) {
+        const interaccion = await qdRepository.asociarInteraccion(casoAbierto.id, ticketId, usuario ?? input.asesor, "relacionada", null, new Date());
+        await qdRepository.registrarAuditoria(
+          casoAbierto.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
+          null, `Ticket #${ticketId} vinculado al caso abierto ${casoAbierto.numero} (mismo dominio ${input.dominio})`,
+        );
+        return { caso: casoAbierto, reutilizado: true, interaccionAsociada: !!interaccion };
+      }
+    }
+
     // 3) Crear caso nuevo. La creación automática desde categorización no exige
     //    datos completos (el asesor los completa después). origen = CATEGORIZACION.
     const caso = await this.crear({
@@ -148,6 +205,111 @@ export const qdService = {
       await qdRepository.registrarAuditoria(
         casoId, usuario, "interaccion_asociada", "ticket",
         null, `Ticket #${ticketId} asociado al caso ${caso.numero}`,
+      );
+    }
+    return interaccion;
+  },
+
+  /** Asigna (o actualiza) el dominio de un caso manualmente. Auditable. NO fusiona casos. */
+  async asignarDominio(casoId: string, dominio: string | null, usuario: string | null): Promise<QdCasoRow> {
+    const caso = await qdRepository.porId(casoId);
+    if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    const d = typeof dominio === "string" ? dominio.trim() : "";
+    const actualizado = await qdRepository.asignarDominio(casoId, d || null, usuario);
+    if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    if (String(caso.dominio ?? "") !== d) {
+      await qdRepository.registrarAuditoria(
+        casoId, usuario, "asignacion_dominio", "dominio",
+        caso.dominio, d || null,
+      );
+    }
+    return actualizado;
+  },
+
+  /** Cierra un caso manualmente. Un nuevo asunto posterior creará un caso nuevo. */
+  async cerrarCaso(casoId: string, usuario: string | null): Promise<QdCasoRow> {
+    const caso = await qdRepository.porId(casoId);
+    if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    if (caso.caso_cerrado) throw new DomainError("El caso ya está cerrado", "CASO_CERRADO");
+    const cerrado = await qdRepository.cerrarCaso(casoId, usuario);
+    if (!cerrado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    await qdRepository.registrarAuditoria(
+      casoId, usuario, "cierre_caso", "caso",
+      "ABIERTO", "CERRADO",
+    );
+    return cerrado;
+  },
+
+  /**
+   * Reabre un caso cerrado. Conserva tickets, interacciones y datos; solo
+   * revierte el estado de cierre para que pueda volver a recibir tickets
+   * relacionados.
+   */
+  async reabrirCaso(casoId: string, usuario: string | null): Promise<QdCasoRow> {
+    const caso = await qdRepository.porId(casoId);
+    if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    if (!caso.caso_cerrado) throw new DomainError("El caso ya está abierto", "CASO_ABIERTO");
+    const reabierto = await qdRepository.reabrirCaso(casoId, usuario);
+    if (!reabierto) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    await qdRepository.registrarAuditoria(
+      casoId, usuario, "reapertura_caso", "caso",
+      "CERRADO", "ABIERTO",
+    );
+    return reabierto;
+  },
+
+  /**
+   * CONSOLIDA varios casos secundarios en un caso principal.
+   * Reglas: mismo tipo; el caso principal no debe ser secundario ni cerrado.
+   * Todos los tickets pasan al caso principal; los secundarios quedan marcados
+   * como consolidados (consolidado_en) conservando trazabilidad.
+   */
+  async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null, motivo?: string | null): Promise<{ principal: QdCasoRow; consolidados: number }> {
+    const principal = await qdRepository.porId(principalId);
+    if (!principal) throw new DomainError("Caso principal no encontrado", "NO_ENCONTRADO");
+    if (principal.consolidado_en) throw new DomainError("El caso principal no puede ser un caso ya consolidado", "CONSOLIDACION_INVALIDA");
+    if (principal.caso_cerrado) throw new DomainError("No se puede consolidar sobre un caso cerrado", "CONSOLIDACION_INVALIDA");
+
+    const secs = new Set(idsSecundarios);
+    secs.delete(principalId);
+    const ids = [...secs];
+    if (ids.length === 0) throw new DomainError("Selecciona al menos un caso secundario", "CONSOLIDACION_INVALIDA");
+
+    // Validar que todos los secundarios sean del mismo tipo y no estén consolidados.
+    for (const id of ids) {
+      const c = await qdRepository.porId(id);
+      if (!c) throw new DomainError("Un caso secundario no existe", "CONSOLIDACION_INVALIDA");
+      if (c.tipo !== principal.tipo) throw new DomainError("No se pueden consolidar casos de distinto tipo (Queja ≠ Devolución)", "CONSOLIDACION_TIPO_DISTINTO");
+      if (c.consolidado_en) throw new DomainError(`El caso ${c.numero} ya fue consolidado`, "CONSOLIDACION_INVALIDA");
+      if (c.caso_cerrado) throw new DomainError(`El caso ${c.numero} está cerrado`, "CONSOLIDACION_INVALIDA");
+    }
+
+    const consolidados = await qdRepository.consolidarCasos(principalId, ids, usuario);
+    await qdRepository.registrarAuditoria(
+      principalId, usuario, "consolidacion_casos", "caso",
+      null, `Consolidados ${ids.length} caso(s) en ${principal.numero}${motivo ? ` — Motivo: ${motivo}` : ""}`,
+    );
+    for (const id of ids) {
+      const c = await qdRepository.porId(id);
+      if (c) {
+        await qdRepository.registrarAuditoria(
+          id, usuario, "consolidado_en", "caso",
+          null, `Caso consolidado en ${principal.numero}`,
+        );
+      }
+    }
+    return { principal, consolidados };
+  },
+
+  /** Vincula un ticket existente a un caso como contacto/interacción. */
+  async vincularTicket(casoId: string, ticketId: string, usuario: string | null, canal?: string | null): Promise<QdInteraccionRow | null> {
+    const caso = await qdRepository.porId(casoId);
+    if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    const interaccion = await qdRepository.asociarInteraccion(casoId, ticketId, usuario, "relacionada", canal ?? null, new Date());
+    if (interaccion) {
+      await qdRepository.registrarAuditoria(
+        casoId, usuario, "interaccion_asociada", "ticket",
+        null, `Ticket #${ticketId} vinculado al caso ${caso.numero}`,
       );
     }
     return interaccion;
@@ -220,10 +382,38 @@ export const qdService = {
     const caso = await qdRepository.porId(id);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
 
-    // Recalcular monto devuelto si cambió monto_pagado o porcentaje y no se envió explícito.
-    const montoPagado = patch.montoPagado !== undefined ? patch.montoPagado : caso.monto_pagado;
-    const porcentaje = patch.porcentaje !== undefined ? patch.porcentaje : caso.porcentaje;
-    const montoDevuelto = patch.montoDevuelto ?? calcularMontoDevuelto(montoPagado, porcentaje);
+    // Normalizar valores NUMERIC leídos de la BD: PostgreSQL/Prisma los entrega
+    // como string (ej. "100"). Se convierten a número para que las comparaciones
+    // y validaciones sean correctas sin importar la procedencia (BD o frontend).
+    const n = (v: unknown): number | null => (v == null || v === "" ? null : Number(v));
+
+    // ── Coherencia Monto solicitado / % conciliado / Monto real a devolver ──
+    // Se conservan los tres conceptos por separado (no se sobrescribe el
+    // solicitado). Reglas:
+    //  - Si cambia el % → se recalcula el monto real a devolver.
+    //  - Si se edita directamente el monto real a devolver → se recalcula el %.
+    //  - Si faltan datos o se borra un campo, permanece NULL (no se inventa 0).
+    let montoPagado = patch.montoPagado !== undefined ? n(patch.montoPagado) : n(caso.monto_pagado);
+    let porcentaje = patch.porcentaje !== undefined ? n(patch.porcentaje) : n(caso.porcentaje);
+    let montoDevuelto = patch.montoDevuelto !== undefined ? n(patch.montoDevuelto) : n(caso.monto_devuelto);
+
+    const cambioPorcentaje = patch.porcentaje !== undefined;
+    const cambioMontoDevuelto = patch.montoDevuelto !== undefined;
+    const cambioMontoPagado = patch.montoPagado !== undefined;
+
+    if (cambioPorcentaje) {
+      // Fuente: % → recalcular monto real (Opción A).
+      montoDevuelto = calcularMontoDevuelto(montoPagado, porcentaje);
+    } else if (cambioMontoDevuelto) {
+      // Fuente: monto real → recalcular % (Opción B). Solo si no se editaron
+      // ambos a la vez (en ese caso el % manda).
+      if (!cambioPorcentaje) {
+        porcentaje = calcularPorcentajeDesdeMontos(montoPagado, montoDevuelto);
+      }
+    } else if (cambioMontoPagado) {
+      // Cambió el solicitado sin % explícito: re-derivar el monto real si había %.
+      if (porcentaje != null) montoDevuelto = calcularMontoDevuelto(montoPagado, porcentaje);
+    }
 
     // Validar coherencia en el estado resultante.
     validarCaso({
@@ -240,7 +430,7 @@ export const qdService = {
       motivo: patch.motivo !== undefined ? patch.motivo : caso.motivo,
     });
 
-    const final = { ...patch, montoDevuelto };
+    const final = { ...patch, montoDevuelto, montoPagado, porcentaje };
     const actualizado = await qdRepository.actualizar(id, final);
     if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
 
@@ -268,4 +458,19 @@ export const qdService = {
   async listarAreas() { return qdRepository.listarCatalogo("qd_areas"); },
   async listarProductos() { return qdRepository.listarCatalogo("qd_productos"); },
   async listarTiposQueja() { return qdRepository.listarCatalogo("qd_tipos_queja"); },
+
+  /**
+   * Catálogo de dominios homologados (solo lectura).
+   * Fuente: v_unificado_norm + qd_casos.dominio, normalizados con
+   * `normalizarDominio`, deduplicados y ordenados. No crea tabla configurable.
+   */
+  async listarDominios(): Promise<string[]> {
+    const raw = await qdRepository.listarDominiosRaw();
+    const set = new Set<string>();
+    for (const d of raw) {
+      const n = normalizarDominio(d);
+      if (n) set.add(n);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  },
 };

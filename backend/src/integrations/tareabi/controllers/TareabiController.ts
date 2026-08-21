@@ -50,4 +50,31 @@ export const tareabiController = {
       return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
     } catch (err) { next(err); }
   },
+
+  /** GET /proyectos — catálogo de proyectos de tareas. */
+  async proyectos(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await service.obtenerProyectos();
+      if (result.status === "success") return res.json({ ok: true, data: result.data });
+      return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
+    } catch (err) { next(err); }
+  },
+
+  /** GET /tipos — catálogo de tipos de tareas. */
+  async tipos(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await service.obtenerTipos();
+      if (result.status === "success") return res.json({ ok: true, data: result.data });
+      return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
+    } catch (err) { next(err); }
+  },
+
+  /** GET /dev — catálogo de desarrolladores/responsables. */
+  async dev(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await service.obtenerDev();
+      if (result.status === "success") return res.json({ ok: true, data: result.data });
+      return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
+    } catch (err) { next(err); }
+  },
 };

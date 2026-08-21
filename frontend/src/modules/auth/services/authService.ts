@@ -15,6 +15,7 @@ export interface AuthUser {
   equipo: string | null;
   estado: string;
   permisos: AuthPermiso[];
+  personabi_id?: string | null;
 }
 
 export type LoginErrorKind = "INVALID_CREDENTIALS" | "USER_DISABLED" | "SERVER_ERROR" | "NETWORK_ERROR";

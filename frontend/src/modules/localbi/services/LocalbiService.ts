@@ -4,6 +4,7 @@ import type {
   LocalbiBusquedaSalida,
   ActividadDominio,
   SoporteOnlineResult,
+  HistoriaLocal,
 } from "../types/localbi";
 
 export type LocalbiApiResult<T> =
@@ -43,9 +44,21 @@ export const localbiService = {
     return res.data.data ?? [];
   },
 
+  /** Resumen de actividad por localbi_id (Nivel 1). */
+  async actividadLocal(localbiIds: string[]): Promise<Record<string, { total: number; ultima_atencion: string | null }>> {
+    const res = await api.get("/localbi/actividad-local", { params: { ids: localbiIds.join(",") } });
+    return res.data.data ?? {};
+  },
+
   /** Soporte en Línea (public.incidencias) por dominios y período. */
   async soporte(dominios: string[], periodo?: string): Promise<SoporteOnlineResult> {
     const res = await api.get("/localbi/soporte", { params: { dominios: dominios.join(","), periodo: periodo ?? undefined } });
     return res.data.data ?? { porDominio: [], nombreLocalPorDominio: {}, totalIncidencias: 0 };
+  },
+
+  /** Historia Clínica de un LOCAL específico por localbi_id. */
+  async historiaLocal(unidadNegocio: string, localbiId: string): Promise<HistoriaLocal> {
+    const res = await api.get(`/localbi/historia/${encodeURIComponent(unidadNegocio)}/local/${encodeURIComponent(localbiId)}`);
+    return res.data.data;
   },
 };

@@ -18,7 +18,9 @@ export function createApp() {
   // Security
   app.use(securityHeaders);
   app.use(rateLimiter);
-  app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+  // CORS: CORS_ORIGIN admite varios orígenes separados por coma (ej. localhost + IP local de la LAN).
+  const origenesPermitidos = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
+  app.use(cors({ origin: origenesPermitidos, credentials: true }));
   app.use(express.json({ limit: "50mb" }));
   app.disable("x-powered-by");
 

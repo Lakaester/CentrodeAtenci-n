@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useHistoriaClinica, useActividadCliente, useSoporteOnline } from "../hooks/useHistoriaClinica";
+import { useHistoriaClinica, useActividadCliente, useSoporteOnline, useHistoriaLocal, useActividadLocal } from "../hooks/useHistoriaClinica";
 import type { LocalbiHistoriaClinica, ActividadDominio, SoporteOnlineResult } from "../types/localbi";
 import { SeccionColapsable, Info, ND, SegmentoBadge, EstadoLocalBadge, fmtMoneda, fmtFecha, nombreLocal, normalizarDominio } from "./HistoriaClinicaUI";
 import { LocalesDrawer } from "./LocalesDrawer";
+import { HistoriaLocalDrawer } from "./HistoriaLocalDrawer";
 import { HistorialFacturacion } from "@/modules/facturacion/components/HistorialFacturacion";
 import { QdClienteHistorial } from "@/modules/quejas-devoluciones/components/QdClienteHistorial";
 import { useTareabiLogs } from "@/modules/tareabi";
@@ -23,14 +24,17 @@ function Kpi({ label, value, tone }: { label: string; value: React.ReactNode; to
 export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }) {
   const { data, isLoading, isFetching, refetch } = useHistoriaClinica(unidadNegocio);
   const [localesOpen, setLocalesOpen] = useState(false);
+  const [localSeleccionado, setLocalSeleccionado] = useState<string | null>(null);
 
   // Hooks siempre en orden: actividad de COPE para los dominios de la ficha (si ya cargó).
-  const dominiosDeLaFicha = data?.status === "success" || data?.status === "warning"
-    ? (data.data as LocalbiHistoriaClinica).dominios?.map((d) => d.dominio) ?? []
-    : [];
+  const fichaData = data?.status === "success" || data?.status === "warning" ? (data.data as LocalbiHistoriaClinica) : null;
+  const dominiosDeLaFicha = fichaData?.dominios?.map((d) => d.dominio) ?? [];
+  const localbiIdsDeLaFicha = fichaData?.dominios?.flatMap((d) => (d.locales ?? []).map((l) => l.localbi_id)) ?? [];
   const { data: actividadData, isLoading: actividadLoading } = useActividadCliente(dominiosDeLaFicha);
   const [periodoInc, setPeriodoInc] = useState<string>("90");
   const { data: soporteData, isLoading: soporteLoading } = useSoporteOnline(dominiosDeLaFicha, periodoInc);
+  const { data: historiaLocalData, isLoading: historiaLocalLoading } = useHistoriaLocal(unidadNegocio, localSeleccionado);
+  const { data: actividadLocalData, isLoading: actividadLocalLoading } = useActividadLocal(localbiIdsDeLaFicha);
 
   if (isLoading) {
     return (
@@ -225,18 +229,19 @@ export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }
                   <th className="px-1.5 py-1 font-medium">Dominio</th>
                   <th className="px-1.5 py-1 font-medium">Estado</th>
                   <th className="px-1.5 py-1 font-medium">Plan</th>
-                  <th className="px-1.5 py-1 text-right font-medium">Mód.</th>
                   <th className="px-1.5 py-1 text-right font-medium">Atenc.</th>
                   <th className="px-1.5 py-1 font-medium">Últ. atención</th>
+                  <th className="px-1.5 py-1 text-right font-medium">NPS</th>
                 </tr>
               </thead>
               <tbody>
                 {locales.map((l) => {
                   const domNorm = normalizarDominio(l.link_dominio || l.dominio);
-                  const act = actividadPorDominio.get(domNorm);
                   const nombreIncidencias = soporteData?.nombreLocalPorDominio?.[domNorm];
+                  const actLocal = actividadLocalData?.[l.localbi_id];
                   return (
-                    <tr key={l.localbi_id} className="border-b border-black-5">
+                    <tr key={l.localbi_id} onClick={() => setLocalSeleccionado(l.localbi_id)}
+                      className="cursor-pointer border-b border-black-5 hover:bg-light" title="Ver Historia del Local">
                       <td className="px-1.5 py-1 text-[10px] font-medium text-black-85">
                         {nombreLocal(l, nombreIncidencias)}
                       </td>
@@ -246,12 +251,14 @@ export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }
                       </td>
                       <td className="px-1.5 py-1"><EstadoLocalBadge estado={l.estado} /></td>
                       <td className="px-1.5 py-1 text-[9px] text-black-45">{l.plan || <ND />}</td>
-                      <td className="px-1.5 py-1 text-right text-[9px] text-black-45">{l.cantidadmodulosusa ?? 0}/9</td>
                       <td className="px-1.5 py-1 text-right text-[9px] tabular-nums">
-                        {actividadLoading ? "…" : act ? act.resumen.total : <span className="text-black-25">0</span>}
+                        {actividadLocalLoading ? "…" : (actLocal?.total ?? 0)}
                       </td>
                       <td className="px-1.5 py-1 text-[9px] text-black-45">
-                        {actividadLoading ? "…" : act?.resumen.ultima_atencion ? fmtFecha(act.resumen.ultima_atencion) : <span className="text-black-25">—</span>}
+                        {actividadLocalLoading ? "…" : actLocal?.ultima_atencion ? fmtFecha(actLocal.ultima_atencion) : <span className="text-black-25">—</span>}
+                      </td>
+                      <td className="px-1.5 py-1 text-right text-[9px] tabular-nums">
+                        {l.nps?.llamadabi_nps != null ? l.nps.llamadabi_nps : <span className="text-black-25">—</span>}
                       </td>
                     </tr>
                   );
@@ -509,6 +516,18 @@ export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }
       </div>
 
       {localesOpen && <LocalesDrawer ficha={ficha} actividadPorDominio={actividadPorDominio} actividadLoading={actividadLoading} onClose={() => setLocalesOpen(false)} />}
+      {localSeleccionado && historiaLocalData && (
+        <HistoriaLocalDrawer
+          data={historiaLocalData}
+          onVolver={() => setLocalSeleccionado(null)}
+          onCerrar={() => setLocalSeleccionado(null)}
+        />
+      )}
+      {localSeleccionado && historiaLocalLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <p className="rounded bg-white px-4 py-2 text-[11px] text-black-45">Cargando Historia del Local…</p>
+        </div>
+      )}
     </>
   );
 }

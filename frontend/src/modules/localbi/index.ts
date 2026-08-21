@@ -1,5 +1,5 @@
 export { useLocalbiSearch } from "./hooks/useLocalbiSearch";
-export { useHistoriaClinica, useActividadCliente, useSoporteOnline } from "./hooks/useHistoriaClinica";
+export { useHistoriaClinica, useActividadCliente, useSoporteOnline, useHistoriaLocal, useActividadLocal } from "./hooks/useHistoriaClinica";
 export { localbiService } from "./services/LocalbiService";
 export type { LocalbiApiResult } from "./services/LocalbiService";
 export type {
@@ -19,4 +19,5 @@ export type {
   SoporteOnlineDominio,
   SoporteResumen,
   Incidencia,
+  HistoriaLocal,
 } from "./types/localbi";

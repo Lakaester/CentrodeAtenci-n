@@ -14,6 +14,7 @@ import type { TicketComentario } from "@/hooks/useTicketDetail";
 export default function Atenciones() {
   const [activa, setActiva] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(true);
   const { tickets: inboxTickets, count, isLoading, isError, error, refetch } = useInbox();
   const ticketDetail = useTicketDetail(activa, retryKey);
 
@@ -93,20 +94,20 @@ export default function Atenciones() {
         <WorkspaceArea ticketId={activa} ticketDetail={ticketDetailWithConv} onRefresh={handleRefresh} />
       </div>
 
-      {/* Columna Derecha: Customer 360 */}
-      <div className="w-72 shrink-0 bg-white flex flex-col min-h-0">
-        <div className="border-b border-black-10 px-3 py-2.5 shrink-0">
-          <h3 className="text-[9px] font-semibold uppercase tracking-wider text-black-45">Panel Operativo</h3>
-        </div>
-        <div className="flex-1 min-h-0">
-          <PanelOperativo
-            customer={ticketDetail.customer}
-            ticket={ticketDetail.ticket}
-            clienteCope={ticketDetail.clienteCope}
-            onOpenTicket={(id) => setActiva(id)}
-          />
-          {customerCtx.context && void 0}
-        </div>
+      {/* Columna Derecha: Panel Operativo (permanente, abatible 48px / expandido 420-520px) */}
+      <div
+        className="shrink-0 bg-white flex flex-col min-h-0 border-l border-black-10 transition-[width] duration-250 ease-out"
+        style={{ width: panelOpen ? "clamp(420px, 32vw, 520px)" : "48px" }}
+      >
+        <PanelOperativo
+          customer={ticketDetail.customer}
+          ticket={ticketDetail.ticket}
+          clienteCope={ticketDetail.clienteCope}
+          onOpenTicket={(id) => setActiva(id)}
+          panelOpen={panelOpen}
+          onTogglePanel={() => setPanelOpen((v) => !v)}
+        />
+        {customerCtx.context && void 0}
       </div>
     </div>
   );

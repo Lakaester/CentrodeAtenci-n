@@ -148,4 +148,37 @@ export class TareabiService {
       return { status: "unavailable", mensaje: this.mensajeDeError(err) };
     }
   }
+
+  /** Catálogo de proyectos de tareas (obtenerDatosEstaticos). */
+  async obtenerProyectos(): Promise<TareabiResult<string[]>> {
+    try {
+      const envelope = await this.client.obtenerDatosEstaticos();
+      const proyectos = (envelope.data?.proyectoList ?? []).map((e) => e.value);
+      return { status: "success", data: proyectos };
+    } catch (err) {
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
+    }
+  }
+
+  /** Catálogo de tipos de tareas (obtenerDatosEstaticos). */
+  async obtenerTipos(): Promise<TareabiResult<string[]>> {
+    try {
+      const envelope = await this.client.obtenerDatosEstaticos();
+      const tipos = (envelope.data?.tipoList ?? []).map((e) => e.value);
+      return { status: "success", data: tipos };
+    } catch (err) {
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
+    }
+  }
+
+  /** Catálogo de desarrolladores/responsables (obtenerDatosEstaticos). */
+  async obtenerDev(): Promise<TareabiResult<string[]>> {
+    try {
+      const envelope = await this.client.obtenerDatosEstaticos();
+      const dev = (envelope.data?.devList ?? []).map((e) => e.value);
+      return { status: "success", data: dev };
+    } catch (err) {
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
+    }
+  }
 }

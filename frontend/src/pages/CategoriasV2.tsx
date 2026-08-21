@@ -16,7 +16,7 @@ interface CategoriasV2Response {
   subcategoriaLider: { nombre: string; volumen: number } | null;
   paretoCategorias: { categoria: string; volumen: number; pct: number; acumulado: number }[];
   paretoSubcategorias: { subcategoria: string; volumen: number; pct: number; acumulado: number }[];
-  jerarquia: { categoria: string; subcategoria: string; volumen: number }[];
+  jerarquia: { categoria: string; subcategoria: string; dominio: string; volumen: number }[];
   categoriasTiempo: { categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[];
   subcategoriasTiempo: { subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[];
   categoriasSLA: { categoria: string; volumen: number; sla: number | null }[];
@@ -194,29 +194,41 @@ function ParetoSubcategoriasChart({ items }: { items: { subcategoria: string; vo
 /* ════════════════════════════════════════════════════════════════ */
 /*  MATRIZ JERÁRQUICA                                              */
 /* ════════════════════════════════════════════════════════════════ */
-function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcategoria: string; volumen: number }[] }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcategoria: string; dominio: string; volumen: number }[] }) {
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
 
+  // Construir árbol Categoría → Subcategoría → Dominio, ordenado por volumen desc en cada nivel.
   const tree = useMemo(() => {
-    const catMap = new Map<string, { total: number; subs: Map<string, number> }>();
+    const catMap = new Map<string, { total: number; subs: Map<string, { total: number; dominios: Map<string, number> }> }>();
     for (const r of items) {
       if (!catMap.has(r.categoria)) catMap.set(r.categoria, { total: 0, subs: new Map() });
       const entry = catMap.get(r.categoria)!;
       entry.total += r.volumen;
-      entry.subs.set(r.subcategoria, (entry.subs.get(r.subcategoria) ?? 0) + r.volumen);
+      if (!entry.subs.has(r.subcategoria)) entry.subs.set(r.subcategoria, { total: 0, dominios: new Map() });
+      const sub = entry.subs.get(r.subcategoria)!;
+      sub.total += r.volumen;
+      sub.dominios.set(r.dominio, (sub.dominios.get(r.dominio) ?? 0) + r.volumen);
     }
     const cats = [...catMap.entries()]
       .map(([categoria, v]) => ({
         categoria,
         total: v.total,
-        subcategorias: [...v.subs.entries()].map(([subcategoria, total]) => ({ subcategoria, total })).sort((a, b) => b.total - a.total),
+        subcategorias: [...v.subs.entries()]
+          .map(([subcategoria, s]) => ({
+            subcategoria,
+            total: s.total,
+            dominios: [...s.dominios.entries()].map(([dominio, total]) => ({ dominio, total })).sort((a, b) => b.total - a.total),
+          }))
+          .sort((a, b) => b.total - a.total),
       }))
       .sort((a, b) => b.total - a.total);
     const grandTotal = cats.reduce((s, c) => s + c.total, 0);
     return { cats, grandTotal };
   }, [items]);
 
-  const toggle = (cat: string) => setExpanded((prev) => { const n = new Set(prev); if (n.has(cat)) n.delete(cat); else n.add(cat); return n; });
+  const toggleCat = (cat: string) => setExpandedCats((prev) => { const n = new Set(prev); if (n.has(cat)) n.delete(cat); else n.add(cat); return n; });
+  const toggleSub = (key: string) => setExpandedSubs((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
 
   if (!tree.cats.length) return null;
 
@@ -228,31 +240,52 @@ function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcateg
             <th className="pb-3 pr-4 w-8" />
             <th className="pb-3 pr-4">Categoría</th>
             <th className="pb-3 pr-4">Subcategoría</th>
+            <th className="pb-3 pr-4">Dominio</th>
             <th className="pb-3 pr-4 text-right">Cantidad</th>
             <th className="pb-3 text-right">%</th>
           </tr>
         </thead>
         <tbody>
           {tree.cats.map((cat) => {
-            const isOpen = expanded.has(cat.categoria);
+            const catOpen = expandedCats.has(cat.categoria);
             return (
               <Fragment key={cat.categoria}>
-                <tr className="border-t border-black-5 cursor-pointer hover:bg-light" onClick={() => toggle(cat.categoria)}>
-                  <td className="py-2.5 pr-4">{isOpen ? <ChevronDown size={14} className="text-black-45" /> : <ChevronRight size={14} className="text-black-45" />}</td>
+                {/* Nivel 1: Categoría */}
+                <tr className="border-t border-black-5 cursor-pointer hover:bg-light" onClick={() => toggleCat(cat.categoria)}>
+                  <td className="py-2.5 pr-4">{catOpen ? <ChevronDown size={14} className="text-black-45" /> : <ChevronRight size={14} className="text-black-45" />}</td>
                   <td className="py-2.5 pr-4 font-semibold text-black-85">{cat.categoria}</td>
                   <td className="py-2.5 pr-4 text-black-25 text-xs">{cat.subcategorias.length} subcategorías</td>
+                  <td className="py-2.5 pr-4 text-black-25 text-xs" />
                   <td className="py-2.5 pr-4 text-right font-medium text-black-85">{fmtNum(cat.total)}</td>
                   <td className="py-2.5 text-right font-medium text-black-85">{fmtPct((cat.total / tree.grandTotal) * 100)}</td>
                 </tr>
-                {isOpen && cat.subcategorias.map((sub) => (
-                  <tr key={`${cat.categoria}-${sub.subcategoria}`} className="border-t border-[#F8F9FA]">
-                    <td className="py-2 pr-4" />
-                    <td className="py-2 pr-4" />
-                    <td className="py-2 pr-4 pl-6 text-[#475569] text-xs">{sub.subcategoria}</td>
-                    <td className="py-2 pr-4 text-right text-[#475569] text-xs">{fmtNum(sub.total)}</td>
-                    <td className="py-2 text-right text-[#475569] text-xs">{fmtPct((sub.total / tree.grandTotal) * 100)}</td>
-                  </tr>
-                ))}
+                {catOpen && cat.subcategorias.map((sub) => {
+                  const subKey = `${cat.categoria}|${sub.subcategoria}`;
+                  const subOpen = expandedSubs.has(subKey);
+                  return (
+                    <Fragment key={subKey}>
+                      {/* Nivel 2: Subcategoría */}
+                      <tr className="border-t border-[#F8F9FA] cursor-pointer hover:bg-light" onClick={() => toggleSub(subKey)}>
+                        <td className="py-2 pr-4" />
+                        <td className="py-2 pr-4" />
+                        <td className="py-2 pr-4 pl-6 text-[#475569] text-xs">{sub.subcategoria}</td>
+                        <td className="py-2 pr-4 text-black-25 text-xs">{subOpen ? "" : `${sub.dominios.length} dominios`}</td>
+                        <td className="py-2 pr-4 text-right text-[#475569] text-xs">{fmtNum(sub.total)}</td>
+                        <td className="py-2 text-right text-[#475569] text-xs">{fmtPct((sub.total / tree.grandTotal) * 100)}</td>
+                      </tr>
+                      {subOpen && sub.dominios.map((dom) => (
+                        <tr key={`${subKey}|${dom.dominio}`} className="border-t border-[#F8F9FA]">
+                          <td className="py-2 pr-4" />
+                          <td className="py-2 pr-4" />
+                          <td className="py-2 pr-4" />
+                          <td className="py-2 pr-4 pl-10 font-mono text-[#475569] text-xs">{dom.dominio}</td>
+                          <td className="py-2 pr-4 text-right text-[#475569] text-xs">{fmtNum(dom.total)}</td>
+                          <td className="py-2 text-right text-[#475569] text-xs">{fmtPct((dom.total / tree.grandTotal) * 100)}</td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                })}
               </Fragment>
             );
           })}
@@ -651,7 +684,7 @@ export default function CategoriasV2() {
       </div>
 
       {/* Matriz Jerárquica */}
-      <ValidatedChart data={data.jerarquia} required={["categoria", "subcategoria", "volumen"]} title="Matriz jerárquica" subtitle="Categoría → Subcategoría · Ordenado por volumen descendente">
+      <ValidatedChart data={data.jerarquia} required={["categoria", "subcategoria", "dominio", "volumen"]} title="Matriz jerárquica" subtitle="Categoría → Subcategoría → Dominio · Ordenado por volumen descendente">
         <MatrizJerarquicaChart items={data.jerarquia} />
       </ValidatedChart>
 

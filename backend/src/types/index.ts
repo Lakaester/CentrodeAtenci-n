@@ -145,7 +145,7 @@ export interface CategoriasV2Response {
   subcategoriaLider: { nombre: string; volumen: number } | null;
   paretoCategorias: { categoria: string; volumen: number; pct: number; acumulado: number }[];
   paretoSubcategorias: { subcategoria: string; volumen: number; pct: number; acumulado: number }[];
-  jerarquia: { categoria: string; subcategoria: string; volumen: number }[];
+  jerarquia: { categoria: string; subcategoria: string; dominio: string; volumen: number }[];
   categoriasTiempo: { categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[];
   subcategoriasTiempo: { subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[];
   categoriasSLA: { categoria: string; volumen: number; sla: number | null }[];

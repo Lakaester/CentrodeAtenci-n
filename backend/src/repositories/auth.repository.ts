@@ -11,6 +11,7 @@ export interface AuthUsuario {
   iniciales: string | null;
   password_hash: string | null;
   last_login_at: Date | null;
+  personabi_id: string | null;
 }
 
 export interface AuthSesion {

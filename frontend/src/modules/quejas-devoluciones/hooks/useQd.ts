@@ -61,6 +61,48 @@ export function useQdEliminar() {
   });
 }
 
+export function useQdAsignarDominio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dominio }: { id: string; dominio: string | null }) => qdService.asignarDominio(id, dominio),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useQdCerrarCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => qdService.cerrarCaso(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useQdReabrirCaso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => qdService.reabrirCaso(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useQdConsolidarCasos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ principalId, casosIds, motivo }: { principalId: string; casosIds: string[]; motivo?: string | null }) =>
+      qdService.consolidarCasos(principalId, casosIds, motivo),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useQdVincularTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ casoId, ticketId, canal }: { casoId: string; ticketId: string; canal?: string | null }) =>
+      qdService.vincularTicket(casoId, ticketId, canal),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
 export function useQdEstados() {
   return useQuery({ queryKey: [...KEY, "catalogo", "estados"], queryFn: () => qdService.estados(), staleTime: 60_000, retry: 1 });
 }
@@ -75,4 +117,8 @@ export function useQdProductos() {
 }
 export function useQdTiposQueja() {
   return useQuery({ queryKey: [...KEY, "catalogo", "tipos-queja"], queryFn: () => qdService.tiposQueja(), staleTime: 60_000, retry: 1 });
+}
+
+export function useQdDominios() {
+  return useQuery({ queryKey: [...KEY, "catalogo", "dominios"], queryFn: () => qdService.dominios(), staleTime: 300_000, retry: 1 });
 }

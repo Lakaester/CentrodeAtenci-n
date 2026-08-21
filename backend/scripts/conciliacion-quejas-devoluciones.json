@@ -1,0 +1,478 @@
+[
+  {
+    "ticket": "30092",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-09",
+    "caso": "QUE-30092"
+  },
+  {
+    "ticket": "30443",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-21",
+    "caso": "QUE-30443"
+  },
+  {
+    "ticket": "30471",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-23",
+    "caso": "QUE-30092"
+  },
+  {
+    "ticket": "30544",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-24",
+    "caso": "QUE-30544"
+  },
+  {
+    "ticket": "30602",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-27",
+    "caso": "QUE-30602"
+  },
+  {
+    "ticket": "30651",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-04-28",
+    "caso": "QUE-30651"
+  },
+  {
+    "ticket": "30615",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-04-29",
+    "caso": "DEV-30615"
+  },
+  {
+    "ticket": "30670",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-04-29",
+    "caso": "DEV-30670"
+  },
+  {
+    "ticket": "30713",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-05-02",
+    "caso": "QUE-30713"
+  },
+  {
+    "ticket": "30843",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-05-07",
+    "caso": "DEV-30843"
+  },
+  {
+    "ticket": "30890",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-05-09",
+    "caso": "QUE-30890"
+  },
+  {
+    "ticket": "4358",
+    "tipo": "queja",
+    "dominio": "polleriaexcelencia.restaurant.pe",
+    "fecha": "2026-05-09",
+    "caso": "QUE-04358"
+  },
+  {
+    "ticket": "4377",
+    "tipo": "queja",
+    "dominio": "polleriaexcelencia2.restaurant.pe",
+    "fecha": "2026-05-09",
+    "caso": "QUE-04377"
+  },
+  {
+    "ticket": "31060",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-05-18",
+    "caso": "QUE-31060"
+  },
+  {
+    "ticket": "31079",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-05-19",
+    "caso": "DEV-31079"
+  },
+  {
+    "ticket": "5221",
+    "tipo": "devolucion",
+    "dominio": "marketvaolurin.restaurant.pe",
+    "fecha": "2026-05-19",
+    "caso": "DEV-05221"
+  },
+  {
+    "ticket": "5646",
+    "tipo": "devolucion",
+    "dominio": "rincondelmar_old.restaurant.pe",
+    "fecha": "2026-05-22",
+    "caso": "DEV-05646"
+  },
+  {
+    "ticket": "31268",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-05-27",
+    "caso": "QUE-31268"
+  },
+  {
+    "ticket": "31269",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-05-27",
+    "caso": "QUE-31269"
+  },
+  {
+    "ticket": "31415",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31415"
+  },
+  {
+    "ticket": "31416",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31416"
+  },
+  {
+    "ticket": "31417",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31417"
+  },
+  {
+    "ticket": "31451",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31451"
+  },
+  {
+    "ticket": "31452",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31452"
+  },
+  {
+    "ticket": "31460",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-03",
+    "caso": "QUE-31460"
+  },
+  {
+    "ticket": "31509",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-05",
+    "caso": "QUE-31509"
+  },
+  {
+    "ticket": "31511",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-05",
+    "caso": "QUE-31511"
+  },
+  {
+    "ticket": "31556",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-06-09",
+    "caso": "DEV-31556"
+  },
+  {
+    "ticket": "31559",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-06-09",
+    "caso": "DEV-31559"
+  },
+  {
+    "ticket": "7239",
+    "tipo": "devolucion",
+    "dominio": "rincondelmar_old.restaurant.pe",
+    "fecha": "2026-06-09",
+    "caso": "DEV-05646"
+  },
+  {
+    "ticket": "31593",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-06-10",
+    "caso": "DEV-31593"
+  },
+  {
+    "ticket": "7709",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-13",
+    "caso": "QUE-07709"
+  },
+  {
+    "ticket": "31795",
+    "tipo": "devolucion",
+    "dominio": null,
+    "fecha": "2026-06-18",
+    "caso": "DEV-31795"
+  },
+  {
+    "ticket": "8230",
+    "tipo": "devolucion",
+    "dominio": "senorwong.restaurant.pe",
+    "fecha": "2026-06-18",
+    "caso": "DEV-08230"
+  },
+  {
+    "ticket": "31814",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-06-19",
+    "caso": "QUE-30092"
+  },
+  {
+    "ticket": "31823",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-06-20",
+    "caso": "QUE-31823"
+  },
+  {
+    "ticket": "8578",
+    "tipo": "devolucion",
+    "dominio": "beikservices.restaurant.pe",
+    "fecha": "2026-06-22",
+    "caso": "DEV-08578"
+  },
+  {
+    "ticket": "31921",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-06-24",
+    "caso": "QUE-31921"
+  },
+  {
+    "ticket": "31923",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-06-24",
+    "caso": "QUE-31923"
+  },
+  {
+    "ticket": "32027",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-06-30",
+    "caso": "QUE-32027"
+  },
+  {
+    "ticket": "32174",
+    "tipo": "devolucion",
+    "dominio": "",
+    "fecha": "2026-07-02",
+    "caso": "DEV-30843"
+  },
+  {
+    "ticket": "32220",
+    "tipo": "queja",
+    "dominio": "casacampoalcor.restaurant.pe",
+    "fecha": "2026-07-06",
+    "caso": "QUE-32220"
+  },
+  {
+    "ticket": "32252",
+    "tipo": "devolucion",
+    "dominio": "lapepalima.restaurant.pe",
+    "fecha": "2026-07-07",
+    "caso": "DEV-32252"
+  },
+  {
+    "ticket": "32260",
+    "tipo": "devolucion",
+    "dominio": "",
+    "fecha": "2026-07-07",
+    "caso": "DEV-32260"
+  },
+  {
+    "ticket": "32273",
+    "tipo": "devolucion",
+    "dominio": "",
+    "fecha": "2026-07-07",
+    "caso": "DEV-32273"
+  },
+  {
+    "ticket": "32281",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-07-08",
+    "caso": "QUE-32281"
+  },
+  {
+    "ticket": "32337",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-07-10",
+    "caso": "QUE-30092"
+  },
+  {
+    "ticket": "32406",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-07-14",
+    "caso": "QUE-32406"
+  },
+  {
+    "ticket": "32407",
+    "tipo": "queja",
+    "dominio": "dontoribio.restaurant.pe",
+    "fecha": "2026-07-14",
+    "caso": "QUE-32407"
+  },
+  {
+    "ticket": "32492",
+    "tipo": "devolucion",
+    "dominio": "casagirasoles.restaurant.pe",
+    "fecha": "2026-07-17",
+    "caso": "DEV-32492"
+  },
+  {
+    "ticket": "32500",
+    "tipo": "devolucion",
+    "dominio": "http://moussa.restaurant.pe",
+    "fecha": "2026-07-17",
+    "caso": "DEV-32273"
+  },
+  {
+    "ticket": "32584",
+    "tipo": "devolucion",
+    "dominio": "https://pechufreeglutenfree.restaurant.pe/",
+    "fecha": "2026-07-22",
+    "caso": "DEV-32584"
+  },
+  {
+    "ticket": "32638",
+    "tipo": "queja",
+    "dominio": "http://bobocha.restaurant.pe/r",
+    "fecha": "2026-07-25",
+    "caso": "QUE-32638"
+  },
+  {
+    "ticket": "32641",
+    "tipo": "queja",
+    "dominio": "grancarbon.quipupos.com",
+    "fecha": "2026-07-25",
+    "caso": "QUE-32641"
+  },
+  {
+    "ticket": "32644",
+    "tipo": "queja",
+    "dominio": "hebraica.restaurant.pe",
+    "fecha": "2026-07-25",
+    "caso": "QUE-32644"
+  },
+  {
+    "ticket": "13918",
+    "tipo": "queja",
+    "dominio": null,
+    "fecha": "2026-07-27",
+    "caso": "QUE-13918"
+  },
+  {
+    "ticket": "32682",
+    "tipo": "queja",
+    "dominio": "heladeriaicecream.restaurant.pe",
+    "fecha": "2026-07-28",
+    "caso": "QUE-32682"
+  },
+  {
+    "ticket": "32696",
+    "tipo": "queja",
+    "dominio": "",
+    "fecha": "2026-07-29",
+    "caso": "QUE-30092"
+  },
+  {
+    "ticket": "32698",
+    "tipo": "queja",
+    "dominio": "heladeriaicecream.restaurant.pe",
+    "fecha": "2026-07-29",
+    "caso": "QUE-32682"
+  },
+  {
+    "ticket": "32727",
+    "tipo": "queja",
+    "dominio": "heladeriaicecream.restaurant.pe",
+    "fecha": "2026-07-30",
+    "caso": "QUE-32682"
+  },
+  {
+    "ticket": "32821",
+    "tipo": "devolucion",
+    "dominio": "casagirasoles.restaurant.pe",
+    "fecha": "2026-08-03",
+    "caso": "DEV-32492"
+  },
+  {
+    "ticket": "32852",
+    "tipo": "devolucion",
+    "dominio": "",
+    "fecha": "2026-08-04",
+    "caso": "DEV-30843"
+  },
+  {
+    "ticket": "32983",
+    "tipo": "devolucion",
+    "dominio": "citypapa.restaurant.pe",
+    "fecha": "2026-08-10",
+    "caso": "DEV-30843"
+  },
+  {
+    "ticket": "33055",
+    "tipo": "queja",
+    "dominio": "elparchefood.restaurant.pe",
+    "fecha": "2026-08-13",
+    "caso": "QUE-33055"
+  },
+  {
+    "ticket": "33068",
+    "tipo": "devolucion",
+    "dominio": "cromanon.restaurant.pe",
+    "fecha": "2026-08-13",
+    "caso": "DEV-33068"
+  },
+  {
+    "ticket": "33144",
+    "tipo": "queja",
+    "dominio": "rikoschicken.quipupos.com",
+    "fecha": "2026-08-18",
+    "caso": "QUE-33144"
+  },
+  {
+    "ticket": "33152",
+    "tipo": "queja",
+    "dominio": "rikoschicken.quipupos.com",
+    "fecha": "2026-08-18",
+    "caso": "QUE-33152"
+  },
+  {
+    "ticket": "33172",
+    "tipo": "devolucion",
+    "dominio": "cromanon.restaurant.pe",
+    "fecha": "2026-08-18",
+    "caso": "DEV-33068"
+  }
+]

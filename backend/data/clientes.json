@@ -260,8 +260,8 @@
       "http://pardoschicken.restaurant.pe/r"
     ],
     "primerContacto": "2026-08-12T17:28:20.478Z",
-    "ultimoContacto": "2026-08-12T17:28:20.478Z",
-    "totalTickets": 1
+    "ultimoContacto": "2026-08-20T15:05:50.225Z",
+    "totalTickets": 2
   },
   {
     "email": "vlozano@restaurant.pe",
@@ -359,8 +359,8 @@
       "barrassanramon.restaurant.pe"
     ],
     "primerContacto": "2026-08-18T13:07:44.424Z",
-    "ultimoContacto": "2026-08-18T16:12:50.345Z",
-    "totalTickets": 4
+    "ultimoContacto": "2026-08-20T23:16:29.586Z",
+    "totalTickets": 7
   },
   {
     "email": "r.vicente@adv.com.pe",
@@ -379,5 +379,221 @@
     "primerContacto": "2026-08-18T14:50:44.859Z",
     "ultimoContacto": "2026-08-18T14:50:44.859Z",
     "totalTickets": 1
+  },
+  {
+    "email": "gastronomicaschiaffino@gmail.com",
+    "dominios": [
+      "http://schiaffinodespensa.restaurant.pe/"
+    ],
+    "primerContacto": "2026-08-18T22:13:07.624Z",
+    "ultimoContacto": "2026-08-18T22:13:07.624Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "luciaramos@laprincipalbistro.com",
+    "dominios": [
+      "laprincipal.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T23:05:41.126Z",
+    "ultimoContacto": "2026-08-19T15:52:54.705Z",
+    "totalTickets": 3
+  },
+  {
+    "email": "bbaldeon@nkc.com.pe",
+    "dominios": [
+      "nkc.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T23:07:30.806Z",
+    "ultimoContacto": "2026-08-19T17:03:02.169Z",
+    "totalTickets": 30
+  },
+  {
+    "email": "empresa.borgo@gmail.com",
+    "dominios": [
+      "borgorossosac.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T23:08:25.566Z",
+    "ultimoContacto": "2026-08-19T16:48:08.545Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "henryrcn89@gmail.com",
+    "dominios": [
+      "elrinconcitodelcuy.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-18T23:08:47.833Z",
+    "ultimoContacto": "2026-08-18T23:13:04.249Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "adm1tacumar@gmail.com",
+    "dominios": [
+      "http://tacumar.restaurant.pe/"
+    ],
+    "primerContacto": "2026-08-19T14:13:18.889Z",
+    "ultimoContacto": "2026-08-19T15:03:40.816Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "amt1608@gmail.com",
+    "dominios": [
+      "http://santorini.restaurant.pe/r"
+    ],
+    "primerContacto": "2026-08-19T14:13:30.608Z",
+    "ultimoContacto": "2026-08-20T15:08:36.490Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "panezcusco@gmail.com",
+    "dominios": [
+      "yuraq.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-19T15:52:50.739Z",
+    "ultimoContacto": "2026-08-19T15:56:27.948Z",
+    "totalTickets": 3
+  },
+  {
+    "email": "restaurantemamamartha@gmail.com",
+    "dominios": [
+      "mamamartha.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-19T15:56:38.005Z",
+    "ultimoContacto": "2026-08-19T15:56:38.005Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "aroman@aytcorp.com.pe",
+    "dominios": [
+      "smashngo.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-19T16:10:57.499Z",
+    "ultimoContacto": "2026-08-19T16:14:12.698Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "juandavid.alarcon@taxxa.co",
+    "dominios": [
+      "http://laesquinadecolis.restaurant.pe/r"
+    ],
+    "primerContacto": "2026-08-19T16:14:20.224Z",
+    "ultimoContacto": "2026-08-19T16:25:50.792Z",
+    "totalTickets": 7
+  },
+  {
+    "email": "estudiocontable.jama1@gmail.com",
+    "dominios": [
+      "elricopiura.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-19T16:48:16.586Z",
+    "ultimoContacto": "2026-08-19T16:48:16.586Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "adm.paulikf@gmail.com",
+    "dominios": [
+      "paulikaffee.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T15:06:09.884Z",
+    "ultimoContacto": "2026-08-20T18:13:05.315Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "contador3@echavarriayasociados.com",
+    "dominios": [
+      "mercadodecolores.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T15:06:21.610Z",
+    "ultimoContacto": "2026-08-20T23:16:36.482Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "yojesusfuentes@gmail.com",
+    "dominios": [
+      "mordidos.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T18:13:09.355Z",
+    "ultimoContacto": "2026-08-20T18:15:32.032Z",
+    "totalTickets": 4
+  },
+  {
+    "email": "operaciones@coleccionistacafe.com",
+    "dominios": [
+      "coleccionistacoffe.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T23:13:00.389Z",
+    "ultimoContacto": "2026-08-20T23:14:16.427Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "roosevelt.torres@williamflorescafe.com",
+    "dominios": [
+      "pachurroyo.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T23:13:09.329Z",
+    "ultimoContacto": "2026-08-20T23:13:48.856Z",
+    "totalTickets": 2
+  },
+  {
+    "email": "dgcasesores23@gmail.com",
+    "dominios": [
+      "dromedarius.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T23:13:47.686Z",
+    "ultimoContacto": "2026-08-20T23:16:10.701Z",
+    "totalTickets": 3
+  },
+  {
+    "email": "ronaldtf@brasarojachicken.com",
+    "dominios": [
+      "brasaroja.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T23:15:10.084Z",
+    "ultimoContacto": "2026-08-20T23:18:49.301Z",
+    "totalTickets": 3
+  },
+  {
+    "email": "noe0521@outlook.com",
+    "dominios": [
+      "http://creperashakescoffee.restaurant.pe/r"
+    ],
+    "primerContacto": "2026-08-20T23:15:16.881Z",
+    "ultimoContacto": "2026-08-20T23:15:16.882Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "idrogoyanelabarboza@gmail.com",
+    "dominios": [
+      "http://chickendoradogroup.restaurant.pe/"
+    ],
+    "primerContacto": "2026-08-20T23:16:10.723Z",
+    "ultimoContacto": "2026-08-20T23:16:10.723Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "valentinicafepizza@gmail.com",
+    "dominios": [
+      "valentinicafepizza.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-20T23:19:09.212Z",
+    "ultimoContacto": "2026-08-20T23:29:49.879Z",
+    "totalTickets": 7
+  },
+  {
+    "email": "alpalorestaurante24@gmail.com",
+    "dominios": [
+      "alpalo.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-21T00:52:09.802Z",
+    "ultimoContacto": "2026-08-21T00:52:09.802Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "jackieaugusto@gmail.com",
+    "dominios": [
+      "http://cafeti.restaurant.pe/"
+    ],
+    "primerContacto": "2026-08-21T00:52:38.272Z",
+    "ultimoContacto": "2026-08-21T01:36:49.456Z",
+    "totalTickets": 32
   }
 ]

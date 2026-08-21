@@ -11,6 +11,7 @@ export interface QdCaso {
   asesor: string | null;
   estado: string | null;
   resultado: string | null;
+  moneda: string | null;           // PEN | USD
   monto_pagado: number | null;
   tipo_monto: string | null;
   area: string | null;
@@ -20,10 +21,14 @@ export interface QdCaso {
   clasificacion: string | null;
   producto: string | null;
   observacion: string | null;
-  origen: string | null;               // MANUAL | CATEGORIZACION
+  origen: string | null;               // MANUAL | CATEGORIZACION | BACKFILL
   eliminado: boolean;
   eliminado_at: string | null;
   eliminado_por: string | null;
+  consolidado_en: string | null;       // caso principal si fue consolidado
+  caso_cerrado: boolean;
+  cerrado_at: string | null;
+  cerrado_por: string | null;
   created_at: string;
   updated_at: string;
   total_interacciones?: number | null;
@@ -35,6 +40,8 @@ export interface QdInteraccion {
   ticket_id: string;
   tipo_relacion: string;
   created_by: string | null;
+  canal: string | null;
+  fecha: string | null;
   created_at: string;
 }
 

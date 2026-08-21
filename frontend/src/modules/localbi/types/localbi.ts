@@ -191,3 +191,22 @@ export interface SoporteOnlineResult {
   nombreLocalPorDominio: Record<string, string>;
   totalIncidencias: number;
 }
+
+/** Historia Clínica de un LOCAL específico. */
+export interface HistoriaLocal {
+  localbi_id: string;
+  dominio: string | null;
+  local: LocalbiLocal | null;
+  actividadLocal: { resumen: ActividadResumen; detalle: AtencionActividad[] };
+  actividadDominio: { resumen: ActividadResumen; detalle: AtencionActividad[] } | null;
+  soporte: { resumen: SoporteResumen; ultimasIncidencias: Incidencia[] } | null;
+  tickets: LocalbiTicket[];
+  tareasSueltas: LocalbiTarea[];
+  nps: LocalbiLocalNps | null;
+  disponible: {
+    actividadLocal: boolean;
+    actividadDominio: boolean;
+    soporte: boolean;
+    tickets: boolean;
+  };
+}

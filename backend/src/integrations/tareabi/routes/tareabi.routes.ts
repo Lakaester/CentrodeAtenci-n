@@ -6,3 +6,6 @@ export const tareabiRouter = Router();
 tareabiRouter.post("/logs/:tareabiId/:ticketbiId", tareabiController.logs);
 tareabiRouter.get("/detalle/:tareabiId", tareabiController.detalle);
 tareabiRouter.get("/estados", tareabiController.estados);
+tareabiRouter.get("/proyectos", tareabiController.proyectos);
+tareabiRouter.get("/tipos", tareabiController.tipos);
+tareabiRouter.get("/dev", tareabiController.dev);

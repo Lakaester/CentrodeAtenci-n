@@ -29,6 +29,7 @@ import { operationsRouter } from "../modules/operations/routes/operations.routes
 import { authRouter } from "./auth.routes";
 import { requireAuth, requirePermission } from "../middlewares/auth.middleware";
 import { qdRouter } from "./quejasDevoluciones.routes";
+import { ticketbiRouter } from "../integrations/ticketbi/routes/ticketbi.routes";
 
 export const apiRouter = Router();
 
@@ -42,6 +43,7 @@ apiRouter.use("/tickets", ticketRouter);
 
 const atencionesRouter = Router();
 atencionesRouter.use("/", atencionRouter);
+atencionesRouter.use("/", requireAuth, ticketbiRouter);
 // atencionesRouter.use("/zendesk", zendeskRouter); // @deprecated — usar /api/zendesk/* (modules/zendesk-test/)
 apiRouter.use("/atenciones", atencionesRouter);
 

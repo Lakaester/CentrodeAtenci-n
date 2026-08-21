@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LocalbiService } from "../services/LocalbiService";
 import { actividadCopeService } from "../services/ActividadCopeService";
 import { soporteOnlineService } from "../services/SoporteOnlineService";
+import { historiaLocalService } from "../services/HistoriaLocalService";
 
 const service = new LocalbiService();
 
@@ -94,6 +95,18 @@ export const localbiController = {
     } catch (err) { next(err); }
   },
 
+  /** GET /actividad-local?ids=a,b,c — resumen de actividad por localbi_id (Nivel 1). */
+  async actividadLocal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const raw = req.query.ids as string | undefined;
+      const ids = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      if (ids.length === 0) return res.status(400).json({ ok: false, error: "ids requerido (lista separada por comas)" });
+      if (ids.length > 500) return res.status(400).json({ ok: false, error: "demasiados localbi_ids (máx 500)" });
+      const data = await actividadCopeService.obtenerActividadPorLocales(ids);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
   /** GET /soporte?dominios=a,b,c&periodo=30 — Soporte en Línea (public.incidencias) por dominios. */
   async soporte(req: Request, res: Response, next: NextFunction) {
     try {
@@ -107,6 +120,25 @@ export const localbiController = {
       }
       const periodo = (req.query.periodo as string | undefined) || undefined;
       const data = await soporteOnlineService.obtenerSoporteOnline(dominios, periodo);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  /** GET /historia/:unidad/local/:localbiId — Historia Clínica de un LOCAL específico. */
+  async historiaLocal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const unidad = decodeURIComponent(req.params.unidadNegocio);
+      const localbiId = req.params.localbiId?.trim();
+      if (!unidad) return res.status(400).json({ ok: false, error: "unidad de negocio requerida" });
+      if (!localbiId) return res.status(400).json({ ok: false, error: "localbiId requerido" });
+
+      const fichaResult = await service.obtenerHistoria(unidad);
+      if (fichaResult.status !== "success" && fichaResult.status !== "warning") {
+        return res.status(502).json({ ok: false, status: fichaResult.status, error: "no se pudo cargar la ficha LocalBI" });
+      }
+      const ficha = fichaResult.data;
+      const data = await historiaLocalService.getHistoriaLocal(ficha, localbiId);
+      if (!data) return res.status(404).json({ ok: false, error: "local no encontrado en la unidad" });
       res.json({ ok: true, data });
     } catch (err) { next(err); }
   },

@@ -21,6 +21,7 @@ export interface CrearCasoInput {
   pais?: string | null;
   estado?: string | null;
   resultado?: string | null;
+  moneda?: string | null;           // PEN | USD
   montoPagado?: number | null;
   tipoMonto?: string | null;
   area?: string | null;
@@ -38,6 +39,7 @@ export interface ActualizarCasoInput {
   pais?: string | null;
   estado?: string | null;
   resultado?: string | null;
+  moneda?: string | null;           // PEN | USD
   montoPagado?: number | null;
   tipoMonto?: string | null;
   area?: string | null;
@@ -86,6 +88,36 @@ export const qdService = {
     return res.data.data;
   },
 
+  /** Asigna/actualiza manualmente el dominio de un caso. */
+  async asignarDominio(id: string, dominio: string | null): Promise<QdCaso> {
+    const res = await api.patch(`/quejas-devoluciones/casos/${id}/dominio`, { dominio });
+    return res.data.data;
+  },
+
+  /** Cierra manualmente un caso. */
+  async cerrarCaso(id: string): Promise<QdCaso> {
+    const res = await api.post(`/quejas-devoluciones/casos/${id}/cerrar`);
+    return res.data.data;
+  },
+
+  /** Reabre manualmente un caso cerrado. */
+  async reabrirCaso(id: string): Promise<QdCaso> {
+    const res = await api.post(`/quejas-devoluciones/casos/${id}/reabrir`);
+    return res.data.data;
+  },
+
+  /** Consolida varios casos secundarios en un caso principal. */
+  async consolidarCasos(principalId: string, casosIds: string[], motivo?: string | null): Promise<{ principal: QdCaso; consolidados: number }> {
+    const res = await api.post(`/quejas-devoluciones/casos/consolidar`, { principalId, casosIds, motivo });
+    return res.data.data;
+  },
+
+  /** Vincula un ticket existente a un caso como contacto. */
+  async vincularTicket(casoId: string, ticketId: string, canal?: string | null): Promise<unknown> {
+    const res = await api.post(`/quejas-devoluciones/casos/${casoId}/vincular-ticket`, { ticketId, canal });
+    return res.data.data;
+  },
+
   async estados(): Promise<QdCatalogoItem[]> {
     const res = await api.get("/quejas-devoluciones/catalogo/estados");
     return res.data.data ?? [];
@@ -104,6 +136,12 @@ export const qdService = {
   },
   async tiposQueja(): Promise<QdCatalogoItem[]> {
     const res = await api.get("/quejas-devoluciones/catalogo/tipos-queja");
+    return res.data.data ?? [];
+  },
+
+  /** Catálogo de dominios homologados (solo lectura, normalizados y únicos). */
+  async dominios(): Promise<string[]> {
+    const res = await api.get("/quejas-devoluciones/catalogo/dominios");
     return res.data.data ?? [];
   },
 

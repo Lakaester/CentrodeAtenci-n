@@ -7,3 +7,8 @@ build/
 backend/dist/
 frontend/dist/
 .vite/
+
+# Datos dinámicos generados por la app (CustomerMemory) y artefactos de build
+backend/data/clientes.json
+backend/data/clientes_cope.json
+frontend/tsconfig.tsbuildinfo

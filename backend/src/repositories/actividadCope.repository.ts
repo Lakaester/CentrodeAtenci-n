@@ -96,6 +96,46 @@ export const actividadCopeRepository = {
     return out;
   },
 
+  /** Actividad de COPE para un localbi_id (Nivel 1). Solo atenciones cuyo localbi_id coincide. */
+  async actividadPorLocalbiId(localbiId: string): Promise<{ resumen: ActividadResumen; detalle: ActividadLocalRow[] }> {
+    const id = localbiId.trim();
+    if (!id) return { resumen: armarResumen([]), detalle: [] };
+    const rows = await prisma.$queryRaw<ActividadLocalRow[]>(Prisma.sql`
+      SELECT localbi_id, dominio, canal, categoria, subcategoria, asesor, estado, fecha, contacto, numero
+      FROM public.v_unificado_norm
+      WHERE localbi_id = ${id}
+      ORDER BY fecha DESC
+      LIMIT 30
+    `);
+    return { resumen: armarResumen(rows), detalle: rows };
+  },
+
+  /**
+   * Resumen de actividad por localbi_id (Nivel 1) para una lista de locales.
+   * Devuelve { localbiId → { total, ultima_atencion } }. Las atenciones cuyo
+   * localbi_id es NULL NO se asignan a ningún local (permanecen a nivel dominio).
+   */
+  async resumenPorLocalbiIds(localbiIds: string[]): Promise<Record<string, { total: number; ultima_atencion: string | null }>> {
+    const limpios = [...new Set(localbiIds.map((s) => s.trim()).filter(Boolean))];
+    if (limpios.length === 0) return {};
+    const rows = await prisma.$queryRaw<{ localbi_id: string; fecha: Date }[]>(Prisma.sql`
+      SELECT localbi_id, fecha
+      FROM public.v_unificado_norm
+      WHERE localbi_id = ANY(${limpios})
+    `);
+    const out: Record<string, { total: number; ultima_atencion: string | null }> = {};
+    for (const id of limpios) out[id] = { total: 0, ultima_atencion: null };
+    for (const r of rows) {
+      const id = r.localbi_id?.trim();
+      if (!id || !out[id]) continue;
+      out[id].total += 1;
+      if (!out[id].ultima_atencion || r.fecha > new Date(out[id].ultima_atencion)) {
+        out[id].ultima_atencion = r.fecha.toISOString();
+      }
+    }
+    return out;
+  },
+
   /** Detalle de atenciones (últimas N) para una lista de dominios. */
   async detallePorDominios(dominios: string[], limite = 30): Promise<Record<string, ActividadLocalRow[]>> {
     const limpios = [...new Set(dominios.map(normalizarDominioActividad).filter(Boolean))];

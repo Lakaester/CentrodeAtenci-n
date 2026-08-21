@@ -16,6 +16,7 @@ export interface AuthMe {
   equipo: string | null;
   estado: string;
   permisos: PermisoRow[];
+  personabi_id?: string | null;
 }
 
 function hashToken(token: string): string {
@@ -37,6 +38,7 @@ function toMe(u: AuthUsuario, permisos: PermisoRow[]): AuthMe {
     equipo: u.equipo_id,
     estado: u.estado,
     permisos,
+    personabi_id: u.personabi_id,
   };
 }
 

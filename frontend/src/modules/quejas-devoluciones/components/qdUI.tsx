@@ -7,9 +7,10 @@ export function fmtFecha(v: string | null | undefined): string {
   return d.toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function fmtMoneda(v: number | null | undefined): string {
+export function fmtMoneda(v: number | null | undefined, moneda?: string | null): string {
   if (v == null) return "—";
-  return v.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+  const mon = moneda === "USD" ? "USD" : "PEN";
+  return v.toLocaleString("es-PE", { style: "currency", currency: mon });
 }
 
 export function fmtPct(v: number | null | undefined): string {

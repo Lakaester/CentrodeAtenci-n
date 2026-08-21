@@ -16,6 +16,20 @@ const N_CATEGORIA = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')
 const N_ASESOR_COALESCE = Prisma.sql`COALESCE(${N_ASESOR}, 'Sin asesor')`;
 const OFFICIAL_FILTER = Prisma.sql`${N_ASESOR} = ANY(ARRAY['Andres','Danilo','Eveling','Lidia','Lisbeth','Sheyla','Victor']::text[])`;
 
+/* ── HOMOLOGACIÓN CENTRAL DE SUBCATEGORÍAS (fuente única de verdad) ──
+ * Clave de agrupación: cope_scat_normalizada(subcategoria) — lowercase, sin tildes,
+ * espacios colapsados, _ → espacio. Consolida variantes de escritura entre canales.
+ * Etiqueta mostrada: INITCAP(cope_scat_normalizada(subcategoria)) — canónico.
+ * IMPORTANTE: SCAT_LABEL se construye sobre la MISMA clave normalizada (SCAT_KEY)
+ * para que sea funcionalmente dependiente del GROUP BY (requisito de GROUP BY
+ * estricto en PostgreSQL y motores SQL). Todas las queries que agrupan por
+ * subcategoría usan SCAT_KEY en GROUP BY y SCAT_LABEL en SELECT.
+ */
+const SCAT_KEY = Prisma.sql`cope_scat_normalizada(subcategoria)`;
+const SCAT_LABEL = Prisma.sql`COALESCE(NULLIF(INITCAP(cope_scat_normalizada(subcategoria)), ''), 'Sin subcategoría')`;
+/* Alias de agrupación: las queries agrupan por la clave normalizada (SCAT_KEY). */
+const SCAT_GROUP = SCAT_KEY;
+
 export interface Desglose {
   etiqueta: string;
   total: number;
@@ -938,7 +952,7 @@ export const unificadoRepository = {
     const porAsesor = await desglose(whereActual, N_ASESOR);
     const topAsesores = await rankingAsesores(whereActual);
     const topCategorias = await desgloseTop(whereActual, Prisma.sql`categoria`, 10);
-    const topSubcategorias = await desgloseTop(whereActual, N_SUBCATEGORIA);
+    const topSubcategorias = await desgloseTop(whereActual, SCAT_LABEL);
     const tiempos = await tiemposPorCanal(whereActual);
 
     return {
@@ -1149,7 +1163,7 @@ export const unificadoRepository = {
     const A_COL = Prisma.sql`COALESCE(${A_N}, 'Sin asesor')`;
     const P_COL = Prisma.sql`COALESCE(INITCAP(TRANSLATE(REPLACE(TRIM(pais), '_', ' '), 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun')), 'Sin país')`;
     const C_COL = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')), ''), 'Sin categoría')`;
-    const SC_COL = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SC_COL = SCAT_LABEL;
 
     const [
       totalActual,
@@ -1281,7 +1295,7 @@ export const unificadoRepository = {
                COUNT(*)::int AS total
         FROM public.v_unificado_norm
         ${whereActual}
-        GROUP BY ${SC_COL}, ${A_COL}
+        GROUP BY ${SCAT_KEY}, ${A_COL}
         ORDER BY total DESC
       `,
 
@@ -1345,7 +1359,7 @@ export const unificadoRepository = {
                COUNT(*)::int AS total
         FROM public.v_unificado_norm
         ${whereActual}
-        GROUP BY ${A_COL}, canal, ${C_COL}, ${SC_COL}
+        GROUP BY ${A_COL}, canal, ${C_COL}, ${SCAT_KEY}
         ORDER BY asesor, canal, categoria, total DESC
       `,
     ]);
@@ -1380,7 +1394,7 @@ export const unificadoRepository = {
       SELECT ${SC_COL} AS sub, COUNT(*)::int AS total
       FROM public.v_unificado_norm
       ${whereActual}
-      GROUP BY ${SC_COL}
+      GROUP BY ${SCAT_KEY}
       ORDER BY total DESC
       LIMIT 15
     `) as { sub: string; total: number }[];
@@ -1395,7 +1409,7 @@ export const unificadoRepository = {
                COUNT(*)::int AS total
         FROM public.v_unificado_norm
         ${whereSub}
-        GROUP BY ${SC_COL}, ${A_COL}
+        GROUP BY ${SCAT_KEY}, ${A_COL}
         ORDER BY etiqueta, total DESC
       `) as { etiqueta: string; asesor: string; total: number }[];
     }
@@ -1564,7 +1578,7 @@ export const unificadoRepository = {
   async categorias(filters: DashboardFilters): Promise<CategoriasResponse> {
     const whereActual = construirWhere(filters);
     const CAT = N_CATEGORIA;
-    const SCAT = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SCAT = SCAT_LABEL;
     const GRUPO = Prisma.sql`
       CASE
         WHEN canal ILIKE '%what%' THEN 'whatsapp'
@@ -1661,7 +1675,7 @@ export const unificadoRepository = {
                COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= ${uRes})::int AS cumpleSlaAtencion,
                COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL)::int AS totalSlaAtencion
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT}, ${CAT} ORDER BY total DESC LIMIT 15
+        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY total DESC LIMIT 15
       ` as Promise<{ subcategoria: string; categoria: string; total: number; tiempoEspera: number | null; tiempoAtencion: number | null; tiempoTotal: number | null; cumpleSlaEspera: number; totalSlaEspera: number; cumpleSlaAtencion: number; totalSlaAtencion: number }[]>,
 
       /* All subcategories (unlimited) for Pareto */
@@ -1675,13 +1689,13 @@ export const unificadoRepository = {
                COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= ${uRes})::int AS cumpleSlaAtencion,
                COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL)::int AS totalSlaAtencion
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT}, ${CAT} ORDER BY total DESC
+        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY total DESC
       ` as Promise<{ subcategoria: string; categoria: string; total: number; tiempoEspera: number | null; tiempoAtencion: number | null; tiempoTotal: number | null; cumpleSlaEspera: number; totalSlaEspera: number; cumpleSlaAtencion: number; totalSlaAtencion: number }[]>,
 
       prisma.$queryRaw`
         SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT} ORDER BY total DESC LIMIT 1
+        GROUP BY ${SCAT_GROUP} ORDER BY total DESC LIMIT 1
       ` as Promise<{ subcategoria: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -1712,7 +1726,7 @@ export const unificadoRepository = {
                COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL
                                 AND primera_respuesta_min_norm > ${uPr})::int AS noCumple
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT} ORDER BY total DESC
+        GROUP BY ${SCAT_GROUP} ORDER BY total DESC
       ` as Promise<{ subcategoria: string; total: number; cumple: number; noCumple: number }[]>,
 
       prisma.$queryRaw`
@@ -1734,7 +1748,7 @@ export const unificadoRepository = {
         SELECT ${SCAT} AS categoria, ${N_ASESOR_COALESCE} AS asesor,
                COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT}, ${N_ASESOR_COALESCE} ORDER BY categoria, total DESC
+        GROUP BY ${SCAT_GROUP}, ${N_ASESOR_COALESCE} ORDER BY categoria, total DESC
       ` as Promise<{ categoria: string; asesor: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -1774,7 +1788,7 @@ export const unificadoRepository = {
              COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= ${uRes})::int AS cumpleSlaAtencion,
              COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL)::int AS totalSlaAtencion
       FROM public.v_unificado_norm ${whereActual}
-      GROUP BY ${CAT}, ${SCAT}, CASE WHEN canal ILIKE '%what%' THEN 'WhatsApp' ELSE 'Correo' END
+      GROUP BY ${CAT}, ${SCAT_GROUP}, CASE WHEN canal ILIKE '%what%' THEN 'WhatsApp' ELSE 'Correo' END
       ORDER BY categoria, subcategoria, total DESC
     ` as {
       categoria: string; subcategoria: string; canal: string; total: number;
@@ -1937,7 +1951,9 @@ export const unificadoRepository = {
   async categoriasV2(filters: DashboardFilters): Promise<CategoriasV2Response> {
     const whereActual = construirWhere(filters);
     const CAT = N_CATEGORIA;
-    const SCAT = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SCAT = SCAT_LABEL;   // canónico mostrado (homologado central)
+    const SCAT_GROUP = SCAT_KEY; // clave de agrupación (homologada central)
+    const DOM = Prisma.sql`COALESCE(NULLIF(TRIM(dominio), ''), '—')`;
     const ASESOR = N_ASESOR_COALESCE;
     const SLA_CASE = Prisma.sql`CASE WHEN resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= 20 THEN 1 ELSE 0 END`;
 
@@ -1960,17 +1976,17 @@ export const unificadoRepository = {
 
       prisma.$queryRaw`SELECT COUNT(DISTINCT ${CAT})::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>,
 
-      prisma.$queryRaw`SELECT COUNT(DISTINCT ${SCAT})::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>,
+      prisma.$queryRaw`SELECT COUNT(DISTINCT ${SCAT_GROUP})::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>,
 
       prisma.$queryRaw`SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT} ORDER BY volumen DESC LIMIT 1` as Promise<{ categoria: string; volumen: number }[]>,
 
-      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT} ORDER BY volumen DESC LIMIT 1` as Promise<{ subcategoria: string; volumen: number }[]>,
+      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT_GROUP} ORDER BY volumen DESC LIMIT 1` as Promise<{ subcategoria: string; volumen: number }[]>,
 
       prisma.$queryRaw`SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT} ORDER BY volumen DESC` as Promise<{ categoria: string; volumen: number }[]>,
 
-      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT} ORDER BY volumen DESC` as Promise<{ subcategoria: string; volumen: number }[]>,
+      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT_GROUP} ORDER BY volumen DESC` as Promise<{ subcategoria: string; volumen: number }[]>,
 
-      prisma.$queryRaw`SELECT ${CAT} AS categoria, ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT}, ${SCAT} ORDER BY categoria, volumen DESC` as Promise<{ categoria: string; subcategoria: string; volumen: number }[]>,
+      prisma.$queryRaw`SELECT ${CAT} AS categoria, ${SCAT} AS subcategoria, ${DOM} AS dominio, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT}, ${SCAT_GROUP}, ${DOM} ORDER BY categoria, volumen DESC` as Promise<{ categoria: string; subcategoria: string; dominio: string; volumen: number }[]>,
 
       prisma.$queryRaw`
         SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen,
@@ -1987,7 +2003,7 @@ export const unificadoRepository = {
                ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
                ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT}, ${CAT} ORDER BY volumen DESC LIMIT 15
+        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY volumen DESC LIMIT 15
       ` as Promise<{ subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[]>,
 
       prisma.$queryRaw`
@@ -2001,12 +2017,12 @@ export const unificadoRepository = {
         SELECT ${SCAT} AS subcategoria, ${CAT} AS categoria, COUNT(*)::int AS volumen,
                ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT}, ${CAT} ORDER BY volumen DESC LIMIT 15
+        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY volumen DESC LIMIT 15
       ` as Promise<{ subcategoria: string; categoria: string; volumen: number; sla: number | null }[]>,
 
       prisma.$queryRaw`SELECT ${ASESOR} AS asesor, ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${ASESOR}, ${CAT}` as Promise<{ asesor: string; categoria: string; volumen: number }[]>,
 
-      prisma.$queryRaw`SELECT ${ASESOR} AS asesor, ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${ASESOR}, ${SCAT} ORDER BY volumen DESC` as Promise<{ asesor: string; subcategoria: string; volumen: number }[]>,
+      prisma.$queryRaw`SELECT ${ASESOR} AS asesor, ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${ASESOR}, ${SCAT_GROUP} ORDER BY volumen DESC` as Promise<{ asesor: string; subcategoria: string; volumen: number }[]>,
 
       prisma.$queryRaw`
         SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen,
@@ -2050,7 +2066,7 @@ export const unificadoRepository = {
       subcategoriaLider: subLiderRaw[0] ? { nombre: subLiderRaw[0].subcategoria, volumen: subLiderRaw[0].volumen } : null,
       paretoCategorias,
       paretoSubcategorias,
-      jerarquia: jerarquiaRaw.map((r) => ({ categoria: r.categoria, subcategoria: r.subcategoria, volumen: r.volumen })),
+      jerarquia: jerarquiaRaw.map((r) => ({ categoria: r.categoria, subcategoria: r.subcategoria, dominio: r.dominio, volumen: r.volumen })),
       categoriasTiempo: catsTiempoRaw.map((r) => ({ categoria: r.categoria, volumen: r.volumen, tiempo_resolucion: r.tiempo_resolucion, tiempo_espera: r.tiempo_espera, tiempo_atencion: r.tiempo_atencion, sla: r.sla })),
       subcategoriasTiempo: subsTiempoRaw.map((r) => ({ subcategoria: r.subcategoria, categoria: r.categoria, volumen: r.volumen, tiempo_resolucion: r.tiempo_resolucion, sla: r.sla })),
       categoriasSLA: catsSLARaw.map((r) => ({ categoria: r.categoria, volumen: r.volumen, sla: r.sla })),
@@ -2065,7 +2081,7 @@ export const unificadoRepository = {
     const whereActual = construirWhere(filters);
     const DOM = Prisma.sql`COALESCE(NULLIF(TRIM(dominio), ''), '-')`;
     const N_CAT = N_CATEGORIA;
-    const N_SCAT = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const N_SCAT = SCAT_LABEL;
     const GRUPO = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'whatsapp' WHEN canal ILIKE '%ticket%' THEN 'whaticket' ELSE 'zendesk' END`;
     const WPP = Prisma.sql`canal ILIKE '%what%'`;
     const CORREO = Prisma.sql`(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%')`;
@@ -2098,7 +2114,7 @@ export const unificadoRepository = {
                ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
                ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM}, ${GRUPO}, ${N_CAT}, ${N_SCAT}
+        GROUP BY ${DOM}, ${GRUPO}, ${N_CAT}, ${SCAT_KEY}
         ORDER BY cliente, canal, categoria, subcategoria
       ` as Promise<{ cliente: string; canal: string; categoria: string; subcategoria: string; total: number; tiempo_espera: number | null; tiempo_resolucion: number | null; sla: number | null }[]>,
 
@@ -2251,9 +2267,9 @@ export const unificadoRepository = {
       ` as Promise<{ cliente: string; categoria: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT ${CL_COL} AS cliente, COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría') AS categoria, COUNT(*)::int AS total
+        SELECT ${CL_COL} AS cliente, ${SCAT_LABEL} AS categoria, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CL_COL}, COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría') ORDER BY cliente, total DESC
+        GROUP BY ${CL_COL}, ${SCAT_KEY} ORDER BY cliente, total DESC
       ` as Promise<{ cliente: string; categoria: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -2637,9 +2653,9 @@ export const unificadoRepository = {
       ` as Promise<{ categoria: string; total: number; resolucion: number | null }[]>,
 
       prisma.$queryRaw`
-        SELECT ${N_SUBCATEGORIA} AS subcategoria, COUNT(*)::int AS total
+        SELECT ${SCAT_LABEL} AS subcategoria, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_SUBCATEGORIA} ORDER BY total DESC LIMIT 20
+        GROUP BY ${SCAT_KEY} ORDER BY total DESC LIMIT 20
       ` as Promise<{ subcategoria: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -3035,7 +3051,7 @@ export const unificadoRepository = {
   async tendencias(filters: DashboardFilters): Promise<TendenciasResponse> {
     const whereActual = construirWhere(filters);
     const CL_COL = Prisma.sql`COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto')`;
-    const SCAT = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SCAT = SCAT_LABEL;
     const GRUPO = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'whatsapp' WHEN canal ILIKE '%zendesk%' OR canal ILIKE '%correo%' THEN 'correo' ELSE 'otro' END`;
     const uPr = umbral(SLA_MINUTOS.primeraRespuesta);
 
@@ -3137,7 +3153,7 @@ export const unificadoRepository = {
       prisma.$queryRaw`
         SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT} ORDER BY total DESC LIMIT 20
+        GROUP BY ${SCAT_GROUP} ORDER BY total DESC LIMIT 20
       ` as Promise<{ subcategoria: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -3176,7 +3192,7 @@ export const unificadoRepository = {
       evolSubRaw = await prisma.$queryRaw`
         SELECT fecha::date AS periodo, ${SCAT} AS subcategoria, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereSubs}
-        GROUP BY fecha::date, ${SCAT} ORDER BY periodo, total DESC
+        GROUP BY fecha::date, ${SCAT_GROUP} ORDER BY periodo, total DESC
       ` as { periodo: Date; subcategoria: string; total: number }[];
     }
 
@@ -3437,7 +3453,7 @@ export const unificadoRepository = {
       ORDER BY pais, canal, total DESC
     ` as { pais: string; canal: string; categoria: string; total: number }[];
 
-    const SCAT = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SCAT = SCAT_LABEL;
     const paisCanalSub = await prisma.$queryRaw`
       SELECT
         ${N_PAIS} AS pais,
@@ -3447,7 +3463,7 @@ export const unificadoRepository = {
         COUNT(*)::int AS total
       FROM public.v_unificado_norm
       ${where}
-      GROUP BY ${N_PAIS}, canal, categoria, ${SCAT}
+      GROUP BY ${N_PAIS}, canal, categoria, ${SCAT_GROUP}
       ORDER BY pais, canal, categoria, total DESC
     ` as { pais: string; canal: string; categoria: string; subcategoria: string; total: number }[];
 
@@ -3554,7 +3570,7 @@ export const unificadoRepository = {
   async opciones(): Promise<OpcionesFiltro> {
     const PAIS_N = Prisma.sql`INITCAP(TRANSLATE(REPLACE(TRIM(pais), '_', ' '), 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun'))`;
     const ASESOR_N = Prisma.sql`TRANSLATE(asesor, 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun')`;
-    const SUB_N = Prisma.sql`REPLACE(subcategoria, '_', ' ')`;
+    const SUB_N = SCAT_LABEL;
     const filas = (await prisma.$queryRaw`
       SELECT
         (SELECT array_agg(DISTINCT canal ORDER BY canal) FROM public.v_unificado_norm WHERE canal IS NOT NULL AND canal <> '') AS canal,
@@ -3598,7 +3614,7 @@ export const unificadoRepository = {
     const A_COL = Prisma.sql`COALESCE(INITCAP(TRANSLATE(SPLIT_PART(asesor, ' ', 1), 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun')), 'Sin asesor')`;
     const P_COL = Prisma.sql`COALESCE(INITCAP(TRANSLATE(REPLACE(TRIM(pais), '_', ' '), 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun')), 'Sin país')`;
     const C_COL = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')), ''), 'Sin categoría')`;
-    const SC_COL = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(subcategoria, '_', ' ')), ''), 'Sin subcategoría')`;
+    const SC_COL = SCAT_LABEL;
 
     const [countResult] = (await prisma.$queryRaw`
       SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${where}
@@ -3640,7 +3656,7 @@ export const unificadoRepository = {
   /** Quejas y Devoluciones — reporte analitico completo */
   async quejasDevoluciones(filters: DashboardFilters): Promise<QuejasDevolucionesResponse> {
     const whereActual = construirWhere(filters);
-    const NORM = Prisma.sql`TRANSLATE(LOWER(TRIM(REPLACE(subcategoria, '_', ' '))), 'áéíóúüñ', 'aeiouun')`;
+    const NORM = Prisma.sql`cope_scat_normalizada(subcategoria)`;
     const FILTRO = Prisma.sql`${N_CATEGORIA} = 'GESTION' AND ${NORM} IN ('queja', 'solicitud de devolucion')`;
     const w = whereActual === Prisma.empty
       ? Prisma.sql`WHERE ${FILTRO}`

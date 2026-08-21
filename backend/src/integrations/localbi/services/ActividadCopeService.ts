@@ -38,4 +38,13 @@ export const actividadCopeService = {
       ultimasAtenciones: detalle[dominio] ?? [],
     }));
   },
+
+  /**
+   * Resumen de actividad por localbi_id (Nivel 1). Cada local obtiene su
+   * propio total y última atención. Las atenciones sin localbi_id (NULL) NO
+   * se asignan a ningún local.
+   */
+  async obtenerActividadPorLocales(localbiIds: string[]): Promise<Record<string, { total: number; ultima_atencion: string | null }>> {
+    return actividadCopeRepository.resumenPorLocalbiIds(localbiIds);
+  },
 };
