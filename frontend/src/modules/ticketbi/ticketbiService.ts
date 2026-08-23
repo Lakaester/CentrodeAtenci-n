@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
  * Capa desacoplada: el formulario NO conoce la fuente de los datos.
  * - Categoría / Subcategoría / Nivel / Áreas: provienen del backend COPE
  *   (catálogo local, sin tablas por ahora).
- * - Proyectos / Tipos / Dev / Estados: provienen de Tareabi (Micro-Services)
+ * - Proyectos / Tipos / Dev / Estados / Áreas: provienen de Tareabi (Micro-Services)
  *   vía backend.
  *
  * Cuando se confirmen los endpoints reales de Micro-Services, solo se cambia
@@ -28,8 +28,9 @@ export async function obtenerNiveles(): Promise<string[]> {
   return res.data?.data ?? [];
 }
 
-export async function obtenerAreas(): Promise<string[]> {
-  const res = await api.get("/atenciones/ticket-catalogos/areas");
+/** Áreas de tarea desde Tareabi (obtenerDatosEstaticos → areaList). */
+export async function obtenerAreasTarea(): Promise<Array<{ id: number; value: string }>> {
+  const res = await api.get("/tareabi/catalogo-areas");
   return res.data?.data ?? [];
 }
 

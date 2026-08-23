@@ -16,6 +16,8 @@ const envSchema = z.object({
   LOCALBI_BASE_URL: z.string().default("https://microservices.restaurant.pe/backendrestaurantpe"),
   LOCALBI_MODE: z.enum(["public", "private"]).default("private"),
   LOCALBI_TOKEN: z.string().default(""),
+  INTEGRACIONES_API_URL: z.string().default("https://api.integraciones.restaurant.pe"),
+  INTEGRACIONES_API_TOKEN: z.string().default(""),
   BOOTSTRAP_ADMIN_EMAIL: z.string().optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),
 });

@@ -31,6 +31,7 @@ export interface TicketDetail {
   tipo: string | null;
   clienteNombre: string;
   clienteEmail: string | null;
+  telefono: string | null;
   dominio: string | null;
   pais: string | null;
   hasPendingReply?: boolean;
@@ -70,6 +71,7 @@ interface AtencionCompletaResponse {
     nombre: string;
     correoPrincipal: string;
     correosSecundarios: string[];
+    telefonos?: string[];
     empresa: string | null;
     pais: string | null;
     dominios: string[];

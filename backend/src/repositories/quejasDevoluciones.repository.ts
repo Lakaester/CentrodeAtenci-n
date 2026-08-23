@@ -22,6 +22,7 @@ export interface QdCasoRow {
   clasificacion: string | null;
   producto: string | null;
   observacion: string | null;
+  fecha_solicitud: string | null;     // YYYY-MM-DD (fecha en que el cliente solicitó)
   origen: string | null;               // MANUAL | CATEGORIZACION | BACKFILL
   eliminado: boolean;
   eliminado_at: Date | null;
@@ -76,6 +77,7 @@ export interface CrearCasoInput {
   clasificacion?: string | null;
   producto?: string | null;
   observacion?: string | null;
+  fechaSolicitud?: string | null;  // YYYY-MM-DD
   origen?: string | null;    // MANUAL | CATEGORIZACION | BACKFILL
 }
 
@@ -313,13 +315,13 @@ export const qdRepository = {
     const rows = await prisma.$queryRaw<QdCasoRow[]>`
       INSERT INTO qd_casos
         (id, tipo, numero, ticket_id, ticket_padre_id, dominio, pais, asesor, estado, resultado,
-         moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, origen)
+         moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, fecha_solicitud, origen)
       VALUES
         (${id}, ${input.tipo}, ${numero}, ${input.ticketId ?? null}, ${input.ticketPadreId ?? null}, ${input.dominio ?? null}, ${input.pais ?? null},
          ${input.asesor ?? null}, ${input.estado ?? null}, ${input.resultado ?? null},
          ${input.moneda ?? "PEN"}, ${input.montoPagado ?? null}, ${input.tipoMonto ?? null}, ${input.area ?? null}, ${input.motivo ?? null},
          ${input.porcentaje ?? null}, ${input.montoDevuelto ?? null}, ${input.clasificacion ?? null}, ${input.producto ?? null},
-         ${input.observacion ?? null}, ${input.origen ?? "MANUAL"})
+         ${input.observacion ?? null}, ${input.fechaSolicitud ?? null}, ${input.origen ?? "MANUAL"})
       RETURNING *
     `;
     return rows[0];
@@ -388,6 +390,7 @@ export const qdRepository = {
       clasificacion: patch.clasificacion,
       producto: patch.producto,
       observacion: patch.observacion,
+      fecha_solicitud: patch.fechaSolicitud,
     };
     for (const [col, val] of Object.entries(map)) {
       if (val !== undefined) { sets.push(`${col} = $${values.length + 1}`); values.push(val); }

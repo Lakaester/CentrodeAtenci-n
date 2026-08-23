@@ -30,6 +30,8 @@ import { authRouter } from "./auth.routes";
 import { requireAuth, requirePermission } from "../middlewares/auth.middleware";
 import { qdRouter } from "./quejasDevoluciones.routes";
 import { ticketbiRouter } from "../integrations/ticketbi/routes/ticketbi.routes";
+import { integracionesRouter } from "../integrations/integraciones/routes/integraciones.routes";
+import { contactoRouter } from "./contacto.routes";
 
 export const apiRouter = Router();
 
@@ -40,6 +42,7 @@ apiRouter.use("/auth", authRouter);
 apiRouter.use("/quejas-devoluciones", qdRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/tickets", ticketRouter);
+apiRouter.use("/contactos", requireAuth, contactoRouter);
 
 const atencionesRouter = Router();
 atencionesRouter.use("/", atencionRouter);
@@ -54,6 +57,7 @@ apiRouter.use("/printer", printerRouter);
 // Rutas sensibles protegidas: requieren sesión autenticada.
 apiRouter.use("/localbi", requireAuth, localbiRouter);
 apiRouter.use("/tareabi", requireAuth, tareabiRouter);
+apiRouter.use("/integraciones", requireAuth, integracionesRouter);
 apiRouter.use("/control-facturacion", requireAuth, facturacionRouter);
 apiRouter.use("/control-facturacion/config", requireAuth, facturacionConfigRouter);
 apiRouter.use("/config", requireAuth, requirePermission("Configuracion", "administrar"), adminConfigRouter);

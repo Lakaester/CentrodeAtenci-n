@@ -5,13 +5,18 @@
  *   https://microservices.restaurant.pe/backendrestaurantpe/public/rest/common/ticketbi/ticketbi
  * Solo acepta POST (GET devuelve "Method not allowed").
  *
- * Payload esperado:
+ * Payload enviado:
  *   {
  *     localbi_id: number,
  *     personabi_id: number,
  *     ticketbi_asunto: string,
  *     ticketbi_categoria: "DESARROLLO",
- *     detalleList: [ { tarea_nombre, tarea_descripcion, area, plataforma } ]
+ *     detalleList: [{
+ *       tarea_nombre, tarea_descripcion, area, plataforma,
+ *       tarea_proyecto, tarea_version, tarea_tipo,
+ *       tarea_etapaerror, tarea_fechaentrega, tarea_referencia,
+ *       casos_contemplar
+ *     }]
  *   }
  *
  * Respuesta:
@@ -24,8 +29,15 @@ const SEGMENTO = "/public/rest/common/ticketbi/ticketbi";
 export interface TicketbiDetalle {
   tarea_nombre: string;
   tarea_descripcion: string;
-  area: string;
+  area: number;
   plataforma?: string;
+  tarea_proyecto?: string;
+  tarea_version?: string;
+  tarea_tipo?: string;
+  tarea_etapaerror?: string;
+  tarea_fechaentrega?: string;
+  tarea_referencia?: string;
+  casos_contemplar?: string;
 }
 
 export interface CrearTicketbiInput {

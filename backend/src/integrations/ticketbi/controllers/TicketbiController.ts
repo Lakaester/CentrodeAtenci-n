@@ -19,7 +19,8 @@ const crearTicketSchema = z.object({
     z.object({
       tarea_nombre: z.string().optional(),
       tarea_descripcion: z.string().optional(),
-      area: z.string().optional(),
+      area: z.union([z.number(), z.string()]).optional(),
+      areaId: z.number().int().positive(),
       plataforma: z.string().optional(),
       proyecto: z.string().optional(),
       version: z.string().optional(),

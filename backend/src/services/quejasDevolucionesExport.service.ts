@@ -7,6 +7,7 @@
 import ExcelJS from "exceljs";
 import { qdRepository, type QdCasoRow } from "../repositories/quejasDevoluciones.repository";
 import { DomainError } from "../core/errors/types";
+import { normalizeCountryName } from "../utils/CountryResolver";
 
 export interface FiltrosExportacion {
   tipo?: string;
@@ -73,7 +74,7 @@ function hojaDevoluciones(ws: ExcelJS.Worksheet, casos: QdCasoRow[]) {
   ws.getRow(1).font = { bold: true };
   for (const c of casos) {
     ws.addRow({
-      fecha: fmtFecha(c.created_at),
+      fecha: c.fecha_solicitud ?? fmtFecha(c.created_at),
       ticket: c.ticket_id ?? "",
       numero: c.numero,
       dominio: c.dominio ?? "",
@@ -113,7 +114,7 @@ function hojaQuejas(ws: ExcelJS.Worksheet, casos: QdCasoRow[]) {
   ws.getRow(1).font = { bold: true };
   for (const c of casos) {
     ws.addRow({
-      fecha: fmtFecha(c.created_at),
+      fecha: c.fecha_solicitud ?? fmtFecha(c.created_at),
       ticket: c.ticket_id ?? "",
       numero: c.numero,
       dominio: c.dominio ?? "",
@@ -143,7 +144,15 @@ export const qdExportService = {
       throw new DomainError("Tipo de exportación inválido", "TIPO_INVALIDO");
     }
 
-    const casos = await qdRepository.listarConFiltros(filtros);
+    // El filtro país se homologa con el CountryResolver (motor oficial):
+    // el dropdown envía la clave canónica (ej. "PERU") y aquí se compara
+    // contra todas las variantes crudas (Perú / perú / PERU / Peru...).
+    const { pais, ...restoFiltros } = filtros;
+    let casos = await qdRepository.listarConFiltros(restoFiltros);
+    if (pais) {
+      const objetivo = normalizeCountryName(pais);
+      if (objetivo) casos = casos.filter((c) => normalizeCountryName(c.pais) === objetivo);
+    }
     const devoluciones = casos.filter((c) => c.tipo === "devolucion");
     const quejas = casos.filter((c) => c.tipo === "queja");
 

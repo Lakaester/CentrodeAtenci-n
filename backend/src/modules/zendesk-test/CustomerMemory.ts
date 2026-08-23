@@ -194,6 +194,7 @@ export const CustomerMemory = {
       nombre: cliente.nombre,
       correoPrincipal: cliente.correoPrincipal,
       correosSecundarios: cliente.correosSecundarios,
+      telefonos: cliente.telefonos,
       empresa: cliente.empresa,
       pais: cliente.pais,
       dominios: cliente.dominios,

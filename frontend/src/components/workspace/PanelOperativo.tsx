@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { RefreshCcw, Search, Stethoscope, Activity, LayoutGrid, History, AlertCircle, ChevronRight, ChevronLeft, User, Plus, X, Loader2, CheckCircle2, ListChecks, Pencil, Trash2 } from "lucide-react";
 import type { CustomerInfo, TicketDetail } from "@/hooks/useTicketDetail";
 import { localbiService } from "@/modules/localbi/services/LocalbiService";
 import { useHistoriaClinica } from "@/modules/localbi/hooks/useHistoriaClinica";
 import { HistoriaClinicaView } from "@/modules/localbi/components/HistoriaClinicaView";
 import { HistoriaClientePanel } from "./HistoriaClientePanel";
+import { PanelIdentificacion } from "./PanelIdentificacion";
 import { SegmentoBadge, fmtMoneda } from "@/modules/localbi/components/HistoriaClinicaUI";
 import type { LocalbiHistoriaClinica } from "@/modules/localbi";
 import { api } from "@/lib/api";
 import { useAuth } from "@/modules/auth";
 import * as ticketbiCatalog from "@/modules/ticketbi/ticketbiService";
+import { IntegracionesSeccion } from "@/modules/integraciones";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -21,11 +23,13 @@ interface Props {
   onTogglePanel: () => void;
 }
 
-type Tab = "resumen" | "actividad" | "operacion" | "historial";
+type Tab = "resumen" | "actividad" | "operacion" | "historial" | "integraciones";
 
 /** Fila de tarea de la grilla (estado temporal del ticket en COPE). */
 interface TareaLinea {
   id: string;
+  areaId: number;
+  areaNombre: string;
   proyecto: string;
   version: string;
   tipo: string;
@@ -48,6 +52,35 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const [unidadManual, setUnidadManual] = useState<string | null>(null);
   const [resolviendo, setResolviendo] = useState(false);
 
+  // ── Identificación contacto → dominio ──
+  const [identidadResuelta, setIdentidadResuelta] = useState<{
+    dominio: string | null;
+    unidad: string | null;
+    localbi_id: string | null;
+    estado: string;
+  } | null>(null);
+
+  const handleIdentidadResuelta = useCallback((data: {
+    dominio: string | null;
+    unidad: string | null;
+    localbi_id: string | null;
+    estado: string;
+  }) => {
+    setIdentidadResuelta(data);
+  }, []);
+
+  // Determinar canal/identificador del ticket
+  const canalTipo = useMemo<"email" | "whatsapp">(() => {
+    const t = (ticket?.tipo ?? "").toLowerCase();
+    return t.includes("what") ? "whatsapp" : "email";
+  }, [ticket?.tipo]);
+
+  const canalValor = useMemo(() => {
+    return canalTipo === "whatsapp"
+      ? (ticket?.telefono ?? "")
+      : (ticket?.clienteEmail ?? "");
+  }, [canalTipo, ticket?.telefono, ticket?.clienteEmail]);
+
   // ── Crear ticket a Desarrollo ──
   const { user } = useAuth();
   const [ticketModal, setTicketModal] = useState(false);
@@ -66,9 +99,13 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const [ticketOk, setTicketOk] = useState<{ ticketbiId: number | string } | null>(null);
 
   const dominioActual = ticket?.dominio;
-  const subdominio = subdominioDe(dominioActual);
+  const dominioResuelto = identidadResuelta?.dominio;
+  const dominioParaBuscar = dominioResuelto ?? dominioActual;
+  const subdominio = subdominioDe(dominioParaBuscar);
 
   // Resolución automática dominio → unidad de negocio (por subdominio, inequívoca).
+  // Usa el dominio resuelto por PanelIdentificacion cuando está disponible;
+  // fallback al dominio original del ticket para retrocompatibilidad.
   const [unidadDetectada, setUnidadDetectada] = useState<{ unidad_negocio: string; nombre?: string } | null>(null);
   useEffect(() => {
     let activo = true;
@@ -90,14 +127,15 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
     return () => { activo = false; };
   }, [subdominio, ticket?.ticketOriginalId]);
 
-  // Limpiar selección manual al cambiar de atención.
+  // Limpiar selección manual y identificación al cambiar de atención.
   useEffect(() => {
     setUnidadManual(null);
+    setIdentidadResuelta(null);
     setTab("resumen");
   }, [ticket?.ticketOriginalId]);
 
-  const unidadActiva = unidadManual ?? unidadDetectada?.unidad_negocio ?? null;
-  const unidadNombre = unidadManual ? unidadManual : (unidadDetectada?.nombre ?? null);
+  const unidadActiva = unidadManual ?? identidadResuelta?.unidad ?? unidadDetectada?.unidad_negocio ?? null;
+  const unidadNombre = unidadManual ? unidadManual : (identidadResuelta?.unidad ?? unidadDetectada?.nombre ?? null);
   const identificado = Boolean(unidadActiva);
   const identificadoAutomatico = !unidadManual && Boolean(unidadDetectada);
 
@@ -105,14 +143,14 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const ficha = historiaData?.status === "success" || historiaData?.status === "warning"
     ? (historiaData.data as LocalbiHistoriaClinica) : null;
 
-  // Deriva el localbi_id de la atención desde la ficha del cliente (Nivel 1).
-  // Prioriza el local cuyo link_dominio coincide con el dominio de la atención;
-  // si no hay coincidencia, usa el primer local de la unidad de negocio.
+  // Deriva el localbi_id: primero de la identificación resuelta (ContactoDominioService),
+  // luego de la ficha de LocalBI (fallback).
   const localbiId = useMemo<string | null>(() => {
+    if (identidadResuelta?.localbi_id) return identidadResuelta.localbi_id;
     if (!ficha) return null;
     const locales = (ficha.dominios ?? []).flatMap((d) => d.locales ?? []);
     if (locales.length === 0) return null;
-    const dom = (ticket?.dominio ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+    const dom = (dominioResuelto ?? ticket?.dominio ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
     const porDominio = locales.find((l) => (l.link_dominio ?? "").trim().toLowerCase().includes(dom) && dom);
     return (porDominio ?? locales[0])?.localbi_id ?? null;
   }, [ficha, ticket?.dominio]);
@@ -131,19 +169,22 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const [niveles, setNiveles] = useState<string[]>([]);
   const [proyectos, setProyectos] = useState<string[]>([]);
   const [tipos, setTipos] = useState<string[]>([]);
+  const [areas, setAreas] = useState<Array<{ id: number; value: string }>>([]);
 
   const cargarCatalogos = async () => {
     try {
-      const [cats, nvs, proy, tips] = await Promise.all([
+      const [cats, nvs, proy, tips, ars] = await Promise.all([
         ticketbiCatalog.obtenerCategorias(),
         ticketbiCatalog.obtenerNiveles(),
         ticketbiCatalog.obtenerProyectos(),
         ticketbiCatalog.obtenerTipos(),
+        ticketbiCatalog.obtenerAreasTarea(),
       ]);
       setCategorias(cats);
       setNiveles(nvs);
       setProyectos(proy);
       setTipos(tips);
+      setAreas(ars);
     } catch {
       // Los catálogos se dejan vacíos; el usuario verá selects sin opciones si fallan.
     }
@@ -213,6 +254,10 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
       setTicketError("Cada tarea debe tener una descripción.");
       return;
     }
+    if (ticketTareas.some((t) => t.areaId == null)) {
+      setTicketError("Cada tarea debe tener un área seleccionada.");
+      return;
+    }
     setCreandoTicket(true);
     setTicketError(null);
     try {
@@ -229,9 +274,14 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
         detalleList: ticketTareas.map((t) => ({
           tarea_nombre: t.descripcion.trim(),
           tarea_descripcion: t.descripcion.trim(),
-          area: "DESARROLLO",
+          areaId: t.areaId,
           proyecto: t.proyecto,
+          version: t.version,
           tipo: t.tipo,
+          etapa_error: t.etapaError,
+          fecha_entrega: t.fechaEntrega,
+          referencia: t.referencia,
+          casos: t.casos,
         })),
       });
       const data = res.data?.data;
@@ -304,8 +354,14 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
 
       {/* Cabecera contextual */}
       <div className="shrink-0 border-b border-black-10 px-3 py-2">
-        {resolviendo ? (
-          <p className="text-[10px] text-black-45">Identificando cliente…</p>
+        {canalValor ? (
+          <PanelIdentificacion
+            tipo={canalTipo}
+            valor={canalValor}
+            dominioExplicito={dominioActual}
+            ticketId={ticket?.ticketOriginalId ?? ""}
+            onResolved={handleIdentidadResuelta}
+          />
         ) : identificado ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
@@ -314,7 +370,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
             </div>
             {identificadoAutomatico ? (
               <p className="inline-flex items-center gap-1 rounded bg-success-5 px-1.5 py-0.5 text-[8px] font-medium text-success">
-                <AlertCircle size={9} /> Cliente identificado automáticamente
+                <AlertCircle size={9} /> Cliente identificado autom\u00e1ticamente
               </p>
             ) : (
               <p className="inline-flex items-center gap-1 rounded bg-primary-10 px-1.5 py-0.5 text-[8px] font-medium text-primary">
@@ -334,9 +390,9 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
         ) : (
           <div className="space-y-1">
             {dominioActual ? (
-              <p className="text-[10px] text-warning-65">Cliente no identificado automáticamente para «{subdominio || dominioActual}».</p>
+              <p className="text-[10px] text-warning-65">Cliente no identificado autom\u00e1ticamente para \u00ab{subdominio || dominioActual}\u00bb.</p>
             ) : (
-              <p className="text-[10px] text-black-45">Esta atención no tiene dominio.</p>
+              <p className="text-[10px] text-black-45">Esta atenci\u00f3n no tiene dominio.</p>
             )}
             <div>
               <HistoriaClientePanel unidadInicial={null} />
@@ -358,6 +414,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
           ["actividad", "Actividad", Activity],
           ["operacion", "Operación", Stethoscope],
           ["historial", "Historial", History],
+          ["integraciones", "Integraciones", Activity],
         ] as [Tab, string, typeof Activity][]).map(([key, label, Icon]) => (
           <button key={key} type="button" onClick={() => setTab(key)}
             className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium", tab === key ? "bg-primary text-white" : "text-black-45 hover:bg-light")}>
@@ -371,7 +428,11 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
 
       {/* Contenido con scroll propio */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {!identificado ? (
+        {tab === "integraciones" ? (
+          <div className="p-3">
+            <IntegracionesSeccion dominio={dominioParaBuscar} embedded />
+          </div>
+        ) : !identificado ? (
           <div className="p-4 text-center text-[10px] text-black-45">
             {manual ? (
               <p>Selecciona un cliente de la búsqueda manual.</p>
@@ -491,6 +552,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[11px] font-medium text-black-85">
                               <span className="mr-1 text-black-25">#{i + 1}</span>
+                              {t.areaNombre && <span className="mr-1 rounded bg-primary-10 px-1 py-0.5 text-[9px] font-medium text-primary">{t.areaNombre}</span>}
                               {[t.proyecto, t.tipo].filter(Boolean).join(" — ") || "Tarea"}
                             </p>
                             <div className="flex items-center gap-1">
@@ -528,7 +590,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
                 <div className="space-y-2">
                   {ticketTareas.map((t, i) => (
                     <div key={t.id} className="rounded border border-black-10 p-2 text-[10px] text-black-65">
-                      <p className="font-medium text-black-85">#{i + 1} {[t.proyecto, t.tipo].filter(Boolean).join(" — ") || "Tarea"}</p>
+                      <p className="font-medium text-black-85">#{i + 1} {t.areaNombre && `[${t.areaNombre}] `}{[t.proyecto, t.tipo].filter(Boolean).join(" — ") || "Tarea"}</p>
                       <p>{t.descripcion}</p>
                       {t.casos && <p className="text-black-45"><span className="text-black-25">Casos: </span>{t.casos}</p>}
                     </div>
@@ -550,9 +612,9 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
       {/* Modal: Agregar Tarea (grilla estilo Micro-Services) */}
       {agregarTarea && (
         <AgregarTareaModal
+          areas={areas}
           proyectos={proyectos}
           tipos={tipos}
-          area="Desarrollo"
           onCancel={() => setAgregarTarea(false)}
           onAgregar={agregarTareaALista}
         />
@@ -562,13 +624,14 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
 }
 
 /* ── Modal Agregar Tarea ─────────────────────────────── */
-function AgregarTareaModal({ proyectos, tipos, area, onCancel, onAgregar }: {
+function AgregarTareaModal({ areas, proyectos, tipos, onCancel, onAgregar }: {
+  areas: Array<{ id: number; value: string }>;
   proyectos: string[];
   tipos: string[];
-  area: string;
   onCancel: () => void;
   onAgregar: (t: Omit<TareaLinea, "id">) => void;
 }) {
+  const [areaId, setAreaId] = useState<number | null>(areas.length > 0 ? areas[0].id : null);
   const [proyecto, setProyecto] = useState("");
   const [version, setVersion] = useState("");
   const [tipo, setTipo] = useState("");
@@ -579,12 +642,20 @@ function AgregarTareaModal({ proyectos, tipos, area, onCancel, onAgregar }: {
   const [casos, setCasos] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const areaNombre = useMemo(() => {
+    return areas.find((a) => a.id === areaId)?.value ?? "";
+  }, [areas, areaId]);
+
   const guardar = () => {
+    if (areaId == null) {
+      setError("Selecciona un área antes de continuar.");
+      return;
+    }
     if (!descripcion.trim()) {
       setError("La descripción de la tarea es obligatoria.");
       return;
     }
-    onAgregar({ proyecto, version, tipo, etapaError, fechaEntrega, referencia, descripcion: descripcion.trim(), casos });
+    onAgregar({ areaId, areaNombre, proyecto, version, tipo, etapaError, fechaEntrega, referencia, descripcion: descripcion.trim(), casos });
   };
 
   return (
@@ -597,8 +668,9 @@ function AgregarTareaModal({ proyectos, tipos, area, onCancel, onAgregar }: {
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-3">
             <label className="mb-1 block text-[10px] font-medium text-black-45">Área</label>
-            <select value={area} disabled className="h-8 w-full rounded border border-black-10 bg-light px-2 text-[11px] text-black-65 disabled:opacity-70">
-              <option value={area}>{area}</option>
+            <select value={areaId ?? ""} onChange={(e) => setAreaId(e.target.value ? Number(e.target.value) : null)} className="h-8 w-full rounded border border-black-10 px-2 text-[11px] focus:border-primary focus:outline-none">
+              <option value="">Seleccionar área…</option>
+              {areas.map((a) => <option key={a.id} value={a.id}>{a.value}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-4 gap-3">

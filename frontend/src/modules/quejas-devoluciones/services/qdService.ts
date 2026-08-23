@@ -31,6 +31,7 @@ export interface CrearCasoInput {
   clasificacion?: string | null;
   producto?: string | null;
   observacion?: string | null;
+  fechaSolicitud?: string | null;  // YYYY-MM-DD
 }
 
 export interface ActualizarCasoInput {
@@ -49,6 +50,7 @@ export interface ActualizarCasoInput {
   clasificacion?: string | null;
   producto?: string | null;
   observacion?: string | null;
+  fechaSolicitud?: string | null;  // YYYY-MM-DD
 }
 
 export const qdService = {

@@ -9,3 +9,4 @@ tareabiRouter.get("/estados", tareabiController.estados);
 tareabiRouter.get("/proyectos", tareabiController.proyectos);
 tareabiRouter.get("/tipos", tareabiController.tipos);
 tareabiRouter.get("/dev", tareabiController.dev);
+tareabiRouter.get("/catalogo-areas", tareabiController.catalogoAreas);

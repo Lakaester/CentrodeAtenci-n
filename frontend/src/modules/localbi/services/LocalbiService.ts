@@ -61,4 +61,22 @@ export const localbiService = {
     const res = await api.get(`/localbi/historia/${encodeURIComponent(unidadNegocio)}/local/${encodeURIComponent(localbiId)}`);
     return res.data.data;
   },
+
+  /**
+   * Resuelve la identidad contacto → dominio (GET /api/contactos/dominio).
+   * No vincula; solo determina el estado y el dominio homologado.
+   */
+  async resolverContacto(tipo: "email" | "whatsapp", valor: string, opts?: { dominioExplicito?: string | null; dominioHilo?: string | null }): Promise<any> {
+    const params: Record<string, string> = { tipo, valor };
+    if (opts?.dominioExplicito) params.dominio_explicito = opts.dominioExplicito;
+    if (opts?.dominioHilo) params.dominio_hilo = opts.dominioHilo;
+    const res = await api.get("/contactos/dominio", { params });
+    return res.data.data;
+  },
+
+  /** Vincula un dominio a un contacto (POST /api/contactos/dominio). */
+  async vincularContacto(tipo: "email" | "whatsapp", valor: string, dominio: string, origen = "MANUAL"): Promise<any> {
+    const res = await api.post("/contactos/dominio", { tipo, valor, dominio, origen });
+    return res.data.data;
+  },
 };

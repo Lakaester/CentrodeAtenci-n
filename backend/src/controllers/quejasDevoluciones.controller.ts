@@ -16,6 +16,7 @@ const casoBase = {
   motivo: z.string().nullable().optional(),
   observacion: z.string().nullable().optional(),
   moneda: z.enum(["PEN", "USD"]).nullable().optional(),
+  fechaSolicitud: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD").nullable().optional(),
 };
 
 const crearSchema = z.discriminatedUnion("tipo", [
@@ -51,6 +52,7 @@ const actualizarSchema = z.object({
   clasificacion: z.string().nullable().optional(),
   producto: z.string().nullable().optional(),
   observacion: z.string().nullable().optional(),
+  fechaSolicitud: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD").nullable().optional(),
 });
 
 function toHttp(err: unknown): number {

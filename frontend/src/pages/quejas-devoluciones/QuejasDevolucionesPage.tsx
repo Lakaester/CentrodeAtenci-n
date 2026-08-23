@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { X, Plus, RefreshCcw, ArrowUpRight, Download, Trash2, CheckCircle2, RotateCcw, GitMerge, Link2, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Plus, RefreshCcw, ArrowUpRight, Download, Trash2, CheckCircle2, RotateCcw, GitMerge, Link2, ChevronDown, ChevronRight, DollarSign, XCircle, Clock, MessageSquare } from "lucide-react";
 import {
   useQdLista, useQdDetalle, useQdCrear, useQdActualizar, useQdEliminar,
   useQdEstados, useQdResultados, useQdAreas, useQdProductos, useQdTiposQueja,
@@ -12,6 +12,7 @@ import type { QdCaso, QdInteraccion, QdTipo } from "@/modules/quejas-devolucione
 import { EstadoBadge, ResultadoBadge, fmtFecha, fmtMoneda, fmtPct } from "@/modules/quejas-devoluciones/components/qdUI";
 import { useAuth, authService } from "@/modules/auth";
 import { cn } from "@/lib/utils";
+import { clavePais, etiquetaPais } from "@/lib/paises";
 
 type Filtro = "todas" | QdTipo;
 
@@ -45,6 +46,33 @@ function filtrosIniciales(): Filtros {
 
 /** Parte de fecha (YYYY-MM-DD) de un valor YYYY-MM-DDTHH:mm. */
 function datePart(v: string): string { return v ? v.split("T")[0] : ""; }
+
+function KpiCard({ icon: Icon, label, pen, usd, count, color }: {
+  icon: React.ElementType;
+  label: string;
+  pen?: number;
+  usd?: number;
+  count?: number;
+  color: "primary" | "danger" | "success" | "warning" | "info";
+}) {
+  const bg = { primary: "bg-primary-5 text-primary", danger: "bg-danger-5 text-danger", success: "bg-success-5 text-success", warning: "bg-warning-5 text-warning-65", info: "bg-black-5 text-black-65" }[color];
+  return (
+    <div className="flex flex-col gap-1 rounded border border-black-10 bg-white p-2.5">
+      <div className="flex items-center gap-1.5">
+        <span className={cn("flex h-5 w-5 items-center justify-center rounded", bg)}><Icon size={10} /></span>
+        <span className="text-[10px] font-medium text-black-65">{label}</span>
+      </div>
+      {count != null ? (
+        <p className="text-lg font-semibold text-black-85">{count}</p>
+      ) : (
+        <>
+          <p className="text-sm font-semibold text-black-85">{fmtMoneda(pen ?? 0, "PEN")}</p>
+          <p className="text-[10px] text-black-45">{fmtMoneda(usd ?? 0, "USD")}</p>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function QuejasDevoluciones() {
   const { user } = useAuth();
@@ -100,9 +128,10 @@ export default function QuejasDevoluciones() {
       const q = buscador.trim().toLowerCase();
       if (q && ![c.numero, c.ticket_id, c.dominio, c.pais, c.motivo, c.clasificacion, c.producto, c.area]
         .some((v) => (v ?? "").toLowerCase().includes(q))) return false;
-      if (applied.desde && new Date(c.created_at) < new Date(applied.desde)) return false;
-      if (applied.hasta && new Date(c.created_at) > new Date(applied.hasta)) return false;
-      if (applied.pais && c.pais !== applied.pais) return false;
+      const fs = c.fecha_solicitud ?? "";
+      const dentroRango = (!applied.desde || fs >= applied.desde) && (!applied.hasta || fs <= applied.hasta);
+      if (!dentroRango && c.caso_cerrado) return false;
+      if (applied.pais && clavePais(c.pais) !== applied.pais) return false;
       if (applied.estado && c.estado !== applied.estado) return false;
       if (applied.resultado && c.resultado !== applied.resultado) return false;
       if (applied.asesor && c.asesor !== applied.asesor) return false;
@@ -112,6 +141,32 @@ export default function QuejasDevoluciones() {
       return true;
     });
   }, [lista, buscador, applied]);
+
+  const resumenKpis = useMemo(() => {
+    const devs = filtrada.filter((c) => c.tipo === "devolucion");
+    const qjas = filtrada.filter((c) => c.tipo === "queja");
+    let solicPEN = 0, solicUSD = 0, noProcPEN = 0, noProcUSD = 0, devPEN = 0, devUSD = 0, pendPEN = 0, pendUSD = 0;
+    for (const c of devs) {
+      const mp = Number(c.monto_pagado) || 0;
+      const md = Number(c.monto_devuelto) || 0;
+      const esPEN = c.moneda === "PEN";
+      const esUSD = c.moneda === "USD";
+      const r = c.resultado ?? "";
+      if (esPEN) solicPEN += mp; else if (esUSD) solicUSD += mp;
+      if (r === "No procede") {
+        if (esPEN) noProcPEN += mp; else if (esUSD) noProcUSD += mp;
+      } else if (r === "Procede parcialmente") {
+        if (esPEN) { devPEN += md; noProcPEN += mp - md; }
+        else if (esUSD) { devUSD += md; noProcUSD += mp - md; }
+      } else if (r === "Procede 100%") {
+        if (esPEN) devPEN += md; else if (esUSD) devUSD += md;
+      } else if (r === "Pendiente") {
+        if (esPEN) { pendPEN += md; noProcPEN += mp - md; }
+        else if (esUSD) { pendUSD += md; noProcUSD += mp - md; }
+      }
+    }
+    return { solicPEN, solicUSD, noProcPEN, noProcUSD, devPEN, devUSD, pendPEN, pendUSD, totalQuejas: qjas.length };
+  }, [filtrada]);
 
   const hayFiltros = Object.values(draft).some((v) => v !== "");
 
@@ -186,6 +241,18 @@ export default function QuejasDevoluciones() {
           <h1 className="text-sm font-semibold text-black-85">Quejas y Devoluciones</h1>
         </div>
         <p className="mt-0.5 text-[11px] text-black-45">Gestión y seguimiento de casos de clientes.</p>
+      </div>
+
+      {/* Resumen ejecutivo */}
+      <div className="shrink-0 border-b border-black-10 px-6 py-3">
+        <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-black-35">Resumen general</p>
+        <div className="grid grid-cols-5 gap-3">
+          <KpiCard icon={DollarSign} label="Monto solicitado" pen={resumenKpis.solicPEN} usd={resumenKpis.solicUSD} color="primary" />
+          <KpiCard icon={XCircle} label="No procede" pen={resumenKpis.noProcPEN} usd={resumenKpis.noProcUSD} color="danger" />
+          <KpiCard icon={CheckCircle2} label="Devuelto" pen={resumenKpis.devPEN} usd={resumenKpis.devUSD} color="success" />
+          <KpiCard icon={Clock} label="Pendiente" pen={resumenKpis.pendPEN} usd={resumenKpis.pendUSD} color="warning" />
+          <KpiCard icon={MessageSquare} label="Total de quejas" count={resumenKpis.totalQuejas} color="info" />
+        </div>
       </div>
 
       {/* Barra tipo + búsqueda */}
@@ -316,7 +383,7 @@ export default function QuejasDevoluciones() {
                         <CasoEstadoBadge cerrado={c.caso_cerrado} />
                       </td>
                       <td className="px-3 py-2 text-[10px] text-black-85">{c.tipo === "devolucion" ? "Devolución" : "Queja"}</td>
-                      <td className="px-3 py-2 text-[10px] text-black-45">{fmtFecha(c.created_at)}</td>
+                      <td className="px-3 py-2 text-[10px] text-black-45">{fmtFecha(c.fecha_solicitud)}</td>
                       <td className="px-3 py-2 font-mono text-[10px] text-black-45">
                         {c.ticket_id || "—"}
                         {c.total_interacciones != null && c.total_interacciones > 1 && (
@@ -449,7 +516,16 @@ function Select({ value, onChange, options, placeholder }: {
 }
 
 function paises(casos: QdCaso[]): { value: string; label: string }[] {
-  return [...new Set(casos.map((c) => c.pais).filter(Boolean) as string[])].map((p) => ({ value: p, label: p }));
+  const mapa = new Map<string, string>();
+  for (const c of casos) {
+    if (!c.pais) continue;
+    const clave = clavePais(c.pais);
+    if (!clave || mapa.has(clave)) continue;
+    mapa.set(clave, etiquetaPais(c.pais));
+  }
+  return [...mapa.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], "es"))
+    .map(([value, label]) => ({ value, label }));
 }
 function asesores(casos: QdCaso[]): { value: string; label: string }[] {
   return [...new Set(casos.map((c) => c.asesor).filter(Boolean) as string[])].map((a) => ({ value: a, label: a }));
@@ -463,8 +539,9 @@ function CasoForm({ estados, resultados, areas, productos, tiposQueja, onClose, 
 }) {
   const crear = useQdCrear();
   const [tipo, setTipo] = useState<QdTipo | null>(null);
+  const todayStr = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
   const [form, setForm] = useState<any>({
-    ticketId: "", dominio: "", pais: "", estado: "", resultado: "",
+    ticketId: "", dominio: "", pais: "", estado: "", fechaSolicitud: todayStr, resultado: "",
     moneda: "PEN", montoPagado: "", tipoMonto: "", area: "", motivo: "", porcentaje: "", montoDevuelto: "",
     clasificacion: "", producto: "", observacion: "",
   });
@@ -478,6 +555,7 @@ function CasoForm({ estados, resultados, areas, productos, tiposQueja, onClose, 
   const guardar = async () => {
     setError(null);
     if (!tipo) { setError("Selecciona el tipo de caso."); return; }
+    if (!form.fechaSolicitud) { setError("Ingresa la fecha de solicitud."); return; }
     try {
       const input: any = {
         tipo,
@@ -489,6 +567,7 @@ function CasoForm({ estados, resultados, areas, productos, tiposQueja, onClose, 
         area: form.area || null,
         motivo: form.motivo || null,
         observacion: form.observacion || null,
+        fechaSolicitud: form.fechaSolicitud || null,
       };
       if (tipo === "devolucion") {
         input.moneda = form.moneda || "PEN";
@@ -530,6 +609,10 @@ function CasoForm({ estados, resultados, areas, productos, tiposQueja, onClose, 
               <option value="">Estado…</option>
               {estados.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
             </select>
+            <div>
+              <label className="mb-0.5 block text-[10px] font-medium text-black-65">Fecha de solicitud *</label>
+              <input type="date" value={form.fechaSolicitud} onChange={(e) => set("fechaSolicitud", e.target.value)} className="h-8 w-full rounded border border-black-10 px-2 text-[11px] focus:border-primary focus:outline-none" />
+            </div>
 
             {tipo === "devolucion" ? (
               <>
@@ -791,7 +874,7 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
           <h2 className="flex items-center gap-2 font-mono text-sm font-semibold text-primary">{caso.numero}</h2>
           <div className="mt-0.5 flex items-center gap-1.5">
             <CasoEstadoBadge cerrado={caso.caso_cerrado} />
-            <span className="text-[10px] text-black-45">{caso.tipo === "devolucion" ? "Devolución" : "Queja"} · {fmtFecha(caso.created_at)}</span>
+            <span className="text-[10px] text-black-45">{caso.tipo === "devolucion" ? "Devolución" : "Queja"} · {fmtFecha(caso.fecha_solicitud)}</span>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -1299,7 +1382,7 @@ function ConsolidarModal({ casos, onClose, onConfirmar }: {
                   </div>
                   <p className="truncate text-[10px] text-black-65">{c.dominio ? c.dominio : "SIN DOMINIO"} · {c.pais || "sin país"}</p>
                   <p className="text-[9px] text-black-45">
-                    Apertura {fmtFecha(c.created_at)} · {c.total_interacciones != null ? `${c.total_interacciones} ticket(s)` : "1 ticket"} · {c.asesor || "sin asesor"}
+                    Apertura {fmtFecha(c.fecha_solicitud)} · {c.total_interacciones != null ? `${c.total_interacciones} ticket(s)` : "1 ticket"} · {c.asesor || "sin asesor"}
                   </p>
                 </div>
                 {principalId === c.id && <span className="shrink-0 text-[9px] font-semibold text-primary">PRINCIPAL</span>}

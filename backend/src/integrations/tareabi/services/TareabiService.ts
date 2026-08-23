@@ -181,4 +181,19 @@ export class TareabiService {
       return { status: "unavailable", mensaje: this.mensajeDeError(err) };
     }
   }
+
+  /** Catálogo de áreas de tarea con ID numérico (obtenerDatosEstaticos → areaList). */
+  async obtenerAreas(): Promise<TareabiResult<Array<{ id: number; value: string }>>> {
+    try {
+      const envelope = await this.client.obtenerDatosEstaticos();
+      const raw = (envelope.data as Record<string, unknown>)?.areaList;
+      if (!Array.isArray(raw)) return { status: "success", data: [] };
+      const areas = raw
+        .filter((e: any) => e && typeof e.id === "number" && typeof e.value === "string")
+        .map((e: any) => ({ id: e.id as number, value: e.value as string }));
+      return { status: "success", data: areas };
+    } catch (err) {
+      return { status: "unavailable", mensaje: this.mensajeDeError(err) };
+    }
+  }
 }

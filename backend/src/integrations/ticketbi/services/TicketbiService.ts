@@ -9,14 +9,17 @@ import { ticketbiClient, type CrearTicketbiInput, type TicketbiEnvelope, type Ti
 import { ApplicationError } from "../../../core/errors/types";
 
 export interface TareaDesarrolloInput {
-  // Campos del formulario (estado temporal de COPE). Solo los confirmados por
-  // el contrato se envían: tarea_nombre, tarea_descripcion, area, plataforma.
   tarea_nombre?: string | null;
   tarea_descripcion?: string | null;
-  area?: string | null;
+  areaId?: number | null;
   plataforma?: string | null;
-  proyecto?: string | null;     // para armar tarea_nombre
-  tipo?: string | null;         // para armar tarea_nombre
+  proyecto?: string | null;
+  tipo?: string | null;
+  version?: string | null;
+  etapaError?: string | null;
+  fechaEntrega?: string | null;
+  referencia?: string | null;
+  casos?: string | null;
 }
 
 export interface CrearTicketDesarrolloInput {
@@ -95,6 +98,14 @@ export const ticketbiService = {
         "DETALLE_REQUERIDO",
       );
     }
+    for (const [i, d] of detalle.entries()) {
+      if (d.areaId == null || !Number.isFinite(d.areaId) || d.areaId <= 0) {
+        throw new ApplicationError(
+          `La tarea ${i + 1} no tiene un área válida. Selecciona un área del catálogo.`,
+          "AREA_REQUERIDA",
+        );
+      }
+    }
     const primera = detalle[0];
     if (!primera.tarea_descripcion || !String(primera.tarea_descripcion).trim()) {
       throw new ApplicationError(
@@ -109,12 +120,17 @@ export const ticketbiService = {
       ticketbi_asunto: String(input.ticketbi_asunto).trim(),
       ticketbi_categoria: (input.ticketbi_categoria ?? "DESARROLLO").toUpperCase(),
       detalleList: detalle.map((d) => ({
-        // tarea_nombre: se prefiere el valor explícito; si no, se arma de forma
-        // clara con proyecto + tipo (sin inventar estructura técnica).
         tarea_nombre: String(d.tarea_nombre ?? nombreTarea(d, input.ticketbi_asunto)).trim(),
         tarea_descripcion: String(d.tarea_descripcion).trim(),
-        area: String(d.area ?? "DESARROLLO").toUpperCase(),
+        area: d.areaId!,
         plataforma: d.plataforma ? String(d.plataforma).toUpperCase() : undefined,
+        tarea_proyecto: d.proyecto ? String(d.proyecto).trim() : undefined,
+        tarea_version: d.version ? String(d.version).trim() : undefined,
+        tarea_tipo: d.tipo ? String(d.tipo).trim() : undefined,
+        tarea_etapaerror: d.etapaError ? String(d.etapaError).trim() : undefined,
+        tarea_fechaentrega: d.fechaEntrega ? String(d.fechaEntrega).trim() : undefined,
+        tarea_referencia: d.referencia ? String(d.referencia).trim() : undefined,
+        casos_contemplar: d.casos ? String(d.casos).trim() : undefined,
       })),
     };
 

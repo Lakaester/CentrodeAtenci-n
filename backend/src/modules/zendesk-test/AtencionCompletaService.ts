@@ -1,6 +1,7 @@
 import { ZendeskClient } from "../zendesk/infrastructure/ZendeskClient";
 import { parseComment, type ContentBlock } from "./ContentParser";
 import { PerfLogger } from "./PerfLogger";
+import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
 
 interface InlineAttachment {
   id: string;
@@ -30,6 +31,7 @@ export interface AtencionCompleta {
     tipo: string | null;
     clienteNombre: string;
     clienteEmail: string | null;
+    telefono: string | null;
     dominio: string | null;
     pais: string | null;
     hasPendingReply: boolean;
@@ -101,10 +103,10 @@ export class AtencionCompletaService {
     const userIds = new Set<number>();
     if (ticketResult.requester_id) userIds.add(ticketResult.requester_id);
     for (const c of commentsResult) userIds.add(c.author_id);
-    let usuarioMap = new Map<number, { name: string; role: string; email: string }>();
+    let usuarioMap = new Map<number, { name: string; role: string; email: string; phone: string | null }>();
     try {
       const usuarios = await this.client.obtenerUsuarios([...userIds]);
-      usuarioMap = new Map(usuarios.map((u) => [u.id, { name: u.name, role: u.role, email: u.email }]));
+      usuarioMap = new Map(usuarios.map((u) => [u.id, { name: u.name, role: u.role, email: u.email, phone: u.phone ?? null }]));
       // Update emisor names with real data
       for (const c of comentarios) {
         const id = parseInt(c.id);
@@ -132,12 +134,15 @@ export class AtencionCompletaService {
     // Step 5: Build response
     log.start("response.build");
     const ticketUser = ticketResult.requester_id ? usuarioMap.get(ticketResult.requester_id) : null;
+    const telefono = ticketUser?.phone ?? null;
 
     // Extract custom fields
     const cfMap = new Map((ticketResult.custom_fields ?? []).map((cf: any) => [cf.id, cf.value]));
     const dominioVal = cfMap.get(40769061038615);
     const paisVal = cfMap.get(1500005211481);
-    const dominio = dominioVal && String(dominioVal).trim() ? String(dominioVal).trim() : null;
+    // Dominio explícito de Zendesk: se normaliza a hostname canónico.
+    const dominioCrudo = dominioVal && String(dominioVal).trim() ? String(dominioVal).trim() : null;
+    const dominio = dominioCrudo && isValidDomainFormat(dominioCrudo) ? normalizeDomain(dominioCrudo) : null;
     const pais = paisVal && String(paisVal).trim() ? String(paisVal).trim() : null;
 
     const result: AtencionCompleta = {
@@ -151,6 +156,7 @@ export class AtencionCompletaService {
         tipo: ticketResult.type,
         clienteNombre: ticketUser?.name ?? "Usuario Zendesk",
         clienteEmail: ticketUser?.email ?? null,
+        telefono,
         dominio,
         pais,
         hasPendingReply,

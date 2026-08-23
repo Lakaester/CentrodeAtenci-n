@@ -77,4 +77,13 @@ export const tareabiController = {
       return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
     } catch (err) { next(err); }
   },
+
+  /** GET /catalogo-areas — catálogo de áreas de tarea con ID numérico. */
+  async catalogoAreas(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await service.obtenerAreas();
+      if (result.status === "success") return res.json({ ok: true, data: result.data });
+      return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
+    } catch (err) { next(err); }
+  },
 };
