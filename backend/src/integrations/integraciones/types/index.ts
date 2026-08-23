@@ -15,11 +15,19 @@ export interface IntegracionesEnvelope<T = unknown> {
   mensajes: string[];
 }
 
-/** Registro de locale/devolución de listaInfoLocal. */
+/** Registro REAL de listaInfoLocal (estructura exacta de la API). */
 export interface InfoLocalRegistro {
+  _id: string;
+  storeId: string;
+  integracion: string;
+  localId: number;
   suscripcion: string;
-  restaurante: string;
-  [k: string]: unknown;
+  minutos_preparacion: string;
+  clave_publica: string | null;
+  clave_privada: string | null;
+  audience: string;
+  marca_id: string;
+  __v: number;
 }
 
 /** Resultado de normalizar dominio → integraciones + storeIds. */

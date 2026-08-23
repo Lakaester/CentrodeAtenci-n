@@ -9,6 +9,7 @@ const dominioParamsSchema = z.object({
 });
 
 const busquedaBodySchema = z.object({
+  dominio: z.string().min(1),
   pagina: z.number().int().positive().default(1),
   registros: z.number().int().positive().max(100).default(20),
   totalregistros: z.number().int().default(0),
@@ -36,12 +37,13 @@ export const integracionesController = {
     } catch (err) { next(err); }
   },
 
-  /** POST /api/integraciones/pedidos — búsqueda de pedidos. */
+  /** POST /api/integraciones/pedidos — búsqueda de pedidos (dominio requerido para seguridad). */
   async buscarPedidos(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = busquedaBodySchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ ok: false, error: "Filtros inválidos." });
-      const result = await service.buscarPedidos(parsed.data);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: "Filtros inválidos. Se requiere dominio." });
+      const { dominio, ...filtros } = parsed.data;
+      const result = await service.buscarPedidos(filtros, dominio);
       if (result.status === "success") return res.json({ ok: true, data: result.data });
       return res.status(toHttp(result)).json({ ok: false, status: result.status, error: result.mensaje });
     } catch (err) { next(err); }

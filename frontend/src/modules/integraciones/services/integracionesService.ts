@@ -7,8 +7,8 @@ export async function obtenerIntegraciones(dominio: string): Promise<DominioInte
   return res.data?.data ?? { dominio, integraciones: [] };
 }
 
-/** Busca pedidos con los filtros proporcionados. */
-export async function buscarPedidos(filtros: PedidoFiltros): Promise<BusquedaPedidosResult> {
-  const res = await api.post("/integraciones/pedidos", filtros);
+/** Busca pedidos con los filtros proporcionados. Incluye dominio para validación backend. */
+export async function buscarPedidos(filtros: PedidoFiltros, dominio: string): Promise<BusquedaPedidosResult> {
+  const res = await api.post("/integraciones/pedidos", { ...filtros, dominio });
   return res.data?.data ?? { totalRegistros: 0, pedidos: [] };
 }

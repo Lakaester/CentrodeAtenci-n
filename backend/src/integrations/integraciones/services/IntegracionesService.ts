@@ -61,16 +61,15 @@ export class IntegracionesService {
         };
       }
 
-      // Agrupar por integración, acumulando storeIds únicos
+      // Estructura real: cada registro tiene integracion (string) y storeId (string).
+      // Agrupar por nombre de integración, acumulando storeIds únicos.
       const mapa = new Map<string, Set<string>>();
       for (const reg of coincidencias) {
-        // Cada registro puede tener campos variables; extraemos integraciones y storeIds
-        // del registro. La estructura real puede variar — usamos campos conocidos.
-        const integraciones = this.extraerIntegraciones(reg);
-        for (const int of integraciones) {
-          if (!mapa.has(int.nombre)) mapa.set(int.nombre, new Set());
-          if (int.storeId) mapa.get(int.nombre)!.add(int.storeId);
-        }
+        const nombre = reg.integracion;
+        const storeId = reg.storeId;
+        if (!nombre) continue;
+        if (!mapa.has(nombre)) mapa.set(nombre, new Set());
+        if (storeId) mapa.get(nombre)!.add(storeId);
       }
 
       const integraciones: IntegracionDominio[] = [...mapa.entries()].map(([nombre, stores]) => ({
@@ -88,49 +87,41 @@ export class IntegracionesService {
   }
 
   /**
-   * Extrae pares (integración, storeId) de un registro de listaInfoLocal.
-   *
-   * La API real puede devolver diferentes estructuras. Este método intenta
-   * extraer la información de forma segura sin asumir un schema fijo.
-   */
-  private extraerIntegraciones(reg: Record<string, unknown>): Array<{ nombre: string; storeId: string }> {
-    const resultado: Array<{ nombre: string; storeId: string }> = [];
-
-    // Patrón 1: reg.integraciones es un array de strings
-    if (Array.isArray(reg.integraciones)) {
-      for (const int of reg.integraciones) {
-        if (typeof int === "string") {
-          resultado.push({ nombre: int, storeId: "" });
-        }
-      }
-    }
-
-    // Patrón 2: reg.storeIds o reg.stores es un array de objetos
-    const storeKey = reg.storeIds ?? reg.stores;
-    if (Array.isArray(storeKey)) {
-      for (const s of storeKey) {
-        if (s && typeof s === "object") {
-          const obj = s as Record<string, unknown>;
-          const nombre = String(obj.integracion ?? obj.nombre ?? obj.integration ?? "");
-          const storeId = String(obj.storeId ?? obj.store_id ?? obj.id ?? "");
-          if (nombre) resultado.push({ nombre, storeId });
-        }
-      }
-    }
-
-    // Patrón 3: campos sueltos (integracion, storeId a nivel del registro)
-    if (resultado.length === 0 && typeof reg.integracion === "string" && reg.integracion) {
-      resultado.push({ nombre: reg.integracion, storeId: String(reg.storeId ?? reg.store_id ?? "") });
-    }
-
-    return resultado;
-  }
-
-  /**
    * Busca pedidos con los filtros proporcionados.
+   * Seguridad: solo permite suscripciones/storeIds que correspondan al dominio autorizado.
    */
-  async buscarPedidos(filtros: BusquedaPedidosRequest): Promise<IntegracionesResult<BusquedaPedidosResultado>> {
+  async buscarPedidos(filtros: BusquedaPedidosRequest, dominioAutorizado?: string): Promise<IntegracionesResult<BusquedaPedidosResultado>> {
     try {
+      // Si hay dominio autorizado, validar que las suscripciones/storeIds solicitados pertenezcan a él.
+      if (dominioAutorizado) {
+        const dominioNorm = normalizeDomain(dominioAutorizado);
+        if (dominioNorm) {
+          // Validar suscripciones
+          const suscripcionesValidas = filtros.suscripciones.filter((s) => normalizeDomain(s) === dominioNorm);
+          if (filtros.suscripciones.length > 0 && suscripcionesValidas.length === 0) {
+            return { status: "error", mensaje: "Las suscripciones solicitadas no corresponden al dominio autorizado." };
+          }
+          // Validar storeIds contra los que existen para ese dominio
+          if (filtros.storeIds.length > 0) {
+            const envelope = await this.client.obtenerInfoLocales();
+            if (String(envelope.tipo) === "1") {
+              const storeIdsDelDominio = new Set(
+                (envelope.data ?? [])
+                  .filter((r) => normalizeDomain(r.suscripcion) === dominioNorm)
+                  .map((r) => r.storeId)
+                  .filter(Boolean)
+              );
+              const invalidos = filtros.storeIds.filter((id) => !storeIdsDelDominio.has(id));
+              if (invalidos.length > 0) {
+                return { status: "error", mensaje: `StoreIds no válidos para este dominio: ${invalidos.join(", ")}` };
+              }
+            }
+          }
+          // Reemplazar suscripciones con la versión validada para evitar inyección
+          filtros = { ...filtros, suscripciones: suscripcionesValidas };
+        }
+      }
+
       const envelope = await this.client.buscarPedidos(filtros);
       if (String(envelope.tipo) !== "1") {
         return { status: "error", mensaje: envelope.mensajes?.join(" · ") || "Error al buscar pedidos." };

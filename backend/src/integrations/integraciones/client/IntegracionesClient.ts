@@ -25,15 +25,16 @@ export class IntegracionesClient {
   }
 
   private buildUrl(path: string): string {
-    return `${this.baseUrl}${path}`;
+    const base = `${this.baseUrl}${path}`;
+    if (env.INTEGRACIONES_API_TOKEN) {
+      const sep = base.includes("?") ? "&" : "?";
+      return `${base}${sep}token=${encodeURIComponent(env.INTEGRACIONES_API_TOKEN)}`;
+    }
+    return base;
   }
 
   private headers(): Record<string, string> {
-    const h: Record<string, string> = { Accept: "application/json" };
-    if (env.INTEGRACIONES_API_TOKEN) {
-      h["Authorization"] = `Token ${env.INTEGRACIONES_API_TOKEN}`;
-    }
-    return h;
+    return { Accept: "application/json" };
   }
 
   private async request<T>(path: string, method: HttpMethod = "GET", body?: unknown): Promise<T> {

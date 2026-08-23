@@ -33,6 +33,7 @@ function defaultFiltros(suscripciones: string[]): PedidoFiltros {
 export function IntegracionesSeccion({ dominio, embedded }: Props) {
   const [pedidoDetalle, setPedidoDetalle] = useState<Pedido | null>(null);
   const [pedidoConfirmacion, setPedidoConfirmacion] = useState<Pedido | null>(null);
+  const [busquedaActivada, setBusquedaActivada] = useState(false);
 
   const {
     data: integracionesData,
@@ -52,13 +53,18 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
     isLoading: cargandoPedidos,
     error: errorPedidos,
     refetch: refetchPedidos,
-  } = useBusquedaPedidos(filtros.suscripciones.length > 0 ? filtros : null);
+  } = useBusquedaPedidos(busquedaActivada ? filtros : null, dominio, busquedaActivada);
 
   const pedidos = pedidosData?.pedidos ?? [];
   const totalRegistros = pedidosData?.totalRegistros ?? 0;
 
   const handleBuscar = () => {
-    refetchPedidos();
+    setBusquedaActivada(true);
+  };
+
+  const handlePaginaChange = (p: number) => {
+    setFiltros((f) => ({ ...f, pagina: p }));
+    if (busquedaActivada) refetchPedidos();
   };
 
   const cardClass = embedded
@@ -78,7 +84,7 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
           )}
           <button
             type="button"
-            onClick={() => { refetchIntegraciones(); if (filtros.suscripciones.length > 0) refetchPedidos(); }}
+            onClick={() => { refetchIntegraciones(); if (busquedaActivada) refetchPedidos(); }}
             className="rounded p-1 text-black-25 transition-colors hover:bg-light hover:text-black-45"
             title="Refrescar"
           >
@@ -128,7 +134,7 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
             loading={cargandoPedidos}
             pagina={filtros.pagina}
             registrosPorPagina={filtros.registros}
-            onPaginaChange={(p) => setFiltros((f) => ({ ...f, pagina: p }))}
+            onPaginaChange={handlePaginaChange}
             onVerDetalle={setPedidoDetalle}
             onVerConfirmacion={setPedidoConfirmacion}
           />
