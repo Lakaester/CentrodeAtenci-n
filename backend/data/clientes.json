@@ -112,11 +112,12 @@
   {
     "email": "mxmedrano@control-rest.com",
     "dominios": [
-      "elcorvinon.restaurant.pe"
+      "elcorvinon.restaurant.pe",
+      "hotelcircasiana.restaurant.pe"
     ],
     "primerContacto": "2026-07-20T21:01:13.704Z",
-    "ultimoContacto": "2026-07-20T21:01:13.704Z",
-    "totalTickets": 1
+    "ultimoContacto": "2026-08-24T04:09:05.204Z",
+    "totalTickets": 3
   },
   {
     "email": "analista.produccion@eddysbbq.com.ec",
@@ -503,8 +504,8 @@
       "mercadodecolores.restaurant.pe"
     ],
     "primerContacto": "2026-08-20T15:06:21.610Z",
-    "ultimoContacto": "2026-08-20T23:16:36.482Z",
-    "totalTickets": 4
+    "ultimoContacto": "2026-08-21T15:10:52.610Z",
+    "totalTickets": 10
   },
   {
     "email": "yojesusfuentes@gmail.com",
@@ -593,7 +594,79 @@
       "http://cafeti.restaurant.pe/"
     ],
     "primerContacto": "2026-08-21T00:52:38.272Z",
-    "ultimoContacto": "2026-08-21T01:36:49.456Z",
-    "totalTickets": 32
+    "ultimoContacto": "2026-08-21T01:46:06.161Z",
+    "totalTickets": 33
+  },
+  {
+    "email": "juanma.cuadros.loarte@gmail.com",
+    "dominios": [
+      "elranchopolleria.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-21T14:46:32.386Z",
+    "ultimoContacto": "2026-08-21T14:52:07.698Z",
+    "totalTickets": 6
+  },
+  {
+    "email": "nvillaseca@restaurant.pe",
+    "dominios": [
+      "lachinita.quipupos.com"
+    ],
+    "primerContacto": "2026-08-21T15:08:50.648Z",
+    "ultimoContacto": "2026-08-24T05:30:46.704Z",
+    "totalTickets": 10
+  },
+  {
+    "email": "restaurant@hebraicaperu.org",
+    "dominios": [
+      "hebraica.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-23T19:41:00.896Z",
+    "ultimoContacto": "2026-08-24T05:22:09.252Z",
+    "totalTickets": 26
+  },
+  {
+    "email": "gerencia.serviciosycomidas@gmail.com",
+    "dominios": [
+      "pranzogt.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-23T19:41:32.933Z",
+    "ultimoContacto": "2026-08-23T19:41:32.933Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "recaudacion@practifact.pe",
+    "dominios": [
+      "marketvaolurin.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-23T19:41:41.563Z",
+    "ultimoContacto": "2026-08-23T19:41:41.563Z",
+    "totalTickets": 1
+  },
+  {
+    "email": "piqarestaurant@gmail.com",
+    "dominios": [
+      "piqa.quipupos.com"
+    ],
+    "primerContacto": "2026-08-23T19:42:28.236Z",
+    "ultimoContacto": "2026-08-23T23:27:43.914Z",
+    "totalTickets": 5
+  },
+  {
+    "email": "yanetjimenezp@yahoo.com",
+    "dominios": [
+      "fresasconcremalatradicion.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-23T23:28:16.952Z",
+    "ultimoContacto": "2026-08-24T05:24:32.708Z",
+    "totalTickets": 6
+  },
+  {
+    "email": "asesoresctla@outlook.com",
+    "dominios": [
+      "salchimonster.restaurant.pe"
+    ],
+    "primerContacto": "2026-08-23T23:52:27.153Z",
+    "ultimoContacto": "2026-08-24T03:16:37.571Z",
+    "totalTickets": 31
   }
 ]

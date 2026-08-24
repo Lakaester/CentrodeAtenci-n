@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import type { Pedido } from "../types";
+import { extraerOrderId, extraerIntegracion, extraerRespuesta } from "../utils/pedidoCampos";
 
 interface Props {
   pedido: Pedido | null;
   onClose: () => void;
-}
-
-function campo(p: Pedido, ...claves: string[]): string {
-  for (const k of claves) {
-    const v = p[k];
-    if (v != null && v !== "") return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v);
-  }
-  return "—";
 }
 
 export function PedidoConfirmacionModal({ pedido, onClose }: Props) {
@@ -20,7 +13,7 @@ export function PedidoConfirmacionModal({ pedido, onClose }: Props) {
 
   if (!pedido) return null;
 
-  const confirmacion = campo(pedido, "respuesta", "confirmacion", "confirmResponse", "json_respuesta");
+  const confirmacion = extraerRespuesta(pedido);
 
   // Intentar extraer mensaje legible del JSON de confirmación
   let mensajeLegible = confirmacion;
@@ -61,8 +54,8 @@ export function PedidoConfirmacionModal({ pedido, onClose }: Props) {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-3 grid grid-cols-2 gap-2 text-[10px]">
-            <div><span className="text-black-25">Pedido: </span>{campo(pedido, "orderId", "order_id", "id")}</div>
-            <div><span className="text-black-25">Integración: </span>{campo(pedido, "integracion", "integration")}</div>
+            <div><span className="text-black-25">Pedido: </span>{extraerOrderId(pedido)}</div>
+            <div><span className="text-black-25">Integración: </span>{extraerIntegracion(pedido)}</div>
           </div>
           <label className="mb-1 block text-[9px] font-medium text-black-45">Confirmación</label>
           <div className="rounded border border-black-5 bg-success-5 p-3 text-[11px] text-black-85">

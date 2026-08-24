@@ -103,7 +103,9 @@ export default function Atenciones() {
           customer={ticketDetail.customer}
           ticket={ticketDetail.ticket}
           clienteCope={ticketDetail.clienteCope}
+          operativa={ticketDetail.operativa}
           onOpenTicket={(id) => setActiva(id)}
+          onRefreshOperativa={handleRefresh}
           panelOpen={panelOpen}
           onTogglePanel={() => setPanelOpen((v) => !v)}
         />

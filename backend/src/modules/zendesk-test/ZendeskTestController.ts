@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { AuthedRequest } from "../../middlewares/auth.middleware";
 import { ZendeskTestService } from "./ZendeskTestService";
 import { ZendeskInboxService } from "./ZendeskInboxService";
 import { ZendeskTicketService } from "./ZendeskTicketService";
@@ -10,6 +11,8 @@ import { AtencionCompletaService } from "./AtencionCompletaService";
 import { ClientStore } from "./ClientStore";
 import { AgentStore } from "./AgentStore";
 import { CustomerMemory } from "./CustomerMemory";
+import { atencionOperativaService } from "../../integrations/atenciones/services/AtencionOperativaService";
+import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
 
 const testService = new ZendeskTestService();
 const inboxService = new ZendeskInboxService();
@@ -18,6 +21,11 @@ const customerService = new ZendeskCustomerService();
 const actionsService = new ZendeskActionsService();
 const viewModelService = new AtencionViewModelService();
 const atencionCompletaService = new AtencionCompletaService();
+
+function usuarioDe(req: Request): string | null {
+  const auth = (req as AuthedRequest).auth;
+  return auth?.nombre ?? null;
+}
 
 export const zendeskTestController = {
   async test(req: Request, res: Response, next: NextFunction) {
@@ -126,6 +134,21 @@ export const zendeskTestController = {
       if (status === "solved" && email) {
         CustomerMemory.registrarResolucion(email, String(id));
       }
+
+      // ── Registro operativo COPE: estado + resolución/cierre ──
+      try {
+        await atencionOperativaService.registrarAccion(String(id), {
+          accion: status === "solved" ? "resolucion" : status === "closed" ? "cierre" : "cambio_estado",
+          detalle: `Estado: ${status}`,
+          campo: "estado",
+          valorNuevo: status,
+          usuario: autor,
+          origen: "zendesk",
+        });
+      } catch (err) {
+        console.error(`[Operativa] No se pudo registrar estado #${id}:`, err);
+      }
+
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
   },
@@ -140,6 +163,18 @@ export const zendeskTestController = {
       // CustomerMemory: register category
       if (email && subcategoria) {
         CustomerMemory.registrarCategoria(email, categoria, subcategoria);
+      }
+
+      // ── Registro operativo COPE: persistir clasificación + auditoría ──
+      try {
+        await atencionOperativaService.registrarClasificacion(String(id), {
+          categoria,
+          subcategoria: subcategoria ?? null,
+          usuario: autor,
+          origen: "zendesk",
+        });
+      } catch (err) {
+        console.error(`[Operativa] No se pudo registrar clasificación #${id}:`, err);
       }
 
       // Integración Quejas y Devoluciones: si la categoría es QUEJA o DEVOLUCIÓN,
@@ -219,6 +254,34 @@ export const zendeskTestController = {
       if (result.ticket.dominio && result.ticket.clienteEmail) {
         ClientStore.registrar(result.ticket.clienteEmail, result.ticket.dominio);
       }
+
+      // ── Registro operativo COPE: sincronizar snapshot por atención (no rompe el flujo) ──
+      try {
+        const operativa = await atencionOperativaService.sincronizarDesdeZendesk(
+          String(id),
+          {
+            asunto: result.ticket.asunto,
+            descripcion: result.ticket.descripcion,
+            clienteEmail: result.ticket.clienteEmail,
+            telefono: result.ticket.telefono,
+            dominio: result.ticket.dominio,
+            pais: result.ticket.pais,
+            estado: result.ticket.ticketOriginalStatus,
+            prioridad: result.ticket.prioridad,
+            tipo: result.ticket.tipo,
+            createdAt: result.ticket.createdAt,
+            updatedAt: result.ticket.updatedAt,
+            tags: result.ticket.tags,
+            assigneeId: result.ticket.assigneeId,
+            requesterId: result.ticket.requesterId,
+          },
+          { usuario: usuarioDe(req) },
+        );
+        (result as any).operativa = operativa;
+      } catch (err) {
+        console.error(`[Operativa] No se pudo sincronizar atención #${id}:`, err);
+      }
+
       console.log(`[AtencionCompleta] #${id} — ${result.metrica.totalMs}ms`);
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
@@ -234,6 +297,23 @@ export const zendeskTestController = {
       await client.actualizarCampos(id, [{ id: 40769061038615, value: dominio }]);
       // Register in local store
       if (email) ClientStore.registrar(email, dominio);
+
+      // ── Registro operativo COPE: snapshot de identificación ──
+      try {
+        const d = normalizeDomain(dominio);
+        if (d && isValidDomainFormat(d)) {
+          await atencionOperativaService.registrarIdentificacion(String(id), {
+            contactoTipo: "email",
+            contactoValor: email ?? undefined,
+            dominio: d,
+            tipoIdentificacion: "MANUAL",
+            usuario: usuarioDe(req),
+          });
+        }
+      } catch (err) {
+        console.error(`[Operativa] No se pudo registrar dominio #${id}:`, err);
+      }
+
       res.json({ ok: true, data: { ticketId: id, dominio } });
     } catch (err) { next(err); }
   },

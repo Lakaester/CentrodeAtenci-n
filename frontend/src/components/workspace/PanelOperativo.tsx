@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { RefreshCcw, Search, Stethoscope, Activity, LayoutGrid, History, AlertCircle, ChevronRight, ChevronLeft, User, Plus, X, Loader2, CheckCircle2, ListChecks, Pencil, Trash2 } from "lucide-react";
-import type { CustomerInfo, TicketDetail } from "@/hooks/useTicketDetail";
+import { RefreshCcw, Stethoscope, Activity, LayoutGrid, History, AlertCircle, ChevronRight, ChevronLeft, User, Plus, X, Loader2, CheckCircle2, ListChecks, Pencil, Trash2, Link2 } from "lucide-react";
+import type { CustomerInfo, TicketDetail, AtencionOperativa } from "@/hooks/useTicketDetail";
 import { localbiService } from "@/modules/localbi/services/LocalbiService";
 import { useHistoriaClinica } from "@/modules/localbi/hooks/useHistoriaClinica";
-import { HistoriaClinicaView } from "@/modules/localbi/components/HistoriaClinicaView";
+import { useHistoriaClinicaData } from "@/modules/localbi/hooks/useHistoriaClinicaData";
+import { ResumenUnidad } from "@/modules/localbi/components/secciones/ResumenUnidad";
+import { ActividadUnidad } from "@/modules/localbi/components/secciones/ActividadUnidad";
+import { OperacionUnidad } from "@/modules/localbi/components/secciones/OperacionUnidad";
+import { HistorialTransversalSeccion } from "@/modules/localbi/components/secciones/HistorialTransversalSeccion";
 import { HistoriaClientePanel } from "./HistoriaClientePanel";
 import { PanelIdentificacion } from "./PanelIdentificacion";
+import { VincularDominioModal } from "./VincularDominioModal";
+import { RegistroOperativo } from "./RegistroOperativo";
 import { SegmentoBadge, fmtMoneda } from "@/modules/localbi/components/HistoriaClinicaUI";
 import type { LocalbiHistoriaClinica } from "@/modules/localbi";
 import { api } from "@/lib/api";
@@ -18,7 +24,9 @@ interface Props {
   customer: CustomerInfo | null;
   ticket: TicketDetail | null;
   clienteCope?: Record<string, any> | null;
+  operativa?: AtencionOperativa | null;
   onOpenTicket?: (ticketId: string) => void;
+  onRefreshOperativa?: () => void;
   panelOpen: boolean;
   onTogglePanel: () => void;
 }
@@ -46,7 +54,7 @@ function subdominioDe(dominio: string | null | undefined): string {
   return dominio.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0] || "";
 }
 
-export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clienteCope, onOpenTicket: _onOpenTicket, panelOpen, onTogglePanel }: Props) {
+export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clienteCope, operativa, onOpenTicket: _onOpenTicket, onRefreshOperativa, panelOpen, onTogglePanel }: Props) {
   const [tab, setTab] = useState<Tab>("resumen");
   const [manual, setManual] = useState(false);
   const [unidadManual, setUnidadManual] = useState<string | null>(null);
@@ -68,6 +76,38 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   }) => {
     setIdentidadResuelta(data);
   }, []);
+
+  // ── Vincular dominio (modal) ──
+  const [vincularAbierto, setVincularAbierto] = useState(false);
+  const [dominiosHistoricos, setDominiosHistoricos] = useState<{ dominio: string; origen: string | null }[]>([]);
+
+  const abrirVincularDominio = useCallback(() => {
+    setDominiosHistoricos(
+      (operativa?.atencion?.dominio_identificado ? [{ dominio: operativa.atencion.dominio_identificado, origen: operativa.atencion.dominio_origen }] : [])
+    );
+    setVincularAbierto(true);
+  }, [operativa]);
+
+  const handleDominioVinculado = useCallback((dominio: string) => {
+    // Actualizar la identificación resuelta para que las pestañas dependientes
+    // usen el nuevo dominio. Los registros históricos no se modifican.
+    setIdentidadResuelta((prev) => ({ ...(prev ?? { unidad: null, localbi_id: null, estado: "SIN_IDENTIFICAR" }), dominio }));
+    // Refrescar el snapshot operativo desde el backend (nuevo dominio persistido).
+    onRefreshOperativa?.();
+  }, [onRefreshOperativa]);
+
+  // Dominio identificado de la ATENCIÓN (contexto principal de las pestañas).
+  // Prioridad:
+  //   1. Identificación resuelta en esta sesión (más reciente — refleja un
+  //      "Vincular dominio" hecho ahora mismo, aunque el snapshot aún no se
+  //      haya refrescado desde el backend).
+  //   2. Snapshot operativo COPE (atencion.dominio_identificado).
+  //   3. Dominio explícito del ticket Zendesk (fallback).
+  // Los registros históricos de la atención NO se modifican retroactivamente.
+  const dominioIdentificado = identidadResuelta?.dominio
+    ?? operativa?.atencion?.dominio_identificado
+    ?? ticket?.dominio
+    ?? null;
 
   // Determinar canal/identificador del ticket
   const canalTipo = useMemo<"email" | "whatsapp">(() => {
@@ -100,7 +140,8 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
 
   const dominioActual = ticket?.dominio;
   const dominioResuelto = identidadResuelta?.dominio;
-  const dominioParaBuscar = dominioResuelto ?? dominioActual;
+  // El Monitor de Integraciones usa el dominio identificado de ESTA atención.
+  const dominioParaBuscar = dominioIdentificado;
   const subdominio = subdominioDe(dominioParaBuscar);
 
   // Resolución automática dominio → unidad de negocio (por subdominio, inequívoca).
@@ -139,7 +180,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const identificado = Boolean(unidadActiva);
   const identificadoAutomatico = !unidadManual && Boolean(unidadDetectada);
 
-  const { data: historiaData, isLoading: historiaLoading } = useHistoriaClinica(unidadActiva);
+  const { data: historiaData } = useHistoriaClinica(unidadActiva);
   const ficha = historiaData?.status === "success" || historiaData?.status === "warning"
     ? (historiaData.data as LocalbiHistoriaClinica) : null;
 
@@ -377,7 +418,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
                 <AlertCircle size={9} /> Cliente vinculado manualmente
               </p>
             )}
-            {dominioActual && <p className="font-mono text-[9px] text-black-45">{dominioActual}</p>}
+            {dominioIdentificado && <p className="font-mono text-[9px] text-black-45">{dominioIdentificado}</p>}
             {kpis && (
               <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-black-45">
                 {kpis.segmento && <SegmentoBadge segmento={kpis.segmento} />}
@@ -389,8 +430,8 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
           </div>
         ) : (
           <div className="space-y-1">
-            {dominioActual ? (
-              <p className="text-[10px] text-warning-65">Cliente no identificado autom\u00e1ticamente para \u00ab{subdominio || dominioActual}\u00bb.</p>
+            {dominioIdentificado ? (
+              <p className="text-[10px] text-warning-65">Cliente no identificado autom\u00e1ticamente para \u00ab{subdominio || dominioIdentificado}\u00bb.</p>
             ) : (
               <p className="text-[10px] text-black-45">Esta atenci\u00f3n no tiene dominio.</p>
             )}
@@ -400,11 +441,25 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
           </div>
         )}
 
+        {/* Acción primaria de identificación: VINCULAR DOMINIO */}
         <div className="mt-1.5 flex items-center gap-1.5">
-          <button type="button" onClick={() => setManual(true)} className="rounded border border-black-10 px-2 py-0.5 text-[9px] text-black-65 hover:bg-light">
-            <Search size={9} className="mr-0.5 inline" /> Buscar
+          <button
+            type="button"
+            onClick={abrirVincularDominio}
+            disabled={!canalValor && !ticket}
+            className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-[9px] font-medium text-white hover:bg-primary-85 disabled:opacity-50"
+            title="Vincular el dominio correspondiente a esta atención"
+          >
+            <Link2 size={10} /> Vincular dominio
           </button>
         </div>
+
+        {/* Registro operativo de la atención (identificación/clasificación/calificación/auditoría) */}
+        {operativa && (
+          <div className="mt-2">
+            <RegistroOperativo operativa={operativa} ticketId={ticket?.id ?? null} onRefrescar={onRefreshOperativa} />
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -428,11 +483,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
 
       {/* Contenido con scroll propio */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {tab === "integraciones" ? (
-          <div className="p-3">
-            <IntegracionesSeccion dominio={dominioParaBuscar} embedded />
-          </div>
-        ) : !identificado ? (
+        {!identificado && tab !== "integraciones" && !canalValor ? (
           <div className="p-4 text-center text-[10px] text-black-45">
             {manual ? (
               <p>Selecciona un cliente de la búsqueda manual.</p>
@@ -440,14 +491,23 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
               <p>{resolviendo ? "Identificando…" : "No hay cliente identificado para esta atención."}</p>
             )}
           </div>
-        ) : historiaLoading ? (
-          <div className="space-y-2 p-3">
-            {[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded bg-black-5" />)}
+        ) : tab === "integraciones" ? (
+          <div className="p-3">
+            <IntegracionesSeccion dominio={dominioParaBuscar} embedded />
           </div>
-        ) : !ficha ? (
-          <div className="p-4 text-center text-[10px] text-danger">No pudimos cargar la información del cliente.</div>
+        ) : !unidadActiva ? (
+          <div className="p-3">
+            {/* Sin unidad resuelta aún: la ficha se cargará al identificar la unidad. */}
+            <div className="space-y-2 p-3">
+              {[0, 1, 2].map((i) => <div key={i} className="h-10 animate-pulse rounded bg-black-5" />)}
+            </div>
+          </div>
         ) : (
-          <HistoriaClinicaView unidadNegocio={unidadActiva as string} />
+          <FichaPorTab
+            tab={tab}
+            unidadActiva={unidadActiva as string}
+            dominioIdentificado={dominioIdentificado}
+          />
         )}
       </div>
 
@@ -619,6 +679,67 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
           onAgregar={agregarTareaALista}
         />
       )}
+
+      {/* Modal: Vincular dominio a esta atención */}
+      {vincularAbierto && canalValor && (
+        <VincularDominioModal
+          tipo={canalTipo}
+          valor={canalValor}
+          ticketId={ticket?.ticketOriginalId ?? ticket?.id ?? ""}
+          dominiosHistoricos={dominiosHistoricos}
+          onClose={() => setVincularAbierto(false)}
+          onVinculado={handleDominioVinculado}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Ficha por pestaña ───────────────────────────────── */
+function FichaPorTab({ tab, unidadActiva, dominioIdentificado }: {
+  tab: Tab;
+  unidadActiva: string;
+  dominioIdentificado: string | null;
+}) {
+  // Datos compartidos de la ficha (una sola carga; React Query cachea).
+  const data = useHistoriaClinicaData(unidadActiva);
+
+  if (data.status.kind === "loading") {
+    return (
+      <div className="space-y-2 p-3">
+        <div className="h-5 w-40 animate-pulse rounded bg-black-5" />
+        <div className="h-3 w-56 animate-pulse rounded bg-black-5" />
+        <div className="grid grid-cols-3 gap-1.5">
+          <div className="h-10 animate-pulse rounded bg-black-5" />
+          <div className="h-10 animate-pulse rounded bg-black-5" />
+          <div className="h-10 animate-pulse rounded bg-black-5" />
+        </div>
+        <div className="h-24 animate-pulse rounded bg-black-5" />
+      </div>
+    );
+  }
+
+  if (data.status.kind === "empty") {
+    return <div className="p-3 text-[10px] text-black-25">No se pudo cargar la Historia Clínica.</div>;
+  }
+
+  if (data.status.kind === "not_configured" || data.status.kind === "unavailable" || data.status.kind === "error") {
+    return (
+      <div className="flex flex-col items-center p-6 text-center">
+        <p className="text-[11px] font-semibold text-warning-65">{data.status.mensaje}</p>
+        <button type="button" onClick={() => data.refetch()} className="mt-3 rounded bg-primary px-3 py-1.5 text-[10px] font-medium text-white hover:bg-primary-85">
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3">
+      {tab === "resumen" && <ResumenUnidad data={data} />}
+      {tab === "actividad" && <ActividadUnidad data={data} />}
+      {tab === "operacion" && <OperacionUnidad data={data} dominioIdentificado={dominioIdentificado} />}
+      {tab === "historial" && <HistorialTransversalSeccion data={data} />}
     </div>
   );
 }

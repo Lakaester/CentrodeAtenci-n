@@ -81,6 +81,73 @@ interface AtencionCompletaResponse {
     primerContacto: string;
     ultimoContacto: string;
   };
+  operativa?: {
+    atencion: {
+      id: string;
+      zendesk_ticket_id: string | null;
+      dominio_identificado: string | null;
+      tipo_identificacion: string | null;
+      identificado_por: string | null;
+      identificado_at: string | null;
+      categoria: string | null;
+      subcategoria: string | null;
+      categorizado_por: string | null;
+      categorizado_at: string | null;
+      calificacion: string | null;
+      calificado_por: string | null;
+      calificado_at: string | null;
+      asesor: string | null;
+      estado: string | null;
+      dominio_origen: string | null;
+      categoria_origen: string | null;
+      calificacion_origen: string | null;
+    };
+    auditoria: Array<{
+      id: string;
+      accion: string;
+      usuario: string | null;
+      detalle: string | null;
+      campo: string | null;
+      valor_anterior: string | null;
+      valor_nuevo: string | null;
+      origen: string;
+      created_at: string;
+    }>;
+  };
+}
+
+export interface AtencionOperativa {
+  atencion: {
+    id: string;
+    zendesk_ticket_id: string | null;
+    dominio_identificado: string | null;
+    tipo_identificacion: string | null;
+    identificado_por: string | null;
+    identificado_at: string | null;
+    categoria: string | null;
+    subcategoria: string | null;
+    categorizado_por: string | null;
+    categorizado_at: string | null;
+    calificacion: string | null;
+    calificado_por: string | null;
+    calificado_at: string | null;
+    asesor: string | null;
+    estado: string | null;
+    dominio_origen: string | null;
+    categoria_origen: string | null;
+    calificacion_origen: string | null;
+  };
+  auditoria: Array<{
+    id: string;
+    accion: string;
+    usuario: string | null;
+    detalle: string | null;
+    campo: string | null;
+    valor_anterior: string | null;
+    valor_nuevo: string | null;
+    origen: string;
+    created_at: string;
+  }>;
 }
 
 export function useTicketDetail(ticketId: string | null, retryKey?: number) {
@@ -88,6 +155,7 @@ export function useTicketDetail(ticketId: string | null, retryKey?: number) {
   const [comentarios, setComentarios] = useState<TicketComentario[]>([]);
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [clienteCope, setClienteCope] = useState<Record<string, any> | null>(null);
+  const [operativa, setOperativa] = useState<AtencionOperativa | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [freshKey, setFreshKey] = useState(0);
@@ -107,11 +175,13 @@ export function useTicketDetail(ticketId: string | null, retryKey?: number) {
     const abort = new AbortController();
     abortRef.current = abort;
 
-    setTicket(null);
-    setComentarios([]);
-    setCustomer(null);
-    setLoading(true);
-    setError(null);
+setTicket(null);
+      setComentarios([]);
+      setCustomer(null);
+      setClienteCope(null);
+      setOperativa(null);
+      setLoading(true);
+      setError(null);
 
     const fetchData = async () => {
       try {
@@ -139,6 +209,7 @@ export function useTicketDetail(ticketId: string | null, retryKey?: number) {
         };
         setCustomer(customerInfo);
         setClienteCope(data.clienteCope ?? null);
+        setOperativa(data.operativa ?? null);
         setLoading(false);
       } catch (err: any) {
         if (err?.name === "CanceledError" || abort.signal.aborted) return;
@@ -165,5 +236,5 @@ export function useTicketDetail(ticketId: string | null, retryKey?: number) {
 
   const refetch = () => setFreshKey((k) => k + 1);
 
-  return { ticket, comentarios, customer, clienteCope, loading, error, refetch };
+  return { ticket, comentarios, customer, clienteCope, operativa, loading, error, refetch };
 }

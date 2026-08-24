@@ -1,5 +1,14 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Pedido } from "../types";
+import {
+  extraerOrderId,
+  extraerStoreId,
+  extraerIntegracion,
+  extraerEstado,
+  extraerConfirmacion,
+  extraerFecha,
+  fmtFechaHora,
+} from "../utils/pedidoCampos";
 
 interface Props {
   pedidos: Pedido[];
@@ -10,25 +19,6 @@ interface Props {
   onPaginaChange: (p: number) => void;
   onVerDetalle: (pedido: Pedido) => void;
   onVerConfirmacion: (pedido: Pedido) => void;
-}
-
-/** Extrae un valor seguro de un pedido (campos no conocidos con certeza). */
-function campo(p: Pedido, ...claves: string[]): string {
-  for (const k of claves) {
-    const v = p[k];
-    if (v != null && v !== "") return String(v);
-  }
-  return "—";
-}
-
-function fmtFecha(p: Pedido): string {
-  const raw = campo(p, "fecha", "fecha_creacion", "createdAt", "date");
-  if (raw === "—") return raw;
-  try {
-    return new Date(raw).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
-  } catch {
-    return raw;
-  }
 }
 
 const totalPaginas = (total: number, porPagina: number) => Math.max(1, Math.ceil(total / porPagina));
@@ -67,7 +57,7 @@ export function PedidosTabla({
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="border-b border-black-10 text-[8px] uppercase tracking-wider text-black-45">
-            <th className="px-2 py-1.5 font-medium">Fecha</th>
+            <th className="px-2 py-1.5 font-medium">Fecha/hora</th>
             <th className="px-2 py-1.5 font-medium">Integración</th>
             <th className="px-2 py-1.5 font-medium">Pedido</th>
             <th className="px-2 py-1.5 font-medium">StoreID</th>
@@ -79,23 +69,25 @@ export function PedidosTabla({
         <tbody>
           {pedidos.map((p, i) => (
             <tr key={i} className="border-b border-black-5 text-[10px]">
-              <td className="px-2 py-1.5 text-black-65">{fmtFecha(p)}</td>
+              <td className="whitespace-nowrap px-2 py-1.5 font-mono text-black-65">
+                {fmtFechaHora(extraerFecha(p))}
+              </td>
               <td className="px-2 py-1.5">
                 <span className="rounded bg-primary-10 px-1 py-0.5 text-[8px] font-medium text-primary">
-                  {campo(p, "integracion", "integration", "canal")}
+                  {extraerIntegracion(p)}
                 </span>
               </td>
               <td className="px-2 py-1.5 font-mono text-black-85">
-                {campo(p, "orderId", "order_id", "pedido", "id")}
+                {extraerOrderId(p)}
               </td>
               <td className="px-2 py-1.5 font-mono text-black-65">
-                {campo(p, "storeId", "store_id", "store")}
+                {extraerStoreId(p)}
               </td>
               <td className="px-2 py-1.5">
-                <EstadoBadge estado={campo(p, "estado", "status")} />
+                <EstadoBadge estado={extraerEstado(p)} />
               </td>
               <td className="px-2 py-1.5">
-                <ConfirmacionBadge estado={campo(p, "estadoConfirmacion", "confirmacion", "confirmStatus")} />
+                <ConfirmacionBadge estado={extraerConfirmacion(p)} />
               </td>
               <td className="px-2 py-1.5 text-right">
                 <div className="flex items-center justify-end gap-1">
@@ -124,14 +116,14 @@ export function PedidosTabla({
       {paginas > 1 && (
         <div className="flex items-center justify-between border-t border-black-5 px-2 py-1.5 text-[9px] text-black-45">
           <span>{totalRegistros} pedidos</span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => onPaginaChange(Math.max(1, pagina - 1))}
               disabled={pagina <= 1}
               className="rounded border border-black-10 px-1.5 py-0.5 disabled:opacity-40"
             >
-              ←
+              <ChevronLeft size={11} />
             </button>
             <span>{pagina}/{paginas}</span>
             <button
@@ -140,7 +132,7 @@ export function PedidosTabla({
               disabled={pagina >= paginas}
               className="rounded border border-black-10 px-1.5 py-0.5 disabled:opacity-40"
             >
-              →
+              <ChevronRight size={11} />
             </button>
           </div>
         </div>

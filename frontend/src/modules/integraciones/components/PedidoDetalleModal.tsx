@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { X, Copy, Check } from "lucide-react";
 import type { Pedido } from "../types";
+import {
+  extraerOrderId,
+  extraerStoreId,
+  extraerIntegracion,
+  extraerEstado,
+  extraerRespuesta,
+} from "../utils/pedidoCampos";
 
 interface Props {
   pedido: Pedido | null;
   onClose: () => void;
-}
-
-function campo(p: Pedido, ...claves: string[]): string {
-  for (const k of claves) {
-    const v = p[k];
-    if (v != null && v !== "") return typeof v === "object" ? JSON.stringify(v, null, 2) : String(v);
-  }
-  return "—";
 }
 
 export function PedidoDetalleModal({ pedido, onClose }: Props) {
@@ -20,7 +19,7 @@ export function PedidoDetalleModal({ pedido, onClose }: Props) {
 
   if (!pedido) return null;
 
-  const jsonRespuesta = campo(pedido, "json_respuesta", "respuesta", "response", "responseData");
+  const jsonRespuesta = extraerRespuesta(pedido);
   const esJson = jsonRespuesta.startsWith("{") || jsonRespuesta.startsWith("[");
 
   const copiar = async () => {
@@ -49,10 +48,10 @@ export function PedidoDetalleModal({ pedido, onClose }: Props) {
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-3 grid grid-cols-2 gap-2 text-[10px]">
-            <div><span className="text-black-25">Pedido: </span>{campo(pedido, "orderId", "order_id", "id")}</div>
-            <div><span className="text-black-25">Integración: </span>{campo(pedido, "integracion", "integration")}</div>
-            <div><span className="text-black-25">Estado: </span>{campo(pedido, "estado", "status")}</div>
-            <div><span className="text-black-25">StoreID: </span>{campo(pedido, "storeId", "store_id")}</div>
+            <div><span className="text-black-25">Pedido: </span>{extraerOrderId(pedido)}</div>
+            <div><span className="text-black-25">Integración: </span>{extraerIntegracion(pedido)}</div>
+            <div><span className="text-black-25">Estado: </span>{extraerEstado(pedido)}</div>
+            <div><span className="text-black-25">StoreID: </span>{extraerStoreId(pedido)}</div>
           </div>
           <label className="mb-1 block text-[9px] font-medium text-black-45">JSON de respuesta</label>
           {esJson ? (

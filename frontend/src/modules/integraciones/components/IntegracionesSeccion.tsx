@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { RefreshCcw } from "lucide-react";
+import { useState, useCallback } from "react";
+import { RefreshCcw, Package, Plug } from "lucide-react";
 import { useIntegraciones, useBusquedaPedidos } from "../hooks/useIntegraciones";
 import { IntegracionesLista } from "./IntegracionesLista";
 import { IntegracionesEmpty } from "./IntegracionesEmpty";
-import { PedidosFiltros } from "./PedidosFiltros";
-import { PedidosTabla } from "./PedidosTabla";
+import { PedidosRecientes } from "./PedidosRecientes";
+import { PedidoDrawer } from "./PedidoDrawer";
 import { PedidoDetalleModal } from "./PedidoDetalleModal";
 import { PedidoConfirmacionModal } from "./PedidoConfirmacionModal";
 import type { PedidoFiltros, Pedido } from "../types";
@@ -16,6 +16,13 @@ interface Props {
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function hoyRangoCompleto(): [string, string] {
+  const now = new Date();
+  const inicio = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 16);
+  const fin = now.toISOString().slice(0, 16);
+  return [inicio, fin];
 }
 
 function defaultFiltros(suscripciones: string[]): PedidoFiltros {
@@ -31,10 +38,15 @@ function defaultFiltros(suscripciones: string[]): PedidoFiltros {
 }
 
 export function IntegracionesSeccion({ dominio, embedded }: Props) {
+  // ── Estado local ──
   const [pedidoDetalle, setPedidoDetalle] = useState<Pedido | null>(null);
   const [pedidoConfirmacion, setPedidoConfirmacion] = useState<Pedido | null>(null);
-  const [busquedaActivada, setBusquedaActivada] = useState(false);
+  const [drawerAbierto, setDrawerAbierto] = useState(false);
+  const [filtros, setFiltros] = useState<PedidoFiltros>(() =>
+    defaultFiltros(dominio ? [dominio] : [])
+  );
 
+  // ── Nivel 1: integraciones (automático) ──
   const {
     data: integracionesData,
     isLoading: cargandoIntegraciones,
@@ -44,28 +56,47 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
 
   const integraciones = integracionesData?.integraciones ?? [];
 
-  const [filtros, setFiltros] = useState<PedidoFiltros>(() =>
-    defaultFiltros(dominio ? [dominio] : [])
-  );
+  // ── Nivel 2: pedidos (solo bajo demanda) ──
+  const [pedidosPedidos, setPedidosPedidos] = useState(false);
 
   const {
     data: pedidosData,
     isLoading: cargandoPedidos,
     error: errorPedidos,
     refetch: refetchPedidos,
-  } = useBusquedaPedidos(busquedaActivada ? filtros : null, dominio, busquedaActivada);
+  } = useBusquedaPedidos(pedidosPedidos ? filtros : null, dominio, pedidosPedidos);
 
   const pedidos = pedidosData?.pedidos ?? [];
   const totalRegistros = pedidosData?.totalRegistros ?? 0;
 
-  const handleBuscar = () => {
-    setBusquedaActivada(true);
-  };
+  // ── Handlers ──
+  const handleVerPedidos = useCallback(() => {
+    const nuevosFiltros: PedidoFiltros = {
+      suscripciones: dominio ? [dominio] : [],
+      integraciones: [],
+      storeIds: [],
+      estados: [],
+      fechas: hoyRangoCompleto(),
+      pagina: 1,
+      registros: 20,
+    };
+    setFiltros(nuevosFiltros);
+    setPedidosPedidos(true);
+  }, [dominio]);
 
-  const handlePaginaChange = (p: number) => {
+  const handleVerTodos = useCallback(() => {
+    setDrawerAbierto(true);
+  }, []);
+
+  const handleBuscarDrawer = useCallback((nuevosFiltros: PedidoFiltros) => {
+    setFiltros(nuevosFiltros);
+    setPedidosPedidos(true);
+  }, []);
+
+  const handlePaginaChange = useCallback((p: number) => {
     setFiltros((f) => ({ ...f, pagina: p }));
-    if (busquedaActivada) refetchPedidos();
-  };
+    // La query se re-ejecuta automáticamente al cambiar el queryKey (filtros)
+  }, []);
 
   const cardClass = embedded
     ? ""
@@ -84,7 +115,10 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
           )}
           <button
             type="button"
-            onClick={() => { refetchIntegraciones(); if (busquedaActivada) refetchPedidos(); }}
+            onClick={() => {
+              refetchIntegraciones();
+              if (pedidosPedidos) refetchPedidos();
+            }}
             className="rounded p-1 text-black-25 transition-colors hover:bg-light hover:text-black-45"
             title="Refrescar"
           >
@@ -100,8 +134,11 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
         </div>
       )}
 
-      {/* Lista de integraciones */}
+      {/* ── BLOQUE A: Integraciones contratadas ── */}
       <div className="mb-3">
+        <p className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-black-45">
+          <Plug size={9} /> Integraciones contratadas
+        </p>
         <IntegracionesLista
           integraciones={integraciones}
           loading={cargandoIntegraciones}
@@ -118,37 +155,63 @@ export function IntegracionesSeccion({ dominio, embedded }: Props) {
         )}
       </div>
 
-      {/* Filtros + tabla de pedidos (solo si hay integraciones) */}
-      {integraciones.length > 0 && (
-        <div className="space-y-2">
-          <PedidosFiltros
-            integraciones={integraciones}
-            filtros={filtros}
-            onFiltrosChange={setFiltros}
-            onBuscar={handleBuscar}
-            loading={cargandoPedidos}
-          />
-          <PedidosTabla
-            pedidos={pedidos}
-            totalRegistros={totalRegistros}
-            loading={cargandoPedidos}
-            pagina={filtros.pagina}
-            registrosPorPagina={filtros.registros}
-            onPaginaChange={handlePaginaChange}
-            onVerDetalle={setPedidoDetalle}
-            onVerConfirmacion={setPedidoConfirmacion}
-          />
-          {errorPedidos && (
-            <IntegracionesEmpty
-              tipo="error"
-              mensaje={errorPedidos.message}
-              onReintentar={() => refetchPedidos()}
-            />
+      {/* ── BLOQUE B: Monitor de Integraciones (pedidos bajo demanda) ── */}
+      {dominio && (
+        <div className="border-t border-black-5 pt-2">
+          <p className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-black-45">
+            <Package size={9} /> Monitor de Integraciones
+          </p>
+
+          {/* Botón Ver pedidos (solo si hay integraciones y no se han pedido aún) */}
+          {integraciones.length > 0 && !pedidosPedidos && (
+            <button
+              type="button"
+              onClick={handleVerPedidos}
+              className="inline-flex items-center gap-1.5 rounded border border-black-10 bg-white px-3 py-1.5 text-[10px] font-medium text-black-65 transition-colors hover:border-primary hover:text-primary"
+            >
+              <Package size={11} /> Ver pedidos
+            </button>
+          )}
+
+          {/* Resumen de pedidos (compacto) */}
+          {pedidosPedidos && (
+            <div className="mt-2 space-y-2">
+              <PedidosRecientes
+                pedidos={pedidos}
+                loading={cargandoPedidos}
+                totalRegistros={totalRegistros}
+                onVerTodos={handleVerTodos}
+              />
+              {errorPedidos && (
+                <IntegracionesEmpty
+                  tipo="error"
+                  mensaje={errorPedidos.message}
+                  onReintentar={() => refetchPedidos()}
+                />
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {/* Modales */}
+      {/* ── Drawer: tabla completa de pedidos ── */}
+      <PedidoDrawer
+        abierto={drawerAbierto}
+        onClose={() => setDrawerAbierto(false)}
+        pedidos={pedidos}
+        totalRegistros={totalRegistros}
+        loading={cargandoPedidos}
+        filtros={filtros}
+        integraciones={integraciones}
+        pagina={filtros.pagina}
+        registrosPorPagina={filtros.registros}
+        onBuscar={handleBuscarDrawer}
+        onPaginaChange={handlePaginaChange}
+        onVerDetalle={setPedidoDetalle}
+        onVerConfirmacion={setPedidoConfirmacion}
+      />
+
+      {/* Modales de detalle */}
       <PedidoDetalleModal pedido={pedidoDetalle} onClose={() => setPedidoDetalle(null)} />
       <PedidoConfirmacionModal pedido={pedidoConfirmacion} onClose={() => setPedidoConfirmacion(null)} />
     </section>
