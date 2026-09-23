@@ -5,8 +5,11 @@ import { authMiddleware } from "../middleware/AuthMiddleware";
 const auth = new AuthService();
 export const securityRouter = Router();
 
-/** POST /api/security/login — Login simple (devuelve token) */
+/** POST /api/security/login — Login simple (devuelve token). Deshabilitado en producción. */
 securityRouter.post("/login", (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ ok: false, error: "No encontrado" });
+  }
   const { email, nombre, rol } = req.body;
   if (!email) return res.status(400).json({ ok: false, error: "Email requerido" });
   const token = auth.generateToken({ id: email, email, nombre: nombre ?? email, rol: rol ?? "agent" });

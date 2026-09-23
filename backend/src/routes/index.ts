@@ -41,21 +41,21 @@ const eventRouter = getEventRouter();
 
 apiRouter.use("/health", healthRouter);
 apiRouter.use("/auth", authRouter);
-apiRouter.use("/quejas-devoluciones", qdRouter);
-apiRouter.use("/dashboard", dashboardRouter);
-apiRouter.use("/tickets", ticketRouter);
+apiRouter.use("/quejas-devoluciones", requireAuth, qdRouter);
+apiRouter.use("/dashboard", requireAuth, dashboardRouter);
+apiRouter.use("/tickets", requireAuth, ticketRouter);
 apiRouter.use("/contactos", requireAuth, contactoRouter);
 
 const atencionesRouter = Router();
-atencionesRouter.use("/", atencionRouter);
+atencionesRouter.use("/", requireAuth, atencionRouter);
 atencionesRouter.use("/", requireAuth, atencionOperativaRouter);
 atencionesRouter.use("/", requireAuth, ticketbiRouter);
 // atencionesRouter.use("/zendesk", zendeskRouter); // @deprecated — usar /api/zendesk/* (modules/zendesk-test/)
 apiRouter.use("/atenciones", atencionesRouter);
 
-apiRouter.use("/guias", guiaRouter);
-apiRouter.use("/herramientas", herramientaRouter);
-apiRouter.use("/zendesk", zendeskTestRouter);
+apiRouter.use("/guias", requireAuth, guiaRouter);
+apiRouter.use("/herramientas", requireAuth, herramientaRouter);
+apiRouter.use("/zendesk", requireAuth, zendeskTestRouter);
 apiRouter.use("/printer", printerRouter);
 // Rutas sensibles protegidas: requieren sesión autenticada.
 apiRouter.use("/localbi", requireAuth, localbiRouter);
@@ -64,7 +64,7 @@ apiRouter.use("/integraciones", requireAuth, integracionesRouter);
 apiRouter.use("/control-facturacion", requireAuth, facturacionRouter);
 apiRouter.use("/control-facturacion/config", requireAuth, facturacionConfigRouter);
 apiRouter.use("/config", requireAuth, requirePermission("Configuracion", "administrar"), adminConfigRouter);
-apiRouter.use("/customer", customerRouter);
+apiRouter.use("/customer", requireAuth, customerRouter);
 apiRouter.use("/search", searchRouter);
 apiRouter.use("/decision", decisionRouter);
 apiRouter.use("/knowledge", knowledgeRouter);
@@ -73,7 +73,7 @@ apiRouter.use("/workflows", workflowRouter);
 apiRouter.use("/plugins", pluginRouter);
 apiRouter.use("/dev/events", eventRouter);
 apiRouter.use("/security", securityRouter);
-apiRouter.use("/config", requireAuth, configRouter);
+apiRouter.use("/config", requireAuth, requirePermission("Configuracion", "administrar"), configRouter);
 apiRouter.use("/health", coreHealthRouter);
 apiRouter.use("/operations", operationsRouter);
 apiRouter.use("/gestion", gestionRouter);

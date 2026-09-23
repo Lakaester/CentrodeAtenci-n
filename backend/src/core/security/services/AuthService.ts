@@ -1,6 +1,6 @@
 import type { User, AuthPayload, UserRole } from "../types";
 
-const API_TOKEN = process.env.COPE_API_TOKEN ?? "cope-dev-token";
+const API_TOKEN = process.env.COPE_API_TOKEN ?? "";
 
 /**
  * AuthService — Autenticación y autorización básica.
