@@ -12,6 +12,7 @@ dashboardRouter.get("/categorias", validateFilters, dashboardController.categori
 dashboardRouter.get("/categorias-v2", validateFilters, dashboardController.categoriasV2);
 dashboardRouter.get("/clientes", validateFilters, dashboardController.clientes);
 dashboardRouter.get("/clientes-v2", validateFilters, dashboardController.clientesV2);
+dashboardRouter.get("/clientes-v2/exportar", validateFilters, dashboardController.clientesV2Exportar);
 dashboardRouter.get("/whatsapp", validateFilters, dashboardController.whatsapp);
 dashboardRouter.get("/zendesk", validateFilters, dashboardController.zendesk);
 dashboardRouter.get("/tendencias", validateFilters, dashboardController.tendencias);

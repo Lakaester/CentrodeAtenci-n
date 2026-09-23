@@ -237,6 +237,30 @@ export const qdController = {
     } catch (err) { handle(res, err); }
   },
 
+  /**
+   * Reconciliación automática: detecta tickets válidos sin caso y los crea.
+   * NO destruye datos operativos de casos existentes.
+   */
+  async reconciliar(req: Request, res: Response, next: NextFunction) {
+    try {
+      const desde = String(req.body?.desde ?? "").trim();
+      const hasta = String(req.body?.hasta ?? "").trim();
+      if (!desde || !hasta) {
+        return res.status(400).json({ ok: false, error: "Se requieren 'desde' y 'hasta' (YYYY-MM-DD)" });
+      }
+      const { reconciliarCasosQD } = await import("../services/quejasCasos.service");
+      const resultados = await reconciliarCasosQD(desde, hasta);
+      const resumen = {
+        total: resultados.length,
+        creados: resultados.filter((r) => r.resultado === "CREADO").length,
+        yaExisten: resultados.filter((r) => r.resultado === "YA_EXISTE").length,
+        sinDominio: resultados.filter((r) => r.resultado === "SIN_DOMINIO").length,
+        errores: resultados.filter((r) => r.resultado === "ERROR").length,
+      };
+      res.json({ ok: true, data: { resumen, detalles: resultados } });
+    } catch (err) { handle(res, err); }
+  },
+
   async listarEstados(_req: Request, res: Response, next: NextFunction) {
     try { res.json({ ok: true, data: await qdService.listarEstados() }); } catch (err) { next(err); }
   },

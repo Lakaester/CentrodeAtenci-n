@@ -24,7 +24,7 @@ import { pluginRouter } from "../core/plugins/routes/plugin.routes";
 import { getEventRouter } from "../core/events/bootstrap";
 import { securityRouter } from "../core/security/routes/security.routes";
 import { configRouter } from "../core/configuration/routes/config.routes";
-import { healthRouter } from "../core/health/routes/health.routes";
+import { healthRouter as coreHealthRouter } from "../core/health/routes/health.routes";
 import { operationsRouter } from "../modules/operations/routes/operations.routes";
 import { authRouter } from "./auth.routes";
 import { requireAuth, requirePermission } from "../middlewares/auth.middleware";
@@ -33,6 +33,7 @@ import { ticketbiRouter } from "../integrations/ticketbi/routes/ticketbi.routes"
 import { integracionesRouter } from "../integrations/integraciones/routes/integraciones.routes";
 import { contactoRouter } from "./contacto.routes";
 import { atencionOperativaRouter } from "../integrations/atenciones/routes/atencionOperativa.routes";
+import { gestionRouter } from "./gestion.routes";
 
 export const apiRouter = Router();
 
@@ -73,5 +74,6 @@ apiRouter.use("/plugins", pluginRouter);
 apiRouter.use("/dev/events", eventRouter);
 apiRouter.use("/security", securityRouter);
 apiRouter.use("/config", requireAuth, configRouter);
-apiRouter.use("/health", healthRouter);
+apiRouter.use("/health", coreHealthRouter);
 apiRouter.use("/operations", operationsRouter);
+apiRouter.use("/gestion", gestionRouter);

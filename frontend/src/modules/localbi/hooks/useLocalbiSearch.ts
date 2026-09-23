@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { localbiService, type LocalbiApiResult } from "../services/LocalbiService";
-import type { LocalbiBusquedaSalida } from "../types/localbi";
+import type { BusquedaClienteSalida } from "../types/localbi";
 
 export function useLocalbiSearch() {
   const [busqueda, setBusqueda] = useState("");
@@ -17,9 +17,9 @@ export function useLocalbiSearch() {
   }, [busqueda]);
 
   const query = useQuery({
-    queryKey: ["localbi", "search", debounced, pagina],
-    queryFn: async (): Promise<LocalbiApiResult<LocalbiBusquedaSalida>> => {
-      return localbiService.buscarUnidades(debounced, pagina, 50);
+    queryKey: ["localbi", "search-clientes", debounced, pagina],
+    queryFn: async (): Promise<LocalbiApiResult<BusquedaClienteSalida>> => {
+      return localbiService.buscarClientes(debounced, pagina, 50);
     },
     enabled: true,
     staleTime: 60 * 1000,

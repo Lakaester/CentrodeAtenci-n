@@ -1,4 +1,5 @@
 import type { CustomerWorkspaceData } from "../types";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   data: CustomerWorkspaceData;
@@ -11,7 +12,7 @@ export function WorkspaceLayout({ data, children }: Props) {
       {/* Header permanente */}
       <div className="shrink-0 border-b border-black-10 bg-white px-4 py-2.5">
         <div className="flex items-center gap-4 text-[11px] text-black-45">
-          <span className="font-semibold text-black-85">{data.dominio}</span>
+          <span className="font-semibold text-black-85">{normalizeDomain(data.dominio)}</span>
           <span className="text-black-10">|</span>
           <span>{data.empresa || "—"}</span>
           <span className="text-black-10">|</span>

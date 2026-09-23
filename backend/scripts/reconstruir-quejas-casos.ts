@@ -1,17 +1,21 @@
 /**
  * RECONSTRUCCIÓN — Quejas y Devoluciones: modelo CASO → N TICKETS con evidencia.
  *
+ * REGLA ABSOLUTA: NUNCA destruir datos operativos.
+ * Esta versión es NO destructiva: preserva estado, resultado, montos,
+ * observaciones y cualquier campo operativo de casos existentes.
+ *
  * Regla de negocio (documentada en src/services/quejasCasos.service.ts):
  *   1. Relación explícita follow_up de Zendesk (prioridad 1, identificador real).
  *   2. Identidad real + dominio normalizado + tipo (prioridad 2).
  *   3. Sin relación → caso independiente.
  *
- * Aplica la migración de la tabla de relaciones (idempotente), genera un
- * respaldo previo y reconstruye los casos BACKFILL del rango.
+ * Aplica la migración de la tabla de relaciones (idempotente) y reconstruye
+ * los casos BACKFILL del rango SIN ejecutar DELETE.
  *
  * Uso:
  *   npx tsx scripts/reconstruir-quejas-casos.ts [YYYY-MM-DD] [YYYY-MM-DD]
- *   (sin argumentos usa 2026-04-01 → 2026-08-31)
+ *   (sin argumentos usa 2026-04-01 → fecha actual)
  */
 import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "fs";
@@ -47,26 +51,29 @@ async function main() {
   }
 
   const desde = process.argv[2] ?? "2026-04-01";
-  const hasta = process.argv[3] ?? "2026-08-31";
+  const hasta = process.argv[3] ?? new Date().toISOString().split("T")[0];
 
   await aplicarMigraciones();
   await prisma.$disconnect();
 
   const r = await reconstruirCasosBackfill(desde, hasta);
 
-  console.log("── Reconstrucción CASO → N TICKETS (evidencia) ──");
-  console.log(`Período:                 ${r.desde} → ${r.hasta}`);
-  console.log(`Tickets Q/D históricos:  ${r.ticketsHistoricos}`);
-  console.log(`Casos BACKFILL borrados: ${r.casosBorrados}`);
-  console.log(`Casos generados:         ${r.casosCreados}`);
-  console.log(`Tickets vinculados:      ${r.ticketsVinculados}`);
-  console.log(`Tickets sin caso:        ${r.ticketsSinCaso}`);
-  console.log(`Duplicados:              ${r.duplicados}`);
-  console.log(`Quejas:                  ${r.quejas.tickets} tickets → ${r.quejas.casos} casos`);
-  console.log(`Devoluciones:            ${r.devoluciones.tickets} tickets → ${r.devoluciones.casos} casos`);
-  console.log("── Casos con múltiples tickets ──");
-  for (const g of r.gruposMultiticket) {
-    console.log(`  ${g.numero} | ${g.tipo} | ${g.dominio ?? "SIN DOMINIO"} | apertura ${g.fechaApertura} | evidencia ${g.evidencia} | tickets=${g.tickets.join(",")}`);
+  console.log("── Reconstrucción CASO → N TICKETS (NO destructiva) ──");
+  console.log(`Período:                  ${r.desde} → ${r.hasta}`);
+  console.log(`Tickets Q/D históricos:   ${r.ticketsHistoricos}`);
+  console.log(`Casos creados (nuevos):   ${r.casosCreados}`);
+  console.log(`Casos actualizados:       ${r.casosActualizados}`);
+  console.log(`Casos preservados:        ${r.casosPreservados} (con datos operativos)`);
+  console.log(`Tickets vinculados:       ${r.ticketsVinculados}`);
+  console.log(`Tickets sin caso:         ${r.ticketsSinCaso}`);
+  console.log(`Duplicados (MANUAL/CO):   ${r.duplicados}`);
+  console.log(`Quejas:                   ${r.quejas.tickets} tickets → ${r.quejas.casos} casos`);
+  console.log(`Devoluciones:             ${r.devoluciones.tickets} tickets → ${r.devoluciones.casos} casos`);
+  if (r.gruposMultiticket.length > 0) {
+    console.log("── Casos con múltiples tickets ──");
+    for (const g of r.gruposMultiticket) {
+      console.log(`  ${g.numero} | ${g.tipo} | ${g.dominio ?? "SIN DOMINIO"} | apertura ${g.fechaApertura} | evidencia ${g.evidencia} | tickets=${g.tickets.join(",")}`);
+    }
   }
   console.log("───────────────────────────────────────────");
 }

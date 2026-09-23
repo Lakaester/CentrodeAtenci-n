@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Loader2, Check, Link2, Search } from "lucide-react";
 import { localbiService } from "@/modules/localbi/services/LocalbiService";
 import { registrarIdentificacion } from "@/modules/atenciones/services/atencionesOperativaService";
+import { normalizeDomain, isValidDomainFormat } from "@/domain/normalizacion";
 
 interface Props {
   tipo: "email" | "whatsapp";
@@ -9,33 +10,9 @@ interface Props {
   ticketId: string;
   dominiosHistoricos?: { dominio: string; origen: string | null }[];
   onClose: () => void;
-  onVinculado: (dominio: string) => void;
+  onVinculado: (dominio: string, info?: { unidadNegocio?: string | null; nombre?: string | null; localbi_id?: string | null }) => void;
 }
 
-/** Normaliza un dominio a su forma canónica (solo hostname). */
-function normalizarDominio(input: string): string {
-  let v = input.trim().toLowerCase();
-  v = v.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
-  v = v.split("#")[0];
-  v = v.split("?")[0];
-  const slash = v.indexOf("/");
-  if (slash !== -1) v = v.slice(0, slash);
-  v = v.replace(/\/+$/g, "").replace(/\s+/g, "").replace(/\.+$/g, "").trim();
-  return v;
-}
-
-/** Valida que un hostname tenga formato de dominio real. */
-function esDominioValido(hostname: string): boolean {
-  const h = normalizarDominio(hostname);
-  if (!h) return false;
-  if (/\s/.test(h)) return false;
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h)) return false;
-  if (!/^[a-z0-9-]+\./.test(h)) return false;
-  const tld = h.split(".").pop() ?? "";
-  if (tld.length < 2) return false;
-  if (h.length < 4) return false;
-  return true;
-}
 
 /**
  * Modal "Vincular dominio" — asocia un dominio a ESTA atención.
@@ -58,7 +35,7 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
   const [propuesta, setPropuesta] = useState<{
     dominio: string;
     homologado: boolean;
-    cliente: { unidadNegocio: string; nombre: string } | null;
+    cliente: { unidadNegocio: string; nombre: string; localbi_id: string | null } | null;
   } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -68,8 +45,8 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
   const historicos = (dominiosHistoricos ?? []).filter((d) => d.dominio);
 
   const buscar = useCallback(async () => {
-    const d = normalizarDominio(input);
-    if (!esDominioValido(d)) {
+    const d = normalizeDomain(input);
+    if (!isValidDomainFormat(d)) {
       setError("Ingresa un dominio con formato válido (ej: ejemplo.restaurant.pe).");
       setPropuesta(null);
       return;
@@ -90,7 +67,7 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
         dominio: d,
         homologado,
         cliente: data?.cliente
-          ? { unidadNegocio: data.cliente.unidadNegocio, nombre: data.cliente.nombre }
+          ? { unidadNegocio: data.cliente.unidadNegocio, nombre: data.cliente.nombre, localbi_id: data.cliente.localbi_id ?? null }
           : null,
       });
     } catch (e: any) {
@@ -102,12 +79,12 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
 
   const seleccionar = (d: string) => {
     setInput(d);
-    setPropuesta({ dominio: normalizarDominio(d), homologado: true, cliente: null });
+    setPropuesta({ dominio: normalizeDomain(d), homologado: true, cliente: null });
   };
 
   const confirmar = async () => {
-    const d = propuesta?.dominio || normalizarDominio(input);
-    if (!esDominioValido(d)) {
+    const d = propuesta?.dominio || normalizeDomain(input);
+    if (!isValidDomainFormat(d)) {
       setError("Ingresa un dominio válido.");
       return;
     }
@@ -118,7 +95,32 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
       await localbiService.vincularContacto(tipo, valor, d, "MANUAL");
       // 2) Snapshot en la atención (atencion.dominio_identificado).
       await registrarIdentificacion(ticketId, { dominio: d, tipoIdentificacion: "MANUAL" });
-      onVinculado(d);
+
+      // Resolver la unidad exacta para que el Panel Operativo la use de inmediato
+      // (sin recargar ni re-derivar por búsqueda genérica de subdominio).
+      let info: { unidadNegocio?: string | null; nombre?: string | null; localbi_id?: string | null } | undefined;
+      if (propuesta?.cliente) {
+        info = {
+          unidadNegocio: propuesta.cliente.unidadNegocio,
+          nombre: propuesta.cliente.nombre,
+          localbi_id: propuesta.cliente.localbi_id,
+        };
+      } else {
+        try {
+          const data = await localbiService.resolverContacto(tipo, valor, { dominioExplicito: d });
+          if (data?.cliente) {
+            info = {
+              unidadNegocio: data.cliente.unidadNegocio,
+              nombre: data.cliente.nombre,
+              localbi_id: data.cliente.localbi_id ?? null,
+            };
+          }
+        } catch {
+          // Si no se pudo homologar la unidad, se vincula igualmente (dato manual).
+        }
+      }
+
+      onVinculado(d, info);
       onClose();
     } catch (e: any) {
       setError(e?.response?.data?.error ?? "No se pudo vincular el dominio. Intenta nuevamente.");
@@ -222,7 +224,7 @@ export function VincularDominioModal({ tipo, valor, ticketId, dominiosHistoricos
           <button
             type="button"
             onClick={confirmar}
-            disabled={guardando || !normalizarDominio(input)}
+            disabled={guardando || !normalizeDomain(input)}
             className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-[9px] font-medium text-white hover:bg-primary-85 disabled:opacity-50"
           >
             {guardando ? <Loader2 size={10} className="animate-spin" /> : <Link2 size={10} />}

@@ -5,6 +5,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
+import { normalizeDomain } from "../../domain/contacto/normalizacion";
 
 const DB_PATH = path.join(__dirname, "..", "..", "..", "data", "clientes_cope.json");
 
@@ -81,9 +82,10 @@ export const CustomerMemory = {
   /** Buscar cliente por dominio */
   buscarPorDominio(dominio: string): ClienteCope | null {
     cargar();
-    const q = dominio.toLowerCase();
+    const q = normalizeDomain(dominio);
+    if (!q) return null;
     for (const c of store.values()) {
-      if (c.dominios.some((d) => d.toLowerCase() === q)) return c;
+      if (c.dominios.some((d) => normalizeDomain(d) === q)) return c;
     }
     return null;
   },
@@ -152,13 +154,15 @@ export const CustomerMemory = {
 
   /** Vincular dominio a un cliente */
   vincularDominio(correo: string, dominio: string): void {
+    const d = normalizeDomain(dominio);
+    if (!d) return;
     cargar();
     const cliente = this.buscarPorCorreo(correo) ?? this.obtenerOCrear(correo, correo.split("@")[0] || "Sin nombre");
-    if (!cliente.dominios.includes(dominio)) {
-      cliente.dominios.push(dominio);
+    if (!cliente.dominios.includes(d)) {
+      cliente.dominios.push(d);
       cliente.fechaActualizacion = new Date().toISOString();
       guardar();
-      console.log(`[CustomerMemory] Dominio ${dominio} vinculado a ${cliente.nombre}`);
+      console.log(`[CustomerMemory] Dominio ${d} vinculado a ${cliente.nombre}`);
     }
   },
 

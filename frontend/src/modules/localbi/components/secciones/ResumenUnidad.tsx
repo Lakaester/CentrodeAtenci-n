@@ -1,4 +1,5 @@
-import { SeccionColapsable, SegmentoBadge, EstadoLocalBadge, fmtMoneda, fmtFecha, nombreLocal, normalizarDominio } from "../HistoriaClinicaUI";
+import { SeccionColapsable, SegmentoBadge, EstadoLocalBadge, fmtMoneda, fmtFecha, nombreLocal } from "../HistoriaClinicaUI";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { LocalesDrawer } from "../LocalesDrawer";
 import { HistoriaLocalDrawer } from "../HistoriaLocalDrawer";
 import { useHistoriaLocal } from "../../hooks/useHistoriaClinica";
@@ -99,7 +100,7 @@ export function ResumenUnidad({ data }: { data: HistoriaClinicaData }) {
               </thead>
               <tbody>
                 {locales.map((l) => {
-                  const domNorm = normalizarDominio(l.link_dominio || l.dominio);
+                  const domNorm = normalizeDomain(l.link_dominio || l.dominio);
                   const nombreIncidencias = data.soporteData?.nombreLocalPorDominio?.[domNorm];
                   const actLocal = data.actividadLocalData?.[l.localbi_id];
                   return (
@@ -110,7 +111,7 @@ export function ResumenUnidad({ data }: { data: HistoriaClinicaData }) {
                       </td>
                       <td className="px-1.5 py-1 text-[10px] text-black-45">{l.pais || <span className="text-black-25">—</span>}</td>
                       <td className="px-1.5 py-1">
-                        <span className="font-mono text-[9px] text-primary">{l.link_dominio || l.dominio || <span className="text-black-25">—</span>}</span>
+                        <span className="font-mono text-[9px] text-primary">{normalizeDomain(l.link_dominio || l.dominio) || <span className="text-black-25">—</span>}</span>
                       </td>
                       <td className="px-1.5 py-1"><EstadoLocalBadge estado={l.estado} /></td>
                       <td className="px-1.5 py-1 text-[9px] text-black-45">{l.plan || <span className="text-black-25">—</span>}</td>

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { normalizeDomain } from "../../domain/contacto/normalizacion";
 
 const DB_PATH = path.join(__dirname, "..", "..", "..", "data", "clientes.json");
 
@@ -54,18 +55,19 @@ export const ClientStore = {
   },
 
   registrar(email: string, dominio: string): void {
-    if (!email || !dominio) return;
+    const d = normalizeDomain(dominio);
+    if (!email || !d) return;
     cargar();
     const key = email.toLowerCase();
     const existing = store.get(key);
     if (existing) {
-      if (!existing.dominios.includes(dominio)) existing.dominios.push(dominio);
+      if (!existing.dominios.includes(d)) existing.dominios.push(d);
       existing.ultimoContacto = new Date().toISOString();
       existing.totalTickets++;
     } else {
       store.set(key, {
         email: key,
-        dominios: [dominio],
+        dominios: [d],
         primerContacto: new Date().toISOString(),
         ultimoContacto: new Date().toISOString(),
         totalTickets: 1,
@@ -75,16 +77,17 @@ export const ClientStore = {
   },
 
   agregarDominio(email: string, dominio: string): void {
-    if (!email || !dominio) return;
+    const d = normalizeDomain(dominio);
+    if (!email || !d) return;
     cargar();
     const key = email.toLowerCase();
     const existing = store.get(key);
     if (existing) {
-      if (!existing.dominios.includes(dominio)) existing.dominios.push(dominio);
+      if (!existing.dominios.includes(d)) existing.dominios.push(d);
     } else {
       store.set(key, {
         email: key,
-        dominios: [dominio],
+        dominios: [d],
         primerContacto: new Date().toISOString(),
         ultimoContacto: new Date().toISOString(),
         totalTickets: 0,
@@ -97,7 +100,7 @@ export const ClientStore = {
     cargar();
     const r = store.get(email.toLowerCase());
     if (r) {
-      r.dominios = r.dominios.filter((d) => d !== dominio);
+      r.dominios = r.dominios.filter((d) => normalizeDomain(d) !== normalizeDomain(dominio));
       guardar();
     }
   },

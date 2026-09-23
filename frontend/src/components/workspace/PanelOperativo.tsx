@@ -15,6 +15,7 @@ import { RegistroOperativo } from "./RegistroOperativo";
 import { SegmentoBadge, fmtMoneda } from "@/modules/localbi/components/HistoriaClinicaUI";
 import type { LocalbiHistoriaClinica } from "@/modules/localbi";
 import { api } from "@/lib/api";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { useAuth } from "@/modules/auth";
 import * as ticketbiCatalog from "@/modules/ticketbi/ticketbiService";
 import { IntegracionesSeccion } from "@/modules/integraciones";
@@ -54,6 +55,35 @@ function subdominioDe(dominio: string | null | undefined): string {
   return dominio.trim().toLowerCase().replace(/^https?:\/\//, "").split(".")[0] || "";
 }
 
+/**
+ * Resuelve dominio → unidad de negocio. Si el subdominio no devuelve resultados
+ * directos (dominios concatenados tipo "polleriaflormila.restaurant.pe" =
+ * "Polleria Flormila"), inserta espacios y vuelve a buscar, deduplicando.
+ */
+type ResBusquedaUnidades = Awaited<ReturnType<typeof localbiService.buscarUnidades>>;
+
+async function resolverUnidadPorDominio(dominio: string | null | undefined): Promise<{ unidad_negocio: string; nombre: string } | null> {
+  const sub = subdominioDe(dominio);
+  if (!sub) return null;
+  const extraer = (res: ResBusquedaUnidades) =>
+    res.status === "success" || res.status === "warning" ? res.data?.unidades ?? [] : [];
+
+  let unidades = extraer(await localbiService.buscarUnidades(sub, 1, 50));
+  if (unidades.length === 0) {
+    const consultas: string[] = [];
+    for (let i = 2; i < sub.length - 1; i++) {
+      const a = sub.slice(0, i);
+      const b = sub.slice(i);
+      if (a.length >= 2 && b.length >= 2) consultas.push(`${a} ${b}`);
+    }
+    const resultados = await Promise.all(consultas.map((q) => localbiService.buscarUnidades(q, 1, 50)));
+    const mapa = new Map<string, (typeof unidades)[number]>();
+    for (const r of resultados) for (const u of extraer(r)) mapa.set(u.unidad_negocio, u);
+    unidades = [...mapa.values()];
+  }
+  return unidades.length === 1 ? { unidad_negocio: unidades[0].unidad_negocio, nombre: unidades[0].nombre } : null;
+}
+
 export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clienteCope, operativa, onOpenTicket: _onOpenTicket, onRefreshOperativa, panelOpen, onTogglePanel }: Props) {
   const [tab, setTab] = useState<Tab>("resumen");
   const [manual, setManual] = useState(false);
@@ -88,10 +118,16 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
     setVincularAbierto(true);
   }, [operativa]);
 
-  const handleDominioVinculado = useCallback((dominio: string) => {
+  const handleDominioVinculado = useCallback((dominio: string, info?: { unidadNegocio?: string | null; nombre?: string | null; localbi_id?: string | null }) => {
     // Actualizar la identificación resuelta para que las pestañas dependientes
-    // usen el nuevo dominio. Los registros históricos no se modifican.
-    setIdentidadResuelta((prev) => ({ ...(prev ?? { unidad: null, localbi_id: null, estado: "SIN_IDENTIFICAR" }), dominio }));
+    // usen el nuevo dominio y, cuando el modal la resolvió, la unidad exacta.
+    // Los registros históricos no se modifican.
+    setIdentidadResuelta((prev) => ({
+      ...(prev ?? { unidad: null, localbi_id: null, estado: "IDENTIFICADO_AUTO" }),
+      dominio,
+      unidad: info?.unidadNegocio ?? prev?.unidad ?? null,
+      localbi_id: info?.localbi_id ?? prev?.localbi_id ?? null,
+    }));
     // Refrescar el snapshot operativo desde el backend (nuevo dominio persistido).
     onRefreshOperativa?.();
   }, [onRefreshOperativa]);
@@ -144,9 +180,10 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
   const dominioParaBuscar = dominioIdentificado;
   const subdominio = subdominioDe(dominioParaBuscar);
 
-  // Resolución automática dominio → unidad de negocio (por subdominio, inequívoca).
-  // Usa el dominio resuelto por PanelIdentificacion cuando está disponible;
-  // fallback al dominio original del ticket para retrocompatibilidad.
+  // Resolución automática dominio → unidad de negocio.
+  // El subdominio directo puede fallar para dominios concatenados
+  // (ej. "polleriaflormila.restaurant.pe" → "Polleria Flormila"), por lo que
+  // se usa resolverUnidadPorDominio (con fallback de particiones).
   const [unidadDetectada, setUnidadDetectada] = useState<{ unidad_negocio: string; nombre?: string } | null>(null);
   useEffect(() => {
     let activo = true;
@@ -154,19 +191,15 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
     setManual(false);
     setResolviendo(Boolean(subdominio));
     if (!subdominio) { setResolviendo(false); return; }
-    localbiService
-      .buscarUnidades(subdominio, 1, 50)
-      .then((res) => {
+    resolverUnidadPorDominio(dominioParaBuscar)
+      .then((u) => {
         if (!activo) return;
         setResolviendo(false);
-        if ((res.status === "success" || res.status === "warning") && res.data.unidades.length === 1) {
-          const u = res.data.unidades[0];
-          setUnidadDetectada({ unidad_negocio: u.unidad_negocio, nombre: u.nombre });
-        }
+        if (u) setUnidadDetectada(u);
       })
       .catch(() => { if (activo) setResolviendo(false); });
     return () => { activo = false; };
-  }, [subdominio, ticket?.ticketOriginalId]);
+  }, [subdominio, dominioParaBuscar, ticket?.ticketOriginalId]);
 
   // Limpiar selección manual y identificación al cambiar de atención.
   useEffect(() => {
@@ -191,8 +224,8 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
     if (!ficha) return null;
     const locales = (ficha.dominios ?? []).flatMap((d) => d.locales ?? []);
     if (locales.length === 0) return null;
-    const dom = (dominioResuelto ?? ticket?.dominio ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-    const porDominio = locales.find((l) => (l.link_dominio ?? "").trim().toLowerCase().includes(dom) && dom);
+    const dom = normalizeDomain(dominioResuelto ?? ticket?.dominio ?? "");
+    const porDominio = locales.find((l) => normalizeDomain(l.link_dominio).includes(dom) && dom);
     return (porDominio ?? locales[0])?.localbi_id ?? null;
   }, [ficha, ticket?.dominio]);
 
@@ -418,7 +451,7 @@ export function PanelOperativo({ customer: _customer, ticket, clienteCope: _clie
                 <AlertCircle size={9} /> Cliente vinculado manualmente
               </p>
             )}
-            {dominioIdentificado && <p className="font-mono text-[9px] text-black-45">{dominioIdentificado}</p>}
+            {dominioIdentificado && <p className="font-mono text-[9px] text-black-45">{normalizeDomain(dominioIdentificado)}</p>}
             {kpis && (
               <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-black-45">
                 {kpis.segmento && <SegmentoBadge segmento={kpis.segmento} />}

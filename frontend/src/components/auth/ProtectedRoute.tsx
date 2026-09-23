@@ -1,7 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth, authService } from "@/modules/auth";
 
-export function ProtectedRoute({ children, modulo }: { children: React.ReactNode; modulo?: string }) {
+export function ProtectedRoute({ children, modulo, submodulos }: {
+  children: React.ReactNode;
+  modulo?: string;
+  submodulos?: string[];
+}) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -17,8 +21,17 @@ export function ProtectedRoute({ children, modulo }: { children: React.ReactNode
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
+  // Check parent module access
   if (modulo && !authService.moduloVisible(user, modulo)) {
     return <Navigate to="/403" replace />;
+  }
+
+  // Check if user has access to at least one submodule
+  if (submodulos && submodulos.length > 0) {
+    const hasAccess = submodulos.some((sub) => authService.moduloVisible(user, sub));
+    if (!hasAccess) {
+      return <Navigate to="/403" replace />;
+    }
   }
 
   return <>{children}</>;

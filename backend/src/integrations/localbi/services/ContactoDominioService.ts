@@ -82,23 +82,39 @@ async function homologarDominio(dominio: string): Promise<Homologacion> {
   if (!d || !isValidDomainFormat(d)) return { estado: "NO_HOMOLOGADO" };
 
   const subdominio = d.split(".")[0];
-  const candidatos = await localbi.buscarUnidades(subdominio, 1, 50);
-  if (candidatos.status === "unavailable" || candidatos.status === "not_configured") {
+  const directa = await localbi.buscarUnidades(subdominio, 1, 50);
+  if (directa.status === "unavailable" || directa.status === "not_configured") {
     return { estado: "NO_DISPONIBLE" };
   }
-  if (candidatos.status === "error") return { estado: "NO_HOMOLOGADO" };
+  if (directa.status === "error") return { estado: "NO_HOMOLOGADO" };
 
-  const unidades = candidatos.status === "success" || candidatos.status === "warning" ? candidatos.data.unidades : [];
+  type RespuestaBusqueda = Awaited<ReturnType<LocalbiService["buscarUnidades"]>>;
+  const vistos = new Map<string, { unidad: string; nombre: string; total_locales: number }>();
+  const agregar = (r: RespuestaBusqueda) => {
+    if (r.status !== "success" && r.status !== "warning") return;
+    for (const u of r.data.unidades) {
+      if (vistos.has(u.unidad_negocio)) continue;
+      vistos.set(u.unidad_negocio, { unidad: u.unidad_negocio, nombre: u.nombre, total_locales: u.total_locales ?? 0 });
+    }
+  };
+  agregar(directa);
+
+  // Si el subdominio no devolvió nada, puede ser la concatenación del nombre de la
+  // unidad (ej. "polleriaflormila" → "Polleria Flormila"). Insertamos un espacio en
+  // cada posición y buscamos en paralelo, deduplicando por unidad de negocio.
+  if (vistos.size === 0) {
+    const consultas: string[] = [];
+    for (let i = 2; i < subdominio.length - 1; i++) {
+      const a = subdominio.slice(0, i);
+      const b = subdominio.slice(i);
+      if (a.length >= 2 && b.length >= 2) consultas.push(`${a} ${b}`);
+    }
+    const resultados = await Promise.all(consultas.map((q) => localbi.buscarUnidades(q, 1, 50)));
+    for (const r of resultados) agregar(r);
+  }
 
   // Deduplicar por unidad_negocio y acotar el número de consultas.
-  const vistos = new Set<string>();
-  const candidatosUnicos: { unidad: string; nombre: string; total_locales: number }[] = [];
-  for (const u of unidades) {
-    if (vistos.has(u.unidad_negocio)) continue;
-    vistos.add(u.unidad_negocio);
-    candidatosUnicos.push({ unidad: u.unidad_negocio, nombre: u.nombre, total_locales: u.total_locales ?? 0 });
-    if (candidatosUnicos.length >= MAX_CANDIDATOS_HISTORIA) break;
-  }
+  const candidatosUnicos = [...vistos.values()].slice(0, MAX_CANDIDATOS_HISTORIA);
 
   // Consultar Historia Clínica de cada candidato y buscar coincidencia EXACTA.
   const coincidencias: Homologacion["unidad"][] = [];

@@ -1,4 +1,5 @@
 import type { FacturacionCaso } from "@/modules/facturacion";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { CasoBadge } from "./CasoBadge";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export function CasosTable({ casos, onAbrir, vacioMsg = "No hay casos que coinci
         <tbody>
           {casos.map((c) => (
             <tr key={c.id} onClick={() => onAbrir(c)} className="cursor-pointer border-b border-black-5 hover:bg-light">
-              <td className="px-3 py-1.5 text-[11px] font-medium text-primary">{c.dominio}</td>
+              <td className="px-3 py-1.5 text-[11px] font-medium text-primary">{normalizeDomain(c.dominio)}</td>
               <td className="px-3 py-1.5 text-[10px] text-black-85">{c.cliente_nombre || "—"}</td>
               <td className="px-3 py-1.5 font-mono text-[10px] text-black-45">{c.ruc || "—"}</td>
               <td className="px-3 py-1.5 text-[10px] text-black-45">{c.proveedor || "—"}</td>

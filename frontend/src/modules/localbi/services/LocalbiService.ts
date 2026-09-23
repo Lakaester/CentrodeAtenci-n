@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import type {
   LocalbiHistoriaClinica,
   LocalbiBusquedaSalida,
+  BusquedaClienteSalida,
   ActividadDominio,
   SoporteOnlineResult,
   HistoriaLocal,
@@ -28,6 +29,13 @@ function toResult<T>(res: { data: any }): LocalbiApiResult<T> {
 }
 
 export const localbiService = {
+  /** Búsqueda de clientes a nivel dominio (para /clientes COPE). */
+  async buscarClientes(busqueda: string, pagina = 1, limite = 50): Promise<LocalbiApiResult<BusquedaClienteSalida>> {
+    const res = await api.get("/localbi/search-clientes", { params: { busqueda, pagina, limite } });
+    return toResult<BusquedaClienteSalida>(res);
+  },
+
+  /** Búsqueda de unidades de negocio (formato original — para workspace). */
   async buscarUnidades(busqueda: string, pagina = 1, limite = 50): Promise<LocalbiApiResult<LocalbiBusquedaSalida>> {
     const res = await api.get("/localbi/search", { params: { busqueda, pagina, limite } });
     return toResult<LocalbiBusquedaSalida>(res);

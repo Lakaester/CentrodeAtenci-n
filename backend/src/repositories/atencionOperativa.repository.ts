@@ -13,6 +13,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 import { genId } from "./facturacion.types";
 
 export type AtencionOrigen = "cope" | "zendesk";
@@ -217,7 +218,7 @@ export const atencionOperativaRepository = {
       UPDATE atencion SET
         contacto_tipo = COALESCE(${entrada.contactoTipo ?? null}, contacto_tipo),
         contacto_valor = COALESCE(${entrada.contactoValor ?? null}, contacto_valor),
-        dominio_identificado = COALESCE(${entrada.dominio ?? null}, dominio_identificado),
+        dominio_identificado = COALESCE(${normalizeDomain(entrada.dominio) || null}, dominio_identificado),
         tipo_identificacion = COALESCE(${entrada.tipoIdentificacion ?? null}, tipo_identificacion),
         identificado_por = ${entrada.usuario ?? null},
         identificado_at = now(),

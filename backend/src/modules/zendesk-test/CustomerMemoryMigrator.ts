@@ -5,6 +5,7 @@
  */
 import { prisma } from "../../repositories/prisma";
 import { CustomerMemory } from "./CustomerMemory";
+import { normalizeDomain } from "../../domain/contacto/normalizacion";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -95,7 +96,10 @@ export async function ejecutarMigracion(): Promise<void> {
         });
       }
       const g = grupos.get(email)!;
-      if (f.dominio) g.dominios.add(f.dominio);
+      if (f.dominio) {
+        const dom = normalizeDomain(f.dominio);
+        if (dom) g.dominios.add(dom);
+      }
       if (f.categoria) g.categorias.add(f.categoria);
       if (f.subcategoria) g.subcategorias.add(f.subcategoria);
       g.totalTickets += f.total;

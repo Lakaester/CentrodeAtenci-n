@@ -1,5 +1,6 @@
 import { Clock, Wrench, Bug, AlertTriangle, Activity, User, Headphones, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 import type { WorkspaceResponse } from "./useTicketWorkspace";
 
 interface Props { workspace: WorkspaceResponse }
@@ -45,7 +46,7 @@ export function Cliente360({ workspace }: Props) {
 
       {/* Identificación */}
       <SectionCard title="Identificación" icon={<User size={13} className="text-primary" />}>
-        <Field label="Dominio">{c.dominio || <span className="text-warning">Pendiente</span>}</Field>
+        <Field label="Dominio">{normalizeDomain(c.dominio) || <span className="text-warning">Pendiente</span>}</Field>
         <Field label="Razón social">{ms?.cliente.razonSocial ?? <InfoND />}</Field>
         <Field label="RUC">{ms?.cliente.ruc ?? <InfoND />}</Field>
         <Field label="País">{(ms?.cliente.pais ?? c.pais) || <InfoND />}</Field>

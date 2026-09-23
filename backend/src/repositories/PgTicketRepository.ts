@@ -3,6 +3,7 @@ import { Ticket, type TicketData } from "../domain/tickets/Ticket";
 import type { ITicketRepository, TicketFilters } from "../contracts/tickets/ITicketRepository";
 import type { TicketStatus } from "../domain/tickets/TicketStatus";
 import type { ExternalChannel } from "../domain/tickets/TicketChannel";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 function translateState(estadoHomologado: string | null): TicketStatus {
   const e = (estadoHomologado ?? "").toLowerCase().trim();
@@ -146,9 +147,9 @@ export class PgTicketRepository implements ITicketRepository {
       status,
       priority: slaVencido ? "ALTA" : "MEDIA",
       priorityScore: slaVencido ? 60 : 30,
-      clienteId: row.dominio || row.id,
+      clienteId: normalizeDomain(row.dominio) || row.id,
       clienteNombre: row.cliente,
-      clienteDominio: row.dominio,
+      clienteDominio: normalizeDomain(row.dominio),
       pais: row.pais,
       asesorId: row.asesor ?? undefined,
       asesorNombre: row.asesor ?? undefined,

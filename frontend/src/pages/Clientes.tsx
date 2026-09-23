@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Users, Globe, AlertTriangle, Phone, Mail, Search, Download, BarChart3 } from "lucide-react";
+import { Users, Globe, AlertTriangle, Phone, Mail, Search, Download, BarChart3, FileSpreadsheet } from "lucide-react";
 import ReactECharts from "echarts-for-react";
 import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
@@ -404,15 +404,53 @@ export default function Clientes() {
 
   const [selectedCliente, setSelectedCliente] = useState<string | null>(null);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
 
   useEffect(() => { if (data) console.log("📊 Dataset clientes-v2:", JSON.parse(JSON.stringify(data))); }, [data]);
+
+  const exportarExcel = useCallback(async () => {
+    setExportando(true);
+    try {
+      const res = await api.get("/dashboard/clientes-v2/exportar", {
+        params,
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const disposition = res.headers["content-disposition"] ?? "";
+      const nombre = disposition.match(/filename="(.+)"/)?.[1] ?? "Clientes.xlsx";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      console.error("Error al exportar clientes");
+    } finally {
+      setExportando(false);
+    }
+  }, [params]);
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
   if (!data) return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center"><p className="text-sm text-black-25">Sin información para el rango seleccionado.</p></motion.div>;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h1 className="text-lg font-semibold text-text">Análisis de Clientes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-text">Análisis de Clientes</h1>
+        <button
+          onClick={exportarExcel}
+          disabled={exportando}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-black-10 text-black-65 hover:bg-primary hover:text-white transition-colors disabled:opacity-50"
+        >
+          <FileSpreadsheet size={14} />
+          {exportando ? "Exportando..." : "Exportar Excel"}
+        </button>
+      </div>
 
       {/* Cards */}
       <KpisRow k={data.kpis} />

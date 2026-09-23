@@ -13,6 +13,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 export interface ActividadLocalRow {
   localbi_id: string | null;
@@ -38,14 +39,24 @@ export interface ActividadResumen {
   ultima_atencion: string | null;
 }
 
-/** Normaliza un dominio para comparación (lowercase, trim, sin protocolo, sin trailing slash). */
-export function normalizarDominioActividad(d: string | null | undefined): string {
-  if (!d) return "";
-  return d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+/** Normaliza un dominio a su forma canónica (solo hostname). Re-export de la fuente única. */
+export const normalizarDominioActividad = normalizeDomain;
+
+/**
+ * Normaliza un término de búsqueda a un token plano (minúsculas, sin acentos,
+ * sin espacios ni puntuación). Se usa para descubrir dominios por coincidencia
+ * parcial (p.ej. "Lorenzo Cafe" → "lorenzocafe").
+ */
+export function normalizarTokenBusqueda(busqueda: string): string {
+  return (busqueda || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 /** Expresión SQL que normaliza el dominio igual que JS (para match por dominio). */
-const NORM_DOMINIO_SQL = Prisma.sql`NULLIF(TRIM(LOWER(REPLACE(REPLACE(REPLACE(dominio,'https://',''),'http://',''),'/',''))), '')`;
+const NORM_DOMINIO_SQL = Prisma.sql`NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''), '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '')`;
 
 /** Construye el resumen agregado desde las filas de un dominio. */
 function armarResumen(filas: ActividadLocalRow[]): ActividadResumen {

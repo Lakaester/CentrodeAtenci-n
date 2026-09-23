@@ -1,0 +1,293 @@
+[RuleRegistry] Registrada: ENV-001 — Disco casi lleno
+[Events] Bus iniciado con 10 tipos de eventos
+[CustomerMemory] Migración ya ejecutada anteriormente. Omitiendo.
+[IntegrationRegistry] Adaptador registrado: printer
+[Integrations] 1 adaptador(es) registrado(s)
+[INFO ] 2026-09-07T22:51:29.491Z API escuchando en http://localhost:4000/api
+[INFO ] 2026-09-07T22:51:29.493Z Salud:     http://localhost:4000/api/health
+[INFO ] 2026-09-07T22:51:29.493Z Salud DB:  http://localhost:4000/api/health/db
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio
+prisma:error 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+[ERROR] 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.` PrismaClientKnownRequestError: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42883`. Message: `ERROR: operator does not exist: date >= text
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.`
+    at $n.handleRequestError (C:\Users\acast\OneDrive\Escritorio\restaurant-bi-fase1\restaurant-bi\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\acast\OneDrive\Escritorio

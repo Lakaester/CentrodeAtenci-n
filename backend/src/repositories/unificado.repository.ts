@@ -5,7 +5,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import type { DashboardFilters, PaisRow, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse } from "../types";
+import type { DashboardFilters, PaisRow, PaisDominioFila, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse } from "../types";
 import { construirWhere, rangoAnterior, comparar, KpiComparado } from "../utils/filtros";
 
 /** Expresiones SQL de normalización (homologación de nombres en toda la app). */
@@ -15,6 +15,17 @@ const N_SUBCATEGORIA = Prisma.sql`REPLACE(subcategoria, '_', ' ')`;
 const N_CATEGORIA = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')), ''), 'Sin categoría')`;
 const N_ASESOR_COALESCE = Prisma.sql`COALESCE(${N_ASESOR}, 'Sin asesor')`;
 const OFFICIAL_FILTER = Prisma.sql`${N_ASESOR} = ANY(ARRAY['Andres','Danilo','Eveling','Lidia','Lisbeth','Sheyla','Victor']::text[])`;
+
+/**
+ * Normalización SQL de dominio — equivalente a normalizeDomain() de JS.
+ * Quita: protocolo (http://, https://), paths, query strings, fragments,
+ * trailing slashes, trailing dots, espacios, mayúsculas.
+ * Fuente única de verdad para GROUP BY / DISTINCT / filtros en SQL.
+ */
+const N_DOMINIO = Prisma.sql`NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+  REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+  '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '')`;
+const N_DOMINIO_COALESCE = Prisma.sql`COALESCE(${N_DOMINIO}, '—')`;
 
 /* ── HOMOLOGACIÓN CENTRAL DE SUBCATEGORÍAS (fuente única de verdad) ──
  * Clave de agrupación: cope_scat_normalizada(subcategoria) — lowercase, sin tildes,
@@ -1759,10 +1770,10 @@ export const unificadoRepository = {
       ` as Promise<{ categoria: string; pais: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT ${CAT} AS categoria, dominio,
+        SELECT ${CAT} AS categoria, ${N_DOMINIO_COALESCE} AS dominio,
                COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CAT}, dominio ORDER BY categoria, total DESC
+        GROUP BY ${CAT}, ${N_DOMINIO} ORDER BY categoria, total DESC
       ` as Promise<{ categoria: string; dominio: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -1953,7 +1964,7 @@ export const unificadoRepository = {
     const CAT = N_CATEGORIA;
     const SCAT = SCAT_LABEL;   // canónico mostrado (homologado central)
     const SCAT_GROUP = SCAT_KEY; // clave de agrupación (homologada central)
-    const DOM = Prisma.sql`COALESCE(NULLIF(TRIM(dominio), ''), '—')`;
+    const DOM = N_DOMINIO_COALESCE;
     const ASESOR = N_ASESOR_COALESCE;
     const SLA_CASE = Prisma.sql`CASE WHEN resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= 20 THEN 1 ELSE 0 END`;
 
@@ -2079,7 +2090,7 @@ export const unificadoRepository = {
 
   async clientesV2(filters: DashboardFilters): Promise<ClientesV2Response> {
     const whereActual = construirWhere(filters);
-    const DOM = Prisma.sql`COALESCE(NULLIF(TRIM(dominio), ''), '-')`;
+    const DOM = N_DOMINIO_COALESCE;
     const N_CAT = N_CATEGORIA;
     const N_SCAT = SCAT_LABEL;
     const GRUPO = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'whatsapp' WHEN canal ILIKE '%ticket%' THEN 'whaticket' ELSE 'zendesk' END`;
@@ -2296,10 +2307,10 @@ export const unificadoRepository = {
       ` as Promise<{ periodo: string; cliente: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT COALESCE(NULLIF(TRIM(dominio), ''), '—') AS dominio, COUNT(*)::int AS total,
+        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total,
                ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempoPromedio
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY dominio ORDER BY total DESC LIMIT 30
+        GROUP BY ${N_DOMINIO} ORDER BY total DESC LIMIT 30
       ` as Promise<{ dominio: string; total: number; tiempoPromedio: number | null }[]>,
     ]);
 
@@ -2502,7 +2513,7 @@ export const unificadoRepository = {
       SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
              SPLIT_PART(hora::text, ':', 1) || ':' || SPLIT_PART(hora::text, ':', 2) AS hora,
              ${CL_COL} AS cliente,
-             COALESCE(NULLIF(TRIM(dominio), ''), '—') AS dominio,
+             ${N_DOMINIO_COALESCE} AS dominio,
              ${N_PAIS} AS pais,
              canal, COALESCE(NULLIF(TRIM(subcanal), ''), '—') AS subcanal,
              ${N_CATEGORIA} AS categoria,
@@ -2707,9 +2718,9 @@ export const unificadoRepository = {
       ` as Promise<{ cliente: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT COALESCE(NULLIF(TRIM(dominio), ''), '—') AS dominio, COUNT(*)::int AS total
+        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY dominio ORDER BY total DESC LIMIT 15
+        GROUP BY ${N_DOMINIO} ORDER BY total DESC LIMIT 15
       ` as Promise<{ dominio: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -2904,9 +2915,9 @@ export const unificadoRepository = {
       ` as Promise<{ pais: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT COALESCE(NULLIF(TRIM(dominio), ''), '—') AS dominio, COUNT(*)::int AS total
+        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${where}
-        GROUP BY dominio ORDER BY total DESC
+        GROUP BY ${N_DOMINIO} ORDER BY total DESC
       ` as Promise<{ dominio: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -3157,9 +3168,9 @@ export const unificadoRepository = {
       ` as Promise<{ subcategoria: string; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT dominio, COUNT(*)::int AS total
+        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereActual}
-        GROUP BY dominio ORDER BY total DESC LIMIT 20
+        GROUP BY ${N_DOMINIO} ORDER BY total DESC LIMIT 20
       ` as Promise<{ dominio: string; total: number }[]>,
 
       prisma.$queryRaw`
@@ -3201,9 +3212,9 @@ export const unificadoRepository = {
       const domFilter = topDomGlobal.map((d) => Prisma.sql`${d.dominio}` as Prisma.Sql);
       const whereDoms = whereConCanal(whereActual, Prisma.sql`dominio = ANY(ARRAY[${Prisma.join(domFilter)}]::text[])`);
       evolDomRaw = await prisma.$queryRaw`
-        SELECT fecha::date AS periodo, dominio, COUNT(*)::int AS total
+        SELECT fecha::date AS periodo, ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
         FROM public.v_unificado_norm ${whereDoms}
-        GROUP BY fecha::date, dominio ORDER BY periodo, total DESC
+        GROUP BY fecha::date, ${N_DOMINIO} ORDER BY periodo, total DESC
       ` as { periodo: Date; dominio: string; total: number }[];
     }
 
@@ -3467,7 +3478,18 @@ export const unificadoRepository = {
       ORDER BY pais, canal, categoria, total DESC
     ` as { pais: string; canal: string; categoria: string; subcategoria: string; total: number }[];
 
-    return { filas, totales: totales[0] ?? filas[0], paisCanal, paisCanalSub };
+    const dominiosPais = await prisma.$queryRaw`
+      SELECT
+        ${N_PAIS} AS pais,
+        ${N_DOMINIO_COALESCE} AS dominio,
+        INITCAP(TRIM(REPLACE(categoria, '_', ' '))) AS categoria,
+        COUNT(*)::int AS total
+      FROM public.v_unificado_norm
+      ${where}
+      GROUP BY 1, ${N_DOMINIO}, 3
+    ` as PaisDominioFila[];
+
+    return { filas, totales: totales[0] ?? filas[0], paisCanal, paisCanalSub, dominiosPais };
   },
 
   async asesoresMatrix(filters: DashboardFilters): Promise<AsesoresMatrixResponse> {
@@ -3579,7 +3601,7 @@ export const unificadoRepository = {
         (SELECT array_agg(DISTINCT ${ASESOR_N} ORDER BY ${ASESOR_N}) FROM public.v_unificado_norm WHERE asesor IS NOT NULL AND asesor <> '') AS asesor,
         (SELECT array_agg(DISTINCT categoria ORDER BY categoria) FROM public.v_unificado_norm WHERE categoria IS NOT NULL AND categoria <> '') AS categoria,
         (SELECT array_agg(DISTINCT ${SUB_N} ORDER BY ${SUB_N}) FROM public.v_unificado_norm WHERE subcategoria IS NOT NULL AND subcategoria <> '') AS subcategoria,
-        (SELECT array_agg(DISTINCT dominio ORDER BY dominio) FROM public.v_unificado_norm WHERE dominio IS NOT NULL AND dominio <> '') AS dominio,
+        (SELECT array_agg(DISTINCT ${N_DOMINIO_COALESCE} ORDER BY ${N_DOMINIO_COALESCE}) FROM public.v_unificado_norm WHERE dominio IS NOT NULL AND dominio <> '') AS dominio,
         (SELECT array_agg(DISTINCT estado_homologado ORDER BY estado_homologado) FROM public.v_unificado_norm WHERE estado_homologado IS NOT NULL) AS estado,
         (SELECT array_agg(DISTINCT tipo_cliente ORDER BY tipo_cliente) FROM public.v_unificado_norm WHERE tipo_cliente IS NOT NULL AND tipo_cliente <> '') AS tipo_cliente,
         (SELECT array_agg(DISTINCT rango_atencion ORDER BY rango_atencion) FROM public.v_unificado_norm WHERE rango_atencion IS NOT NULL AND rango_atencion <> '') AS rango_atencion
@@ -3643,7 +3665,7 @@ export const unificadoRepository = {
           THEN ROUND(((primera_respuesta_min_norm + resolucion_min_norm) / 2)::numeric, 1)::float8
           ELSE COALESCE(primera_respuesta_min_norm, resolucion_min_norm)
         END AS "tiempoPromedio",
-        COALESCE(NULLIF(TRIM(dominio), ''), '—') AS dominio,
+        ${N_DOMINIO_COALESCE} AS dominio,
         COALESCE(NULLIF(TRIM(tipo_cliente), ''), NULL) AS "tipoCliente"
       FROM public.v_unificado_norm ${where}
       ORDER BY fecha DESC, hora DESC

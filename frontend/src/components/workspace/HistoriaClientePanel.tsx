@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { useLocalbiSearch } from "@/modules/localbi";
+import { useLocalbiSearchUnidades } from "@/modules/localbi/hooks/useLocalbiSearchUnidades";
 import { HistoriaClinicaView } from "@/modules/localbi/components/HistoriaClinicaView";
 import type { LocalbiUnidadNegocio } from "@/modules/localbi";
 
@@ -17,7 +17,7 @@ interface Props {
 export function HistoriaClientePanel({ unidadInicial }: Props) {
   const [seleccion, setSeleccion] = useState<LocalbiUnidadNegocio | null>(null);
   const [buscando, setBuscando] = useState(false);
-  const { busqueda, setBusqueda, result, isLoading } = useLocalbiSearch();
+  const { busqueda, setBusqueda, result, isLoading } = useLocalbiSearchUnidades();
 
   // Prioridad: selección manual del usuario > unidad detectada automáticamente.
   const unidadActual = seleccion ?? (unidadInicial

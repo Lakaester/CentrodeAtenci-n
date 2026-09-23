@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { X, Search, Store } from "lucide-react";
 import type { LocalbiHistoriaClinica, LocalbiLocal, ActividadDominio } from "@/modules/localbi";
-import { EstadoLocalBadge, fmtMoneda, fmtNps, fmtFecha, nombreLocal, normalizarDominio } from "@/modules/localbi/components/HistoriaClinicaUI";
+import { EstadoLocalBadge, fmtMoneda, fmtNps, fmtFecha, nombreLocal } from "@/modules/localbi/components/HistoriaClinicaUI";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   ficha: LocalbiHistoriaClinica;
@@ -100,7 +101,7 @@ export function LocalesDrawer({ ficha, actividadPorDominio, actividadLoading, on
             porDominio.map(([dominio, lista]) => (
               <div key={dominio} className="mb-4">
                 <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-primary">
-                  <Store size={12} /> {dominio}
+                  <Store size={12} /> {normalizeDomain(dominio)}
                   <span className="font-normal text-black-25">({lista.length})</span>
                 </div>
                 <div className="overflow-x-auto rounded border border-black-5">
@@ -120,7 +121,7 @@ export function LocalesDrawer({ ficha, actividadPorDominio, actividadLoading, on
                     </thead>
                     <tbody>
                       {lista.map((l) => {
-                        const act = actividadPorDominio?.get(normalizarDominio(l.link_dominio || dominio));
+                        const act = actividadPorDominio?.get(normalizeDomain(l.link_dominio || dominio));
                         return (
                         <tr key={l.localbi_id} className="border-t border-black-5 text-[10px] text-black-85">
                           <td className="px-2 py-1.5 font-medium">{nombreLocal(l)}</td>

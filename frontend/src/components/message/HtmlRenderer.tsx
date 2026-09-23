@@ -20,9 +20,11 @@ function normalizeHtml(html: string): string {
 interface Props {
   html: string;
   className?: string;
+  /** Fuerza el color de texto a blanco para contrastar sobre globos con fondo oscuro (asesor). */
+  forzarTextoBlanco?: boolean;
 }
 
-export function HtmlRenderer({ html, className }: Props) {
+export function HtmlRenderer({ html, className, forzarTextoBlanco }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(100);
 
@@ -53,6 +55,11 @@ export function HtmlRenderer({ html, className }: Props) {
             overflow-x: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
           }
+          ${forzarTextoBlanco ? `
+          body { color: #ffffff !important; }
+          body * { color: #ffffff !important; }
+          a { color: #ffffff !important; }
+          ` : ""}
           body > table,
           body > div,
           body > center {

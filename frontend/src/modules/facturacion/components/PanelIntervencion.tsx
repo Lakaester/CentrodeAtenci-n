@@ -15,6 +15,7 @@ import type { IntervencionDetalle } from "@/modules/facturacion";
 import { Cronometro } from "@/modules/facturacion/components/Cronometro";
 import { ACCIONES_FACTURACION, RESULTADOS_FACTURACION, MOTIVOS_PAUSA } from "@/config/facturacionCatalog";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 function estadoBadge(status: string): { label: string; cls: string } {
   switch (status) {
@@ -227,7 +228,7 @@ export function PanelIntervencion({
             <div className="rounded-lg border border-black-10 bg-white">
               <div className="flex items-center justify-between border-b border-black-10 px-4 py-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-black-85">{activaDetalle.intervencion.dominio}</h2>
+                  <h2 className="text-sm font-semibold text-black-85">{normalizeDomain(activaDetalle.intervencion.dominio)}</h2>
                   <p className="text-[10px] text-black-45">
                     {activaDetalle.intervencion.cliente_nombre || "Sin cliente"} · {activaDetalle.intervencion.ruc || "Sin RUC"}
                   </p>
@@ -338,7 +339,7 @@ export function PanelIntervencion({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-sm rounded-lg border border-black-10 bg-white p-4">
             <h3 className="text-sm font-semibold text-black-85">Finalizar intervención</h3>
-            <p className="mt-1 text-[11px] text-black-45">{activaDetalle.intervencion.dominio}</p>
+            <p className="mt-1 text-[11px] text-black-45">{normalizeDomain(activaDetalle.intervencion.dominio)}</p>
 
             <div className="mt-3">
               <p className="mb-1 text-[10px] font-medium text-black-45">Resultado *</p>

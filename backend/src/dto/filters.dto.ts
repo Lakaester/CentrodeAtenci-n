@@ -27,6 +27,7 @@ export const filtersSchema = z.object({
   search: z.string().max(120).optional(),
   pagina: z.coerce.number().int().min(1).default(1),
   limite: z.coerce.number().int().min(1).max(100000).default(20),
+  selectedPais: z.string().max(60).optional(),
 });
 
 export type FiltersDTO = z.infer<typeof filtersSchema>;

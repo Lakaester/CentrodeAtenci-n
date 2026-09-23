@@ -5,12 +5,21 @@
  */
 import { Prisma } from "@prisma/client";
 import type { DashboardFilters } from "../types";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 export interface KpiComparado {
   valor: number | null;
   anterior: number | null;
   deltaPct: number | null;
   direccion: "up" | "down" | "flat" | null;
+}
+
+/**
+ * Normaliza un array de dominios para uso en filtros SQL.
+ * Garantiza que tanto valores raw como canónicos matcheen.
+ */
+function normalizeDominioFilter(dominios: string[]): string[] {
+  return [...new Set(dominios.map(normalizeDomain).filter(Boolean))];
 }
 
 /** Traduce los filtros a un WHERE seguro y parametrizado sobre v_unificado_norm. */
@@ -26,7 +35,14 @@ export function construirWhere(f: DashboardFilters): Prisma.Sql {
   if (f.asesor?.length) c.push(Prisma.sql`asesor = ANY(${f.asesor})`);
   if (f.categoria?.length) c.push(Prisma.sql`categoria = ANY(${f.categoria})`);
   if (f.subcategoria?.length) c.push(Prisma.sql`subcategoria = ANY(${f.subcategoria})`);
-  if (f.dominio?.length) c.push(Prisma.sql`dominio = ANY(${f.dominio})`);
+  if (f.dominio?.length) {
+    const dominiosNorm = normalizeDominioFilter(f.dominio);
+    if (dominiosNorm.length) {
+      c.push(Prisma.sql`NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+        REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+        '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '') = ANY(${dominiosNorm})`);
+    }
+  }
   if (f.estado?.length) c.push(Prisma.sql`estado_homologado = ANY(${f.estado})`);
   if (f.tipoCliente?.length) c.push(Prisma.sql`tipo_cliente = ANY(${f.tipoCliente})`);
   if (f.rangoAtencion?.length) c.push(Prisma.sql`rango_atencion = ANY(${f.rangoAtencion})`);

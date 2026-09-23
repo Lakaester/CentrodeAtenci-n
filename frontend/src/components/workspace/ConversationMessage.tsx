@@ -131,7 +131,7 @@ export const ConversationMessage = memo(function ConversationMessage({ msg }: { 
         </div>
 
         {tieneHtml && verHtml ? (
-          <HtmlRenderer html={msg.html!} />
+          <HtmlRenderer html={msg.html!} forzarTextoBlanco={tipo === "asesor"} />
         ) : msg.bloques && msg.bloques.length > 0 ? (
           <BloquesRenderer bloques={msg.bloques} esAsesor={tipo === "asesor"} />
         ) : (

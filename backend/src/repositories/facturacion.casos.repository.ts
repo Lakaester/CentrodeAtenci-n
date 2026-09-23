@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { Prisma } from "@prisma/client";
 import { genId } from "./facturacion.types";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 // ── Tipos ──
 
@@ -84,9 +85,8 @@ export interface FiltrosCasos {
 
 // ── Repositorio ──
 
-function normalizarDominio(dominio: string): string {
-  return dominio.trim().toLowerCase().replace(/\/+$/, "");
-}
+/** Normaliza un dominio a su forma canónica (solo hostname). Re-export de la fuente única. */
+const normalizarDominio = normalizeDomain;
 
 export const facturacionCasosRepository = {
   /**

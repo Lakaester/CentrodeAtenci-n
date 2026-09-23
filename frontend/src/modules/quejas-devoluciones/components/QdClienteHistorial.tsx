@@ -1,4 +1,5 @@
 import { useQdLista } from "@/modules/quejas-devoluciones";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { EstadoBadge, ResultadoBadge, fmtFecha, fmtMoneda } from "@/modules/quejas-devoluciones/components/qdUI";
 import { Link } from "react-router-dom";
 
@@ -8,8 +9,9 @@ export function QdClienteHistorial({ dominios }: { dominios: string[] }) {
 
   if (loadD || loadQ) return <p className="px-2.5 py-1 text-[10px] text-black-25">Cargando…</p>;
 
+  const dominiosNorm = dominios.map(normalizeDomain).filter(Boolean);
   const casos = [...(devoluciones ?? []), ...(quejas ?? [])].filter(
-    (c) => c.dominio && dominios.includes(c.dominio),
+    (c) => c.dominio && dominiosNorm.includes(normalizeDomain(c.dominio) ?? ""),
   );
 
   if (casos.length === 0) {
@@ -25,7 +27,7 @@ export function QdClienteHistorial({ dominios }: { dominios: string[] }) {
             <span className="text-[9px] text-black-45">{fmtFecha(c.created_at)}</span>
           </div>
           <p className="mt-0.5 truncate text-[10px] font-medium text-black-85">
-            {c.tipo === "devolucion" ? "Devolución" : "Queja"} · {c.dominio || c.ticket_id || "—"}
+            {c.tipo === "devolucion" ? "Devolución" : "Queja"} · {normalizeDomain(c.dominio) || c.ticket_id || "—"}
           </p>
           <div className="mt-1 flex items-center gap-2 text-[9px] text-black-45">
             <span className="truncate">{c.motivo || c.area || c.producto || "—"}</span>

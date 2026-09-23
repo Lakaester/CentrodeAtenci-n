@@ -1,6 +1,7 @@
 import { X, ArrowLeft } from "lucide-react";
 import type { HistoriaLocal, LocalbiTarea, LocalbiTicket } from "@/modules/localbi";
 import { EstadoLocalBadge, fmtMoneda, fmtFecha, fmtNps } from "./HistoriaClinicaUI";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   data: HistoriaLocal;
@@ -50,7 +51,7 @@ export function HistoriaLocalDrawer({ data, onVolver, onCerrar }: Props) {
               <ArrowLeft size={11} /> Volver al cliente
             </button>
             <h3 className="truncate text-xs font-semibold text-black-85">{l?.nombre || "Local"}</h3>
-            <p className="font-mono text-[9px] text-black-45">{l?.link_dominio || data.dominio || "—"}</p>
+            <p className="font-mono text-[9px] text-black-45">{normalizeDomain(l?.link_dominio || data.dominio) || "—"}</p>
           </div>
           <button type="button" onClick={onCerrar} className="rounded p-1 text-black-45 hover:bg-light"><X size={14} /></button>
         </div>

@@ -1,4 +1,5 @@
 import type { CustomerWorkspaceData } from "../types";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   data: CustomerWorkspaceData;
@@ -9,7 +10,7 @@ export function ResumenTab({ data }: Props) {
     <div className="space-y-4 p-4">
       <h2 className="text-sm font-semibold text-black-85">Resumen del cliente</h2>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <InfoCard label="Dominio" value={data.dominio} />
+        <InfoCard label="Dominio" value={normalizeDomain(data.dominio)} />
         <InfoCard label="Empresa" value={data.empresa ?? "—"} />
         <InfoCard label="Producto" value={data.producto ?? "—"} />
         <InfoCard label="País" value={data.pais ?? "—"} />

@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Inbox, ReceiptText, Users, BarChart3, BookOpen, Settings, LogOut, X, RefreshCcw, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Inbox, ReceiptText, Users, BarChart3, BookOpen, Settings, LogOut, X, ClipboardList, type LucideIcon } from "lucide-react";
 import { useAuth, authService } from "@/modules/auth";
 
 interface SidebarItem {
@@ -13,7 +13,7 @@ const ITEMS: SidebarItem[] = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, modulo: "Dashboard" },
   { path: "/atenciones", label: "Atenciones", icon: Inbox, modulo: "Atenciones" },
   { path: "/control-facturacion", label: "Control de Facturación", icon: ReceiptText, modulo: "Control de Facturación" },
-  { path: "/quejas-devoluciones", label: "Quejas y Dev.", icon: RefreshCcw, modulo: "Quejas y Devoluciones" },
+  { path: "/gestion", label: "Gestión", icon: ClipboardList, modulo: "Gestión" },
   { path: "/clientes", label: "Clientes", icon: Users, modulo: "Clientes" },
   { path: "/reportes", label: "Reportes", icon: BarChart3, modulo: "Reportes" },
   { path: "/admin/guias", label: "Conocimiento", icon: BookOpen, modulo: "Conocimiento" },

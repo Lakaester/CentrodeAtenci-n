@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ReceiptText, Search, Download, X, Inbox, UserCheck, History } from "lucide-react";
 import { useAuth, authService } from "@/modules/auth";
+import { normalizeDomain } from "@/domain/normalizacion";
 import {
   useCasos, useCasoDetalle, useCategorias, useSubcategoriasDeCategoria,
   useAsignarCaso, useCambiarEstadoCaso, useCategorizarCaso, useRegistrarSnapshotCaso,
@@ -77,7 +78,7 @@ export default function ControlFacturacion() {
       if (f.hasta && new Date(c.primera_deteccion) > new Date(f.hasta + "T23:59:59")) return false;
       if (f.asesor && c.asesor_actual !== f.asesor) return false;
       if (f.proveedor && c.proveedor !== f.proveedor) return false;
-      if (f.dominio && !c.dominio.toLowerCase().includes(f.dominio.toLowerCase())) return false;
+      if (f.dominio && !(normalizeDomain(c.dominio ?? "") ?? "").includes(normalizeDomain(f.dominio) ?? "")) return false;
       if (f.ruc && c.ruc !== f.ruc) return false;
       if (f.estado && c.estado_operativo !== f.estado) return false;
       if (f.categoria && c.categoria_nombre !== f.categoria) return false;

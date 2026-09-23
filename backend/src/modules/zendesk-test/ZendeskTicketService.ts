@@ -1,5 +1,6 @@
 import { ZendeskClient } from "../zendesk/infrastructure/ZendeskClient";
 import { ZendeskMapper } from "../zendesk/application/mapper/ZendeskMapper";
+import { normalizeDomain } from "../../domain/contacto/normalizacion";
 
 export class ZendeskTicketService {
   private client: ZendeskClient;
@@ -35,7 +36,7 @@ export class ZendeskTicketService {
     const cfMap = new Map((ticket.custom_fields ?? []).map((cf: any) => [cf.id, cf.value]));
     const dominioVal = cfMap.get(40769061038615);
     const paisVal = cfMap.get(1500005211481);
-    const dominio = dominioVal && String(dominioVal).trim() ? String(dominioVal).trim() : null;
+    const dominio = dominioVal && String(dominioVal).trim() ? normalizeDomain(String(dominioVal).trim()) : null;
     const pais = paisVal && String(paisVal).trim() ? String(paisVal).trim() : null;
 
     return {

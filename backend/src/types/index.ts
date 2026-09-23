@@ -22,6 +22,7 @@ export interface DashboardFilters {
   search?: string;
   pagina?: number;
   limite?: number;
+  selectedPais?: string;
 }
 
 /** Respuesta estándar de la API. */
@@ -72,11 +73,19 @@ export interface PaisCanalSubFila {
   total: number;
 }
 
+export interface PaisDominioFila {
+  pais: string;
+  dominio: string;
+  categoria: string;
+  total: number;
+}
+
 export interface PaisResponse {
   filas: PaisRow[];
   totales: PaisRow;
   paisCanal: PaisCanalFila[];
   paisCanalSub: PaisCanalSubFila[];
+  dominiosPais: PaisDominioFila[];
 }
 
 export interface AsesorRow {

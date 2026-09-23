@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import type { CasoDetalle, CategoriaItem } from "@/modules/facturacion";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { CasoBadge } from "./CasoBadge";
 import { AsignarCasoModal, CambiarEstadoModal, CategorizarCasoModal, RegistrarSnapshotModal } from "./CasoModals";
 
@@ -88,7 +89,7 @@ export function CasoDrawer({
       <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-black-10 bg-white">
         <div className="flex items-center justify-between border-b border-black-10 px-4 py-3">
           <div className="min-w-0">
-            <h3 className="truncate text-xs font-semibold text-primary">{caso.dominio}</h3>
+            <h3 className="truncate text-xs font-semibold text-primary">{normalizeDomain(caso.dominio)}</h3>
             <div className="mt-0.5 flex items-center gap-1.5"><CasoBadge estado={caso.estado_operativo} /></div>
           </div>
           <button type="button" onClick={onCerrar} className="rounded p-1 text-black-45 hover:bg-light"><X size={14} /></button>
@@ -97,7 +98,7 @@ export function CasoDrawer({
         <div className="flex-1 overflow-y-auto p-4">
           {/* Identificación */}
           <Seccion titulo="Identificación">
-            <Fila label="Dominio">{caso.dominio}</Fila>
+            <Fila label="Dominio">{normalizeDomain(caso.dominio)}</Fila>
             <Fila label="Cliente">{caso.cliente_nombre || "—"}</Fila>
             <Fila label="RUC">{caso.ruc || "—"}</Fila>
             <Fila label="Proveedor">{caso.proveedor || "—"}</Fila>

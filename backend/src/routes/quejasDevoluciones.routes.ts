@@ -38,3 +38,7 @@ qdRouter.delete("/casos/:id", requirePermission("Quejas y Devoluciones", "elimin
 
 // Carga retroactiva (BACKFILL) del histórico real: requiere permiso "administrar"
 qdRouter.post("/backfill", requirePermission("Quejas y Devoluciones", "administrar"), qdController.backfill);
+
+// Reconciliación automática: detecta tickets válidos sin caso y los crea.
+// NO destruye datos operativos. Requiere permiso "administrar".
+qdRouter.post("/reconciliar", requirePermission("Quejas y Devoluciones", "administrar"), qdController.reconciliar);

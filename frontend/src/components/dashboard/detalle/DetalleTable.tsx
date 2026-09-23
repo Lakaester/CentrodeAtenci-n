@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface DetalleFila {
   fecha: string;
@@ -317,9 +318,11 @@ export function DetalleTable() {
                     const display =
                       val == null || val === ""
                         ? "—"
-                        : col.key === "primeraRespuesta" || col.key === "resolucion" || col.key === "tiempoPromedio"
-                          ? fmtDur(val as number)
-                          : String(val);
+                        : col.key === "dominio"
+                          ? normalizeDomain(val as string)
+                          : col.key === "primeraRespuesta" || col.key === "resolucion" || col.key === "tiempoPromedio"
+                            ? fmtDur(val as number)
+                            : String(val);
                     return (
                       <td
                         key={col.key}

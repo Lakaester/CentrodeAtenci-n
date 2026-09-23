@@ -4,6 +4,7 @@ import type { Ticket, CanalTicket } from "./types";
 import { mejorTicket, NIVEL_CONFIG } from "./prioridad-engine";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   tickets: Ticket[];
@@ -89,7 +90,7 @@ export function TicketRecomendado({ tickets, activa, onSelect }: Props) {
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-black-85">{ticket.nombreCliente}</p>
-              <p className="truncate text-[10px] text-black-45">{ticket.dominio}</p>
+              <p className="truncate text-[10px] text-black-45">{normalizeDomain(ticket.dominio)}</p>
             </div>
           </div>
 

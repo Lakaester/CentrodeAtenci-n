@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props {
   title: string;
@@ -80,11 +81,8 @@ export function fmtNps(v: number | null | undefined): string {
   return v != null ? String(v) : "—";
 }
 
-/** Normaliza un dominio para comparación (lowercase, trim, sin protocolo, sin trailing slash). */
-export function normalizarDominio(d: string | null | undefined): string {
-  if (!d) return "";
-  return d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
-}
+/** Normaliza un dominio a su forma canónica (solo hostname). Re-export de la fuente única. */
+export const normalizarDominio = normalizeDomain;
 
 /**
  * Nombre del local con fallback EXPLÍCITO: si no hay nombre, usa

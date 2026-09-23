@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MessageSquare, CheckCircle, Tag, BookOpen, Zap, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { AutoResizeTextarea } from "@/components/ui/AutoResizeTextarea";
 import type { WorkspaceResponse } from "./useTicketWorkspace";
 
@@ -42,7 +43,7 @@ export function AreaTrabajo({ workspace }: Props) {
   const insertarEnRespuesta = (texto: string) => {
     const conVariables = texto
       .replace("{{cliente}}", workspace.contacto.nombre)
-      .replace("{{dominio}}", workspace.contacto.dominio)
+      .replace("{{dominio}}", normalizeDomain(workspace.contacto.dominio))
       .replace("{{canal}}", workspace.contacto.categoriaActual ?? "");
     setRespuesta((prev) => prev + (prev ? "\n\n" : "") + conVariables);
   };
@@ -150,7 +151,7 @@ export function AreaTrabajo({ workspace }: Props) {
           </div>
           <div className="flex items-center justify-between rounded-lg border border-black-5 p-2">
             <span className="text-black-25">Dominio</span>
-            <span className="font-medium text-black-85">{at?.clasificacion.dominio || "—"}</span>
+            <span className="font-medium text-black-85">{normalizeDomain(at?.clasificacion.dominio) || "—"}</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-black-5 p-2">
             <span className="text-black-25">Canal</span>

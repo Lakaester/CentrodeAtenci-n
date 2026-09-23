@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import type { ClienteInfo, TipoCliente, EstadoCliente } from "./types";
 import { TIPO_CLIENTE_LABELS, ESTADO_CLIENTE_LABELS } from "./types";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 interface Props { data: ClienteInfo; loading?: boolean }
 
@@ -46,7 +47,7 @@ export function TabGeneral({ data, loading }: Props) {
     <div className="space-y-2 p-3">
       <CollapsibleCard title="Datos del Cliente">
         <Field label="Nombre">{data.nombre}</Field>
-        <Field label="Dominio">{data.dominio}</Field>
+        <Field label="Dominio">{normalizeDomain(data.dominio)}</Field>
         <Field label="Teléfono">{data.telefono}</Field>
         <Field label="Correo">{data.correo}</Field>
         <Field label="País">{data.pais}</Field>

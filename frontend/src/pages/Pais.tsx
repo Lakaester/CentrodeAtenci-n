@@ -41,11 +41,19 @@ export interface PaisCanalSubFila {
   total: number;
 }
 
+export interface PaisDominioFila {
+  pais: string;
+  dominio: string;
+  categoria: string;
+  total: number;
+}
+
 interface PaisResponse {
   filas: PaisRow[];
   totales: PaisRow;
   paisCanal: PaisCanalFila[];
   paisCanalSub: PaisCanalSubFila[];
+  dominiosPais: PaisDominioFila[];
 }
 
 /* ── Country normalization ── */
@@ -356,6 +364,97 @@ function PaisCanalTable({
   );
 }
 
+/* ── Dominios Table ── */
+function DominiosPaisTable({
+  dominios,
+  selectedPais,
+}: {
+  dominios: PaisDominioFila[];
+  selectedPais: string | null;
+}) {
+  const { matrix, cats, catTotals, grandTotal } = useMemo(() => {
+    if (!dominios.length || !selectedPais) return { matrix: [], cats: [], catTotals: {}, grandTotal: 0 };
+
+    const filtered = dominios.filter((d) => normalizeCountry(d.pais) === selectedPais);
+    if (!filtered.length) return { matrix: [], cats: [], catTotals: {}, grandTotal: 0 };
+
+    const catTotalsMap = new Map<string, number>();
+    const domMap = new Map<string, Map<string, number>>();
+    let grand = 0;
+
+    for (const r of filtered) {
+      catTotalsMap.set(r.categoria, (catTotalsMap.get(r.categoria) ?? 0) + r.total);
+      if (!domMap.has(r.dominio)) domMap.set(r.dominio, new Map());
+      domMap.get(r.dominio)!.set(r.categoria, (domMap.get(r.dominio)!.get(r.categoria) ?? 0) + r.total);
+      grand += r.total;
+    }
+
+    const cats = [...catTotalsMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([c]) => c);
+
+    const rows: { dominio: string; vals: Record<string, number>; total: number }[] = [];
+    for (const [dom, catMap] of domMap) {
+      let total = 0;
+      const vals: Record<string, number> = {};
+      for (const c of cats) {
+        const v = catMap.get(c) ?? 0;
+        vals[c] = v;
+        total += v;
+      }
+      rows.push({ dominio: dom, vals, total });
+    }
+    rows.sort((a, b) => b.total - a.total);
+
+    const catTotals: Record<string, number> = {};
+    for (const c of cats) catTotals[c] = catTotalsMap.get(c) ?? 0;
+
+    return { matrix: rows, cats, catTotals, grandTotal: grand };
+  }, [dominios, selectedPais]);
+
+  if (!selectedPais || matrix.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-black-10 bg-white">
+      <div className="border-b border-black-10 px-4 py-3">
+        <h3 className="text-xs font-semibold text-black-85">Dominios ({selectedPais})</h3>
+        <p className="mt-0.5 text-[10px] text-black-25">Desglose por categoría (todos los canales)</p>
+      </div>
+      <div className="overflow-auto max-h-[500px]">
+        <table className="w-full table-auto">
+          <thead className="sticky top-0 z-20 bg-white">
+            <tr>
+              <th className="border-r border-black-10 px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-black-45">Dominio</th>
+              {cats.map((c) => (
+                <th key={c} className="border-r border-black-10 px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-black-45 whitespace-nowrap">{c}</th>
+              ))}
+              <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-black-45">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row) => (
+              <tr key={row.dominio} className="border-t border-black-5 hover:bg-[#FFF7ED] transition-colors">
+                <td className="border-r border-black-5 px-2 py-1.5 text-[11px] font-medium text-black-85 truncate max-w-[180px]">{row.dominio}</td>
+                {cats.map((c) => (
+                  <td key={c} className="border-r border-black-5 px-2 py-1.5 text-[11px] text-right text-[#475569]">{row.vals[c] ?? 0}</td>
+                ))}
+                <td className="px-2 py-1.5 text-[11px] text-right font-semibold text-black-85">{row.total.toLocaleString("es-PE")}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-black-10 bg-black-5 font-semibold">
+              <td className="border-r border-black-5 px-2 py-1.5 text-[11px] text-black-85">TOTAL</td>
+              {cats.map((c) => (
+                <td key={c} className="border-r border-black-5 px-2 py-1.5 text-[11px] text-right text-black-85">{(catTotals[c] ?? 0).toLocaleString("es-PE")}</td>
+              ))}
+              <td className="px-2 py-1.5 text-[11px] text-right text-black-85">{grandTotal.toLocaleString("es-PE")}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ── Page ── */
 export default function Pais() {
   const { filters, setFilters } = useFilters();
@@ -593,6 +692,12 @@ export default function Pais() {
               onSelectCategoria={onSelectCategoria}
             />
           ) : null}
+          {data?.dominiosPais && selectedPais && (
+            <DominiosPaisTable
+              dominios={data.dominiosPais}
+              selectedPais={selectedPais}
+            />
+          )}
         </div>
       )}
     </motion.div>

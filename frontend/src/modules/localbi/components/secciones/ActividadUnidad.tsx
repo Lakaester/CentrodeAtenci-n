@@ -4,6 +4,7 @@ import { useTareabiLogs } from "@/modules/tareabi";
 import type { TareabiTareaLog } from "@/modules/tareabi";
 import type { HistoriaClinicaData } from "../../hooks/useHistoriaClinicaData";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 /**
  * Sección ACTIVIDAD del Panel Operativo.
@@ -107,12 +108,12 @@ function ActividadCope({ data }: { data: HistoriaClinicaData }) {
           </div>
           <div className="space-y-1">
             {data.actividadData?.map((a) => {
-              const l = data.locales.find((x) => x.link_dominio === a.dominio || x.dominio === a.dominio);
+              const l = data.locales.find((x) => normalizeDomain(x.link_dominio) === normalizeDomain(a.dominio) || normalizeDomain(x.dominio) === normalizeDomain(a.dominio));
               return (
                 <div key={a.dominio} className="rounded border border-black-5 bg-light p-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[10px] font-medium text-black-85">{l?.nombre || a.dominio}</span>
-                    <span className="shrink-0 font-mono text-[9px] text-primary">{a.dominio}</span>
+                    <span className="min-w-0 truncate text-[10px] font-medium text-black-85">{l?.nombre || normalizeDomain(a.dominio)}</span>
+                    <span className="shrink-0 font-mono text-[9px] text-primary">{normalizeDomain(a.dominio)}</span>
                   </div>
                   <p className="mt-0.5 text-[9px] text-black-45">
                     {a.resumen.total} atenciones

@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { genId } from "./facturacion.types";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 export interface QdCasoRow {
   id: string;
@@ -99,6 +100,7 @@ export interface QdHistorialRow {
   categoria: string | null;
   subcategoria: string | null;
   tipo: "queja" | "devolucion";   // clasificación oficial derivada de la subcategoría
+  estado: string | null;           // estado Zendesk (closed, solved, etc.)
 }
 
 /** Resultado de una ejecución de backfill (reconstrucción por evidencia). */
@@ -249,8 +251,9 @@ export const qdRepository = {
    * Asignar dominio NO fusiona casos automáticamente.
    */
   async asignarDominio(casoId: string, dominio: string | null, usuario: string | null): Promise<QdCasoRow | null> {
+    const d = dominio ? normalizeDomain(dominio) : null;
     const rows = await prisma.$queryRaw<QdCasoRow[]>`
-      UPDATE qd_casos SET dominio = ${dominio ?? null}, updated_at = now()
+      UPDATE qd_casos SET dominio = ${d}, updated_at = now()
       WHERE id = ${casoId}
       RETURNING *
     `;
@@ -312,12 +315,13 @@ export const qdRepository = {
   async crear(input: CrearCasoInput): Promise<QdCasoRow> {
     const id = genId();
     const numero = `${input.tipo === "devolucion" ? "DEV" : "QUE"}-${String(Date.now()).slice(-5)}`;
+    const d = input.dominio ? normalizeDomain(input.dominio) : null;
     const rows = await prisma.$queryRaw<QdCasoRow[]>`
       INSERT INTO qd_casos
         (id, tipo, numero, ticket_id, ticket_padre_id, dominio, pais, asesor, estado, resultado,
          moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, fecha_solicitud, origen)
       VALUES
-        (${id}, ${input.tipo}, ${numero}, ${input.ticketId ?? null}, ${input.ticketPadreId ?? null}, ${input.dominio ?? null}, ${input.pais ?? null},
+        (${id}, ${input.tipo}, ${numero}, ${input.ticketId ?? null}, ${input.ticketPadreId ?? null}, ${d}, ${input.pais ?? null},
          ${input.asesor ?? null}, ${input.estado ?? null}, ${input.resultado ?? null},
          ${input.moneda ?? "PEN"}, ${input.montoPagado ?? null}, ${input.tipoMonto ?? null}, ${input.area ?? null}, ${input.motivo ?? null},
          ${input.porcentaje ?? null}, ${input.montoDevuelto ?? null}, ${input.clasificacion ?? null}, ${input.producto ?? null},
@@ -347,6 +351,7 @@ export const qdRepository = {
         NULLIF(TRIM(asesor), '') AS asesor,
         NULLIF(TRIM(categoria), '') AS categoria,
         NULLIF(TRIM(subcategoria), '') AS subcategoria,
+        NULLIF(TRIM(estado), '') AS estado,
         CASE WHEN cope_scat_normalizada(subcategoria) = 'solicitud de devolucion' THEN 'devolucion'
              ELSE 'queja' END AS tipo
       FROM public.v_unificado_norm
@@ -375,7 +380,7 @@ export const qdRepository = {
     const values: unknown[] = [];
     const map: Record<string, unknown> = {
       ticket_id: patch.ticketId,
-      dominio: patch.dominio,
+      dominio: patch.dominio != null ? normalizeDomain(patch.dominio) : patch.dominio,
       pais: patch.pais,
       asesor: patch.asesor,
       estado: patch.estado,

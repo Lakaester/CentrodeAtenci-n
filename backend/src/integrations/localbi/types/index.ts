@@ -120,6 +120,7 @@ export interface LocalbiUnidadNegocio {
   pago_mensual: number | null;
   aporte_mensual_total: number | null;
   segmento: string;
+  coincidencia?: string;
 }
 
 export interface LocalbiBusquedaResponse {
@@ -128,4 +129,22 @@ export interface LocalbiBusquedaResponse {
   totalRegistros: number;
   data: LocalbiUnidadNegocio[];
   logs: unknown[];
+}
+
+/** Resultado de búsqueda a nivel dominio — el resultado principal es un dominio/local. */
+export interface ResultadoBusquedaCliente {
+  dominio: string;
+  local: string;
+  localbi_id: string;
+  unidad_negocio: string;
+  unidad_nombre: string;
+  segmento: string;
+  coincidencia: string;
+}
+
+export interface BusquedaClienteSalida {
+  resultados: ResultadoBusquedaCliente[];
+  totalRegistros: number;
+  pagina: number;
+  limite: number;
 }

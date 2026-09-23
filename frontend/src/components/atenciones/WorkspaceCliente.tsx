@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, Shield, Flag, FileText, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { useTicketWorkspace } from "./useTicketWorkspace";
 import { Cliente360 } from "./Cliente360";
 import { WidgetSeccionRenderer, GuiaResolucionRenderer } from "./WidgetOperativoRenderer";
@@ -50,7 +51,7 @@ function EncabezadoTicket({ workspace }: { workspace: import("./useTicketWorkspa
       {/* Cliente + Dominio */}
       <div className="mb-1">
         <p className="truncate text-sm font-semibold text-black-85">{contacto.nombre}</p>
-        <p className="truncate text-[10px] text-black-45">{contacto.dominio}</p>
+        <p className="truncate text-[10px] text-black-45">{normalizeDomain(contacto.dominio)}</p>
       </div>
 
       {/* Tipo Cliente + Producto + País */}

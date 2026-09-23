@@ -5,8 +5,33 @@ import type { AdminRol } from "@/modules/admin";
 import { cn } from "@/lib/utils";
 import { AccesoTabs } from "./AccesoTabs";
 
-const MODULOS = ["Dashboard", "Atenciones", "Clientes", "Control de Facturación", "Quejas y Devoluciones", "Reportes", "Conocimiento", "Configuración"];
 const ACCIONES = ["ver", "crear", "editar", "eliminar", "exportar", "administrar"] as const;
+
+/** Módulos con soporte de submódulos jerárquicos */
+interface ModuloDef {
+  key: string;
+  label: string;
+  children?: { key: string; label: string }[];
+}
+
+const MODULOS: ModuloDef[] = [
+  { key: "Dashboard", label: "Dashboard" },
+  { key: "Atenciones", label: "Atenciones" },
+  { key: "Clientes", label: "Clientes" },
+  { key: "Control de Facturación", label: "Control de Facturación" },
+  {
+    key: "Gestión",
+    label: "Gestión",
+    children: [
+      { key: "Quejas y Devoluciones", label: "Quejas y Devoluciones" },
+      { key: "Apoyos", label: "Apoyos" },
+      { key: "Agendas", label: "Agendas" },
+    ],
+  },
+  { key: "Reportes", label: "Reportes" },
+  { key: "Conocimiento", label: "Conocimiento" },
+  { key: "Configuración", label: "Configuración" },
+];
 
 function RolRow({
   rol,
@@ -157,25 +182,88 @@ export default function RolesConfig() {
                 </tr>
               </thead>
               <tbody>
-                {MODULOS.map((mod) => (
-                  <tr key={mod} className="border-b border-black-5">
-                    <td className="px-2 py-1.5 text-[10px] font-medium text-black-85">{mod}</td>
-                    {ACCIONES.map((acc) => {
-                      const activo = permisoVal(mod, acc);
-                      return (
-                        <td key={acc} className="px-2 py-1.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => togglePermiso(mod, acc, activo)}
-                            className={cn("inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] transition-colors", activo ? "border-primary bg-primary-10 text-primary" : "border-black-10 text-black-25 hover:border-black-25")}
-                          >
-                            {activo ? "✓" : "·"}
-                          </button>
-                        </td>
+                {MODULOS.map((mod) => {
+                  const rows: React.ReactNode[] = [];
+
+                  if (mod.children) {
+                    // Module padre: mostrar si tiene permiso "ver"/"administrar" O si cualquier hijo tiene permisos
+                    const padreTienePermiso = permisoVal(mod.key, "ver") || permisoVal(mod.key, "administrar");
+                    const algunHijoTienePermiso = mod.children.some((child) =>
+                      ACCIONES.some((acc) => permisoVal(child.key, acc))
+                    );
+                    const padreVisible = padreTienePermiso || algunHijoTienePermiso;
+                    if (padreVisible) {
+                      rows.push(
+                        <tr key={mod.key} className="border-b border-black-5 bg-black-5/30">
+                          <td className="px-2 py-1.5 text-[10px] font-semibold text-black-85">{mod.label}</td>
+                          {ACCIONES.map((acc) => {
+                            const activo = permisoVal(mod.key, acc);
+                            return (
+                              <td key={acc} className="px-2 py-1.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => togglePermiso(mod.key, acc, activo)}
+                                  className={cn("inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] transition-colors", activo ? "border-primary bg-primary-10 text-primary" : "border-black-10 text-black-25 hover:border-black-25")}
+                                >
+                                  {activo ? "✓" : "·"}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
                       );
-                    })}
-                  </tr>
-                ))}
+                    }
+
+                    // Submódulos
+                    for (const child of mod.children) {
+                      rows.push(
+                        <tr key={child.key} className="border-b border-black-5">
+                          <td className="px-2 py-1.5 pl-6 text-[10px] text-black-85">
+                            <span className="mr-1 text-black-25">└</span>
+                            {child.label}
+                          </td>
+                          {ACCIONES.map((acc) => {
+                            const activo = permisoVal(child.key, acc);
+                            return (
+                              <td key={acc} className="px-2 py-1.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => togglePermiso(child.key, acc, activo)}
+                                  className={cn("inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] transition-colors", activo ? "border-primary bg-primary-10 text-primary" : "border-black-10 text-black-25 hover:border-black-25")}
+                                >
+                                  {activo ? "✓" : "·"}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }
+                  } else {
+                    // Módulo sin hijos
+                    rows.push(
+                      <tr key={mod.key} className="border-b border-black-5">
+                        <td className="px-2 py-1.5 text-[10px] font-medium text-black-85">{mod.label}</td>
+                        {ACCIONES.map((acc) => {
+                          const activo = permisoVal(mod.key, acc);
+                          return (
+                            <td key={acc} className="px-2 py-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => togglePermiso(mod.key, acc, activo)}
+                                className={cn("inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] transition-colors", activo ? "border-primary bg-primary-10 text-primary" : "border-black-10 text-black-25 hover:border-black-25")}
+                              >
+                                {activo ? "✓" : "·"}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  }
+
+                  return rows;
+                })}
               </tbody>
             </table>
           </div>

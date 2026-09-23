@@ -1,5 +1,6 @@
 import { FileText, Wrench, Activity, AlertCircle, Target, ExternalLink, CheckCircle, BookOpen, Info, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 export interface WorkspaceESPData {
   tipo: string;
@@ -39,7 +40,7 @@ export function WorkspaceRenderer({ data }: { data: WorkspaceESPData }) {
       {/* 1. Cliente */}
       <Card title="Cliente" icon={<Target size={13} className="text-primary" />}>
         <div className="space-y-1 text-xs">
-          {[["Dominio", data.cliente.dominio], ["Contacto", data.cliente.contacto], ["País", data.cliente.pais], ["Producto", data.cliente.producto ?? <InfoND />]].map(([l, v]) => (
+          {[["Dominio", normalizeDomain(data.cliente.dominio)], ["Contacto", data.cliente.contacto], ["País", data.cliente.pais], ["Producto", data.cliente.producto ?? <InfoND />]].map(([l, v]) => (
             <div key={l as string} className="flex justify-between"><span className="text-black-25">{l as string}</span><span className="font-medium text-black-85">{v as React.ReactNode}</span></div>
           ))}
           <div className="flex justify-between">

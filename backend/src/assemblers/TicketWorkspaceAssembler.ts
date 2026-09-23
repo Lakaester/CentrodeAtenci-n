@@ -4,6 +4,7 @@ import { WorkspaceFactory } from "../builders/WorkspaceFactory";
 import { MicroserviceRepository } from "../repositories/MicroserviceRepository";
 import type { MicroserviceResponseDTO } from "../dto/MicroserviceDTOs";
 import { MotorContexto } from "../domain/contexto/MotorContexto";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 export interface ActividadResponse {
   id: string;
@@ -121,7 +122,7 @@ const HERRAMIENTAS_POR_CATEGORIA: Record<string, string[]> = {
 
 export class TicketWorkspaceAssembler {
   async assemble(ticket: Ticket): Promise<WorkspaceResponse> {
-    const dominio = ticket.clienteDominio;
+    const dominio = normalizeDomain(ticket.clienteDominio);
     const categoria = ticket.categoriaFinal ?? "default";
 
     const microservice = new MicroserviceRepository();
@@ -278,15 +279,19 @@ export class TicketWorkspaceAssembler {
 
   private async obtenerDatosCliente(dominio: string): Promise<{ correo: string | null; telefono: string | null; pais: string | null; producto: string | null; version: string | null } | null> {
     if (!dominio) return null;
+    const domNorm = normalizeDomain(dominio);
+    if (!domNorm) return null;
     const rows = await prisma.$queryRaw<any[]>`
       SELECT
-        COALESCE(NULLIF(TRIM(dominio), ''), '') AS correo,
+        COALESCE(NULLIF(TRIM(dominio), ''), '') AS dominio_raw,
         NULL AS telefono,
         COALESCE(NULLIF(TRIM(pais), ''), '') AS pais,
         NULL AS producto,
         NULL AS version
       FROM public.v_unificado_norm
-      WHERE dominio ILIKE ${dominio}
+      WHERE NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+        REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+        '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '') = ${domNorm}
       LIMIT 1
     `;
     if (!rows.length) return null;
@@ -298,7 +303,10 @@ export class TicketWorkspaceAssembler {
     return prisma.$queryRaw<HistorialRow[]>`
       SELECT ctid::text, fecha, canal, categoria, subcategoria, asesor, estado_homologado
       FROM public.v_unificado_norm
-      WHERE dominio ILIKE ${dominio} AND ctid::text != ${excludeId}
+      WHERE NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+        REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+        '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '') = ${domNorm}
+        AND ctid::text != ${excludeId}
       ORDER BY fecha DESC NULLS LAST
       LIMIT 20
     `;
@@ -309,7 +317,10 @@ export class TicketWorkspaceAssembler {
     const rows = await prisma.$queryRaw<{ categoria: string; total: number }[]>`
       SELECT COALESCE(NULLIF(TRIM(categoria), ''), 'Sin categoría') AS categoria, COUNT(*)::int AS total
       FROM public.v_unificado_norm
-      WHERE dominio ILIKE ${dominio} AND categoria IS NOT NULL AND TRIM(categoria) != ''
+      WHERE NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+        REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+        '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '') = ${domNorm}
+        AND categoria IS NOT NULL AND TRIM(categoria) != ''
       GROUP BY categoria ORDER BY total DESC LIMIT 5
     `;
     return rows.map((r) => `${r.categoria} (${r.total})`);
@@ -344,7 +355,10 @@ export class TicketWorkspaceAssembler {
     const rows = await prisma.$queryRaw<{ asesor: string; total: number }[]>`
       SELECT COALESCE(NULLIF(TRIM(asesor), ''), 'Sin asesor') AS asesor, COUNT(*)::int AS total
       FROM public.v_unificado_norm
-      WHERE dominio ILIKE ${dominio} AND asesor IS NOT NULL AND TRIM(asesor) != ''
+      WHERE NULLIF(LOWER(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(
+        REGEXP_REPLACE(TRIM(dominio), '^[[:space:]]*https?://', ''),
+        '/.*$', ''), '#.*$', ''), '[?].*$', ''), '[.]\\s*$', '')), '') = ${domNorm}
+        AND asesor IS NOT NULL AND TRIM(asesor) != ''
       GROUP BY asesor ORDER BY total DESC LIMIT 1
     `;
     return rows[0]?.asesor ?? null;

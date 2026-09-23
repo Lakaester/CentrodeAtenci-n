@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import type { FacturacionDominioPendiente } from "../services/facturacionService";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { DetalleError } from "./FuenteUI";
 
 interface Props {
@@ -30,13 +31,13 @@ export function DrawerDetalleCaso({ caso, onClose, onIniciarDiagnostico, onReenv
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black-10 bg-white">
         <div className="flex items-center justify-between border-b border-black-10 px-4 py-3">
-          <h3 className="truncate text-xs font-semibold text-black-85">{caso.dominio}</h3>
+          <h3 className="truncate text-xs font-semibold text-black-85">{normalizeDomain(caso.dominio)}</h3>
           <button type="button" onClick={onClose} className="rounded p-1 text-black-45 hover:bg-light"><X size={14} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-4 rounded-lg border border-black-10 bg-light p-3">
-            <Fila label="Dominio">{caso.dominio || <ND />}</Fila>
+            <Fila label="Dominio">{normalizeDomain(caso.dominio) || <ND />}</Fila>
             <Fila label="RUC">{caso.ruc || <ND />}</Fila>
             <Fila label="Proveedor">{caso.proveedor || <ND />}</Fila>
           </div>

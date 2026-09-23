@@ -1,5 +1,5 @@
 import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow } from "../repositories/quejasDevoluciones.repository";
-import { reconstruirCasosBackfill, normalizarDominio, type ReconstruccionResultado } from "./quejasCasos.service";
+import { reconstruirCasosBackfill, reconciliarCasosQD, normalizarDominio, dominioValido, canalValido, estadoZendeskCandidato, type ReconstruccionResultado } from "./quejasCasos.service";
 import { DomainError } from "../core/errors/types";
 
 function calcularMontoDevuelto(montoPagado: number | null | undefined, porcentaje: number | null | undefined): number | null {
@@ -135,14 +135,35 @@ export const qdService = {
     estado?: string | null;
     clasificacion?: string | null;
     resultado?: string | null;
-  }, usuario: string | null): Promise<{ caso: QdCasoRow; reutilizado: boolean; interaccionAsociada: boolean }> {
+    canal?: string | null;
+  }, usuario: string | null): Promise<{
+    caso: QdCasoRow | null;
+    reutilizado: boolean;
+    interaccionAsociada: boolean;
+    creado: boolean;
+    motivoNoCreacion?: string;
+  }> {
     const tipo = input.tipo;
     const ticketId = input.ticketId;
+
+    // ── VALIDACIONES OBLIGATORIAS ANTES DE CREAR ──
+    // 1. Canal debe ser CORREO o CHAT.
+    if (!canalValido(input.canal)) {
+      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_CANAL_INVALIDO" };
+    }
+    // 2. Estado Zendesk debe ser closed o solved.
+    if (!estadoZendeskCandidato(input.estado)) {
+      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_ESTADO_NO_CERRADO" };
+    }
+    // 3. Dominio válido.
+    if (!dominioValido(input.dominio)) {
+      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "SIN_DOMINIO" };
+    }
 
     // 1) Idempotencia / duplicado directo: este ticket ya es el principal de un caso.
     let existente = await qdRepository.porTicketGeneral(ticketId, tipo);
     if (existente) {
-      return { caso: existente, reutilizado: true, interaccionAsociada: false };
+      return { caso: existente, reutilizado: true, interaccionAsociada: false, creado: false };
     }
 
     // 2) Hilo: si este ticket es follow_up de un ticket padre que ya tiene caso,
@@ -155,7 +176,7 @@ export const qdService = {
           casoPadre.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
           null, `Ticket #${ticketId} asociado al caso ${casoPadre.numero} (hilo follow_up de #${input.ticketPadreId})`,
         );
-        return { caso: casoPadre, reutilizado: true, interaccionAsociada: !!interaccion };
+        return { caso: casoPadre, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
       }
     }
 
@@ -171,7 +192,7 @@ export const qdService = {
           casoAbierto.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
           null, `Ticket #${ticketId} vinculado al caso abierto ${casoAbierto.numero} (mismo dominio ${input.dominio})`,
         );
-        return { caso: casoAbierto, reutilizado: true, interaccionAsociada: !!interaccion };
+        return { caso: casoAbierto, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
       }
     }
 
@@ -189,7 +210,7 @@ export const qdService = {
       clasificacion: input.clasificacion ?? null,
       origen: "CATEGORIZACION",
     }, usuario ?? input.asesor, true);
-    return { caso, reutilizado: false, interaccionAsociada: false };
+    return { caso, reutilizado: false, interaccionAsociada: false, creado: true };
   },
 
   /**
@@ -214,10 +235,10 @@ export const qdService = {
   async asignarDominio(casoId: string, dominio: string | null, usuario: string | null): Promise<QdCasoRow> {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    const d = typeof dominio === "string" ? dominio.trim() : "";
+    const d = dominio ? normalizarDominio(dominio) : "";
     const actualizado = await qdRepository.asignarDominio(casoId, d || null, usuario);
     if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    if (String(caso.dominio ?? "") !== d) {
+    if (normalizarDominio(String(caso.dominio ?? "")) !== d) {
       await qdRepository.registrarAuditoria(
         casoId, usuario, "asignacion_dominio", "dominio",
         caso.dominio, d || null,

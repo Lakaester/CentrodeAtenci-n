@@ -3,6 +3,7 @@
  */
 import { Request, Response, NextFunction } from "express";
 import { dashboardService } from "../services/dashboard.service";
+import { clientesExportService } from "../services/clientesExport.service";
 import type { DashboardFilters } from "../types";
 
 export const dashboardController = {
@@ -79,6 +80,19 @@ export const dashboardController = {
       const filters = (req as Request & { filters: DashboardFilters }).filters ?? {};
       const data = await dashboardService.clientesV2(filters);
       res.json({ ok: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async clientesV2Exportar(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filters = (req as Request & { filters: DashboardFilters }).filters ?? {};
+      const { buffer, nombre, total } = await clientesExportService.generar(filters);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+      res.setHeader("X-Export-Total", String(total));
+      res.send(buffer);
     } catch (err) {
       next(err);
     }

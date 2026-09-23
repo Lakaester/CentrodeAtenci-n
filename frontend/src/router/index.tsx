@@ -6,6 +6,7 @@ import { RequireAuthLayout } from "@/components/auth/RequireAuthLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { CopeLayout } from "@/layouts/CopeLayout";
 import { ReportLayout } from "@/layouts/ReportLayout";
+import { GestionLayout } from "@/layouts/GestionLayout";
 import ResumenEjecutivo from "@/pages/ResumenEjecutivo";
 import Operacion from "@/pages/Operacion";
 import Asesores from "@/pages/Asesores";
@@ -16,6 +17,8 @@ import Zendesk from "@/pages/Zendesk";
 import Tendencias from "@/pages/Tendencias";
 import Pais from "@/pages/Pais";
 import QuejasDevoluciones from "@/pages/QuejasDevoluciones";
+import ApoyosPage from "@/pages/gestion/ApoyosPage";
+import AgendasPage from "@/pages/gestion/AgendasPage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import Atenciones from "@/pages/cope/Atenciones";
 import ControlFacturacion from "@/pages/cope/ControlFacturacion";
@@ -60,7 +63,17 @@ export const router = createBrowserRouter([
           { path: "atenciones", element: <Atenciones /> },
           { path: "control-facturacion", element: <ControlFacturacion /> },
           { path: "clientes", element: <ClientesCope /> },
-          { path: "quejas-devoluciones", element: <ProtectedRoute modulo="Quejas y Devoluciones"><QuejasDevolucionesPage /></ProtectedRoute> },
+          { path: "quejas-devoluciones", element: <Navigate to="/gestion/quejas-devoluciones" replace /> },
+          {
+            path: "gestion",
+            element: <ProtectedRoute modulo="Gestión" submodulos={["Quejas y Devoluciones", "Apoyos", "Agendas"]}><GestionLayout /></ProtectedRoute>,
+            children: [
+              { index: true, element: <Navigate to="quejas-devoluciones" replace /> },
+              { path: "quejas-devoluciones", element: <QuejasDevolucionesPage /> },
+              { path: "apoyos", element: <ApoyosPage /> },
+              { path: "agendas", element: <AgendasPage /> },
+            ],
+          },
           {
             path: "configuracion",
             element: <ProtectedRoute modulo="Configuración"><ConfigLayout /></ProtectedRoute>,

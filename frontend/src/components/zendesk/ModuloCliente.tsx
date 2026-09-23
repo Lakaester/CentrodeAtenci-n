@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
 import type { ZendeskTicketFE } from "./useZendesk";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 function ND() { return <span className="text-black-10 italic">No disponible</span>; }
 
@@ -13,7 +14,7 @@ export function ModuloCliente({ ticket }: { ticket: ZendeskTicketFE }) {
       <div className="space-y-1 px-2.5 py-2 text-[10px]">
         <Fila label="Nombre" valor={ticket.clienteNombre} />
         <Fila label="Correo" valor={ticket.clienteEmail ?? null} />
-        <Fila label="Dominio" valor={ticket.dominio ?? null} />
+        <Fila label="Dominio" valor={normalizeDomain(ticket.dominio) || null} />
         <Fila label="País" valor={ticket.pais ?? null} />
         <Fila label="Categoría" valor={ticket.categoria ?? null} />
         <Fila label="Subcategoría" valor={ticket.subcategoria ?? null} />

@@ -44,6 +44,33 @@ export const localbiController = {
     }
   },
 
+  /** GET /search-clientes?busqueda=... — Búsqueda a nivel dominio (para /clientes COPE). */
+  async searchClientes(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = searchQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ ok: false, error: parsed.error.flatten().fieldErrors });
+      }
+      const result = await service.buscarClientes(parsed.data.busqueda, parsed.data.pagina, parsed.data.limite);
+
+      switch (result.status) {
+        case "success":
+        case "warning":
+          return res.json({ ok: true, status: result.status, data: result.data, warnings: result.warnings ?? [] });
+        case "error":
+          return res.json({ ok: false, status: "error", mensajes: result.mensajes });
+        case "not_configured":
+          return res.status(503).json({ ok: false, status: "not_configured", error: result.mensaje });
+        case "unavailable":
+          return res.status(502).json({ ok: false, status: "unavailable", error: result.mensaje });
+        default:
+          return res.status(500).json({ ok: false, error: "Estado desconocido" });
+      }
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async historia(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = historiaParamsSchema.safeParse(req.params);

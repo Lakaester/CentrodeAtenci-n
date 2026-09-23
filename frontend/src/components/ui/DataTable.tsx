@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "./Input";
@@ -100,7 +100,7 @@ export function DataTable<T>({
       )}
 
       <div className={cn("overflow-x-auto border border-black-5 rounded-lg", maxHeight, "overflow-y-auto")}>
-        <table className="w-full text-sm">
+        <table className="min-w-full text-sm">
           <thead className="sticky top-0 z-10 bg-light">
             <tr className="text-left text-xs font-semibold uppercase tracking-wider text-black-45">
               {expandRow && <th className="w-10 px-3 py-3" />}
@@ -153,8 +153,8 @@ export function DataTable<T>({
                 const id = getId(row);
                 const isExpanded = expandedId === id;
                 const isSelected = selectedIds.includes(id);
-                return (
-                  <tbody key={id}>
+                  return (
+                  <Fragment key={id}>
                     <tr
                       className={cn(
                         "border-t border-black-5 transition-colors hover:bg-light",
@@ -202,7 +202,7 @@ export function DataTable<T>({
                         </td>
                       </tr>
                     )}
-                  </tbody>
+                  </Fragment>
                 );
               })
             )}

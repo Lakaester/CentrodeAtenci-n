@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { Prisma } from "@prisma/client";
 import { genId, type IntervencionRow, type PausaRow, type ActividadRow } from "./facturacion.types";
+import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 export interface CrearIntervencionInput {
   asesor: string;
@@ -28,13 +29,14 @@ export interface FinalizarInput {
 export const facturacionRepository = {
   async crear(input: CrearIntervencionInput): Promise<IntervencionRow> {
     const id = genId();
+    const d = normalizeDomain(input.dominio);
     const rows = await prisma.$queryRaw<IntervencionRow[]>`
       INSERT INTO facturacion_intervenciones
         (id, asesor, unidad_negocio_id, cliente_nombre, ruc, dominio, proveedor,
          facturas_pendientes, boletas_pendientes, subcategoria_id, estado_id, status, caso_id)
       VALUES
         (${id}, ${input.asesor}, ${input.unidadNegocioId ?? null}, ${input.clienteNombre ?? null},
-         ${input.ruc ?? null}, ${input.dominio}, ${input.proveedor ?? null},
+         ${input.ruc ?? null}, ${d}, ${input.proveedor ?? null},
          ${input.facturasPendientes ?? null}, ${input.boletasPendientes ?? null},
          ${input.subcategoriaId ?? null}, ${input.estadoId ?? null}, 'EN_DIAGNOSTICO', ${input.casoId ?? null})
       RETURNING *
@@ -74,7 +76,10 @@ export const facturacionRepository = {
       conditions.push(Prisma.sql`unidad_negocio_id = ${unidadNegocioId}`);
     }
     if (dominios.length > 0) {
-      conditions.push(Prisma.sql`dominio = ANY(${dominios})`);
+      const dominiosNorm = [...new Set(dominios.map(normalizeDomain).filter(Boolean))];
+      if (dominiosNorm.length) {
+        conditions.push(Prisma.sql`dominio = ANY(${dominiosNorm})`);
+      }
     }
     if (conditions.length === 0) return [];
 

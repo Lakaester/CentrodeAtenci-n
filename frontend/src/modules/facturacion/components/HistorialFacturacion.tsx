@@ -1,4 +1,5 @@
 import { useHistorialCliente } from "../hooks/useFacturacion";
+import { normalizeDomain } from "@/domain/normalizacion";
 
 function fmtDuracion(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -43,7 +44,7 @@ export function HistorialFacturacion({ unidadNegocioId, dominios }: Props) {
               <span className="shrink-0 text-[9px] font-medium text-black-85">{i.asesor}</span>
             </div>
             <div className="mt-0.5 flex items-center justify-between gap-2">
-              <span className="truncate text-[10px] font-medium text-black-85">{i.dominio}</span>
+              <span className="truncate text-[10px] font-medium text-black-85">{normalizeDomain(i.dominio)}</span>
               <span className="shrink-0 font-mono text-[9px] text-black-45">{fmtDuracion(d.duraciones.duracionEfectivaMs)}</span>
             </div>
             <div className="mt-1 space-y-0.5 text-[9px] text-black-45">

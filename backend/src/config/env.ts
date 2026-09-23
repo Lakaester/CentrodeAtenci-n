@@ -20,6 +20,7 @@ const envSchema = z.object({
   INTEGRACIONES_API_TOKEN: z.string().default(""),
   BOOTSTRAP_ADMIN_EMAIL: z.string().optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),
+  ACTA_STORAGE_PATH: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

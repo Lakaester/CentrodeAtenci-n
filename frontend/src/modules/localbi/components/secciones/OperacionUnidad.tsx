@@ -5,6 +5,7 @@ import { HistorialFacturacion } from "@/modules/facturacion/components/Historial
 import { QdClienteHistorial } from "@/modules/quejas-devoluciones/components/QdClienteHistorial";
 import { facturacionService } from "@/modules/facturacion/services/facturacionService";
 import type { HistoriaClinicaData } from "../../hooks/useHistoriaClinicaData";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { Link } from "react-router-dom";
 
 /**
@@ -41,7 +42,7 @@ export function OperacionUnidad({ data, dominioIdentificado }: {
       <div className="border-b border-black-10 px-3 py-2">
         <p className="text-[9px] font-semibold uppercase tracking-wider text-black-45">Contexto de operación</p>
         {dominioIdentificado ? (
-          <p className="mt-0.5 truncate font-mono text-[10px] text-primary">{dominioIdentificado}</p>
+          <p className="mt-0.5 truncate font-mono text-[10px] text-primary">{normalizeDomain(dominioIdentificado)}</p>
         ) : (
           <p className="mt-0.5 text-[10px] text-warning-65">
             Sin dominio vinculado a esta atención. Usa <span className="font-medium">Vincular dominio</span> para operar.
@@ -61,7 +62,7 @@ export function OperacionUnidad({ data, dominioIdentificado }: {
           <div className="space-y-1 px-2.5 pb-2">
             <div className="rounded border border-black-10 bg-light p-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[9px] font-semibold text-primary">{caso.caso.dominio}</span>
+                <span className="font-mono text-[9px] font-semibold text-primary">{normalizeDomain(caso.caso.dominio)}</span>
                 <span className="rounded bg-black-5 px-1.5 py-0.5 text-[9px] text-black-65">{caso.caso.estado_operativo}</span>
               </div>
               <div className="mt-1 space-y-0.5 text-[9px] text-black-45">

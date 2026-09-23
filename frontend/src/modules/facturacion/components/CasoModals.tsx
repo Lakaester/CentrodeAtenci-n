@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import type { FacturacionCaso, CategoriaItem, SubcategoriaItem } from "@/modules/facturacion";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { cn } from "@/lib/utils";
 
 function ModalShell({ titulo, onClose, children }: { titulo: string; onClose: () => void; children: React.ReactNode }) {
@@ -43,7 +44,7 @@ export function AsignarCasoModal({ caso, asesores, onConfirmar, onClose }: Asign
   return (
     <ModalShell titulo="Asignar asesor" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{caso.dominio}</span></p>
+        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{normalizeDomain(caso.dominio)}</span></p>
         <div className="rounded border border-black-5 bg-light px-3 py-2 text-[10px]">
           <span className="text-black-45">Actual: </span>
           <span className="font-medium text-black-85">{caso.asesor_actual || "Sin responsable"}</span>
@@ -88,7 +89,7 @@ export function CambiarEstadoModal({ caso, estadosPermitidos, onConfirmar, onClo
   return (
     <ModalShell titulo="Cambiar estado" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{caso.dominio}</span> · <span>Actual: <strong>{caso.estado_operativo}</strong></span></p>
+        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{normalizeDomain(caso.dominio)}</span> · <span>Actual: <strong>{caso.estado_operativo}</strong></span></p>
         <div className="flex flex-wrap gap-1.5">
           {estadosPermitidos.map((e) => (
             <button key={e} type="button" onClick={() => setEstado(e)}
@@ -191,7 +192,7 @@ export function RegistrarSnapshotModal({ caso, onConfirmar, onClose }: SnapshotM
   return (
     <ModalShell titulo="Registrar snapshot" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{caso.dominio}</span></p>
+        <p className="text-[11px] text-black-45">Caso: <span className="font-medium text-black-85">{normalizeDomain(caso.dominio)}</span></p>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <p className="mb-1 text-[9px] uppercase tracking-wider text-black-45">Facturas</p>

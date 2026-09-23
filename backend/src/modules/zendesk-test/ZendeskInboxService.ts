@@ -29,7 +29,7 @@ export class ZendeskInboxService {
   async obtenerInbox(): Promise<{ tickets: InboxItem[]; total: number }> {
     const result = await this.client.searchTickets("type:ticket status<closed", 100);
 
-    const userIds = [...new Set(result.tickets.map((t) => t.requester_id))];
+    const userIds = [...new Set(result.tickets.flatMap((t) => [t.requester_id, t.assignee_id]).filter((id): id is number => id != null))];
     const usuarios = await this.client.obtenerUsuarios(userIds);
     const usuarioMap = new Map(usuarios.map((u) => [u.id, u]));
 

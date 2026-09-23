@@ -12,13 +12,23 @@ function leerToken(req: Request): string {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = leerToken(req);
-  const user = token ? await authService.usuarioPorToken(token) : null;
-  if (!user) {
-    return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+  try {
+    const token = leerToken(req);
+    const user = token ? await authService.usuarioPorToken(token) : null;
+    if (!user) {
+      return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+    }
+    (req as AuthedRequest).auth = user;
+    next();
+  } catch (err: any) {
+    const isDbError = err?.code === "P1017" || err?.code === "P1001" || err?.code === "P1011" || err?.name?.startsWith("PrismaClient");
+    if (isDbError) {
+      console.error(`[AUTH] Error de DB en requireAuth: ${err.message}`);
+      return res.status(503).json({ ok: false, error: "Servicio temporalmente no disponible", code: "DB_UNAVAILABLE" });
+    }
+    console.error(`[AUTH] Error inesperado en requireAuth: ${err.message}`);
+    next(err);
   }
-  (req as AuthedRequest).auth = user;
-  next();
 }
 
 export function requirePermission(modulo: string, accion: string) {

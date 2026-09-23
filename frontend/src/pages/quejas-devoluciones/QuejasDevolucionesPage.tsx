@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { X, Plus, RefreshCcw, ArrowUpRight, Download, Trash2, CheckCircle2, RotateCcw, GitMerge, Link2, ChevronDown, ChevronRight, DollarSign, XCircle, Clock, MessageSquare } from "lucide-react";
+import { normalizeDomain } from "@/domain/normalizacion";
 import {
   useQdLista, useQdDetalle, useQdCrear, useQdActualizar, useQdEliminar,
   useQdEstados, useQdResultados, useQdAreas, useQdProductos, useQdTiposQueja,
   useQdDominios, useQdCerrarCaso, useQdReabrirCaso, useQdConsolidarCasos,
-  useQdVincularTicket, useQdAsignarDominio,
+  useQdVincularTicket,
   qdService,
 } from "@/modules/quejas-devoluciones";
 import type { QdCaso, QdInteraccion, QdTipo } from "@/modules/quejas-devoluciones";
@@ -107,7 +108,6 @@ export default function QuejasDevoluciones() {
   const reabrir = useQdReabrirCaso();
   const consolidar = useQdConsolidarCasos();
   const vincular = useQdVincularTicket();
-  const asignarDominio = useQdAsignarDominio();
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
 
   const estados = useQdEstados().data ?? [];
@@ -476,9 +476,6 @@ export default function QuejasDevoluciones() {
             onVincularTicket={async (ticketId, canal) => {
               await vincular.mutateAsync({ casoId: detalle.caso.id, ticketId, canal });
             }}
-            onAsignarDominio={async (dominio) => {
-              await asignarDominio.mutateAsync({ id: detalle.caso.id, dominio });
-            }}
             estados={estados} resultados={resultados} areas={areas} productos={productos} tiposQueja={tiposQueja}
             onActualizar={async (input) => actualizar.mutateAsync({ id: detalle.caso.id, input })}
             onCerrar={() => setCasoId(null)}
@@ -681,7 +678,7 @@ function CasoForm({ estados, resultados, areas, productos, tiposQueja, onClose, 
 
 /* ============================================================ */
 
-function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, puedeEliminar, confirmandoEliminar, setConfirmandoEliminar, onEliminar, confirmandoCerrar, setConfirmandoCerrar, onCerrarCaso, confirmandoReabrir, setConfirmandoReabrir, onReabrirCaso, onVincularTicket, onAsignarDominio, estados, resultados, areas, productos, tiposQueja, onActualizar, onCerrar }: {
+function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, puedeEliminar, confirmandoEliminar, setConfirmandoEliminar, onEliminar, confirmandoCerrar, setConfirmandoCerrar, onCerrarCaso, confirmandoReabrir, setConfirmandoReabrir, onReabrirCaso, onVincularTicket, estados, resultados, areas, productos, tiposQueja, onActualizar, onCerrar }: {
   caso: QdCaso;
   interacciones: QdInteraccion[];
   auditoria: any[];
@@ -698,7 +695,6 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
   setConfirmandoReabrir: (v: boolean) => void;
   onReabrirCaso: () => Promise<unknown>;
   onVincularTicket: (ticketId: string, canal: string | null) => Promise<unknown>;
-  onAsignarDominio: (dominio: string | null) => Promise<unknown>;
   estados: any[];
   resultados: any[];
   areas: any[];
@@ -715,14 +711,13 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
   const [errorVincular, setErrorVincular] = useState<string | null>(null);
   const [vincularTicket, setVincularTicket] = useState("");
   const [vincularCanal, setVincularCanal] = useState("");
-  const [editandoDominio, setEditandoDominio] = useState(false);
-  const [dominioSel, setDominioSel] = useState(caso.dominio ?? "");
-  const [dominioBusqueda, setDominioBusqueda] = useState("");
-  const [dominioAbierto, setDominioAbierto] = useState(false);
-  const [errorDominio, setErrorDominio] = useState<string | null>(null);
-  const [guardandoDominio, setGuardandoDominio] = useState(false);
 
-  // Datos propios del caso (Devolución / Queja) — edición desde el detalle.
+  // Dominio — se edita inline pero se guarda junto con todo.
+  const [dominioSel, setDominioSel] = useState(caso.dominio ?? "");
+  const [dominioBusqueda, setDominioBusqueda] = useState(caso.dominio ?? "");
+  const [dominioAbierto, setDominioAbierto] = useState(false);
+
+  // Datos propios del caso (Devolución / Queja) — se sincroniza con el caso al cargar.
   const [datos, setDatos] = useState<any>({
     moneda: caso.moneda ?? "PEN",
     montoPagado: caso.monto_pagado,
@@ -734,18 +729,19 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
     clasificacion: caso.clasificacion ?? "",
     producto: caso.producto ?? "",
   });
-  const [errorDatos, setErrorDatos] = useState<string | null>(null);
-  const [guardandoDatos, setGuardandoDatos] = useState(false);
 
-  // Gestión (estado/resultado/observación) — edición desde el detalle.
+  // Gestión (estado/resultado/observación) — se sincroniza con el caso al cargar.
   const [gestion, setGestion] = useState<any>({
     estado: caso.estado ?? "",
     resultado: caso.resultado ?? "",
     observacion: caso.observacion ?? "",
   });
-  const [errorGestion, setErrorGestion] = useState<string | null>(null);
-  const [guardandoGestion, setGuardandoGestion] = useState(false);
   const setGestionCampo = (k: string, v: any) => setGestion((f: any) => ({ ...f, [k]: v }));
+  const setDato = (k: string, v: any) => setDatos((f: any) => ({ ...f, [k]: v }));
+
+  // Estado unificado de guardado.
+  const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
 
   // Sincroniza la gestión con el caso cuando se refresca (React Query).
@@ -753,38 +749,46 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
     setGestion({ estado: caso.estado ?? "", resultado: caso.resultado ?? "", observacion: caso.observacion ?? "" });
   }, [caso.id, caso.estado, caso.resultado, caso.observacion]);
 
-  const guardarGestion = async () => {
-    setErrorGestion(null);
-    setGuardandoGestion(true);
+  // Sincroniza el dominio con el caso cuando se refresca.
+  useEffect(() => {
+    setDominioSel(caso.dominio ?? "");
+    setDominioBusqueda(caso.dominio ?? "");
+  }, [caso.id, caso.dominio]);
+
+  /** Handler unificado: guarda dominio + datos + gestión en una sola llamada. */
+  const guardarTodo = async () => {
+    setErrorGeneral(null);
+    setGuardando(true);
     try {
-      await onActualizar({
-        estado: gestion.estado || null,
-        resultado: gestion.resultado || null,
-        observacion: gestion.observacion || null,
-      });
+      const input: any = {};
+      // Dominio
+      input.dominio = dominioSel.trim() || null;
+      // Datos del caso
+      if (caso.tipo === "devolucion") {
+        input.moneda = datos.moneda || "PEN";
+        input.montoPagado = datos.montoPagado === "" || datos.montoPagado == null ? null : Number(datos.montoPagado);
+        input.tipoMonto = datos.tipoMonto || null;
+        input.porcentaje = datos.porcentaje === "" || datos.porcentaje == null ? null : Number(datos.porcentaje);
+        input.montoDevuelto = datos.montoDevuelto === "" || datos.montoDevuelto == null ? null : Number(datos.montoDevuelto);
+        input.area = datos.area || null;
+        input.motivo = datos.motivo || null;
+      } else {
+        input.clasificacion = datos.clasificacion || null;
+        input.producto = datos.producto || null;
+        input.area = datos.area || null;
+        input.motivo = datos.motivo || null;
+      }
+      // Gestión
+      input.estado = gestion.estado || null;
+      input.resultado = gestion.resultado || null;
+      input.observacion = gestion.observacion || null;
+      await onActualizar(input);
     } catch (e: any) {
-      setErrorGestion(e?.response?.data?.error ?? e.message ?? "Error");
+      setErrorGeneral(e?.response?.data?.error ?? e.message ?? "Error al guardar");
     } finally {
-      setGuardandoGestion(false);
+      setGuardando(false);
     }
   };
-
-  // Sincroniza el formulario de datos con el caso cuando se refresca (React Query).
-  useEffect(() => {
-    setDatos({
-      moneda: caso.moneda ?? "PEN",
-      montoPagado: caso.monto_pagado,
-      tipoMonto: caso.tipo_monto ?? "",
-      porcentaje: caso.porcentaje,
-      montoDevuelto: caso.monto_devuelto,
-      area: caso.area ?? "",
-      motivo: caso.motivo ?? "",
-      clasificacion: caso.clasificacion ?? "",
-      producto: caso.producto ?? "",
-    });
-  }, [caso.id, caso.moneda, caso.monto_pagado, caso.porcentaje, caso.monto_devuelto, caso.tipo_monto, caso.area, caso.motivo, caso.clasificacion, caso.producto]);
-
-  const setDato = (k: string, v: any) => setDatos((f: any) => ({ ...f, [k]: v }));
 
   /** Redondea a 2 decimales evitando errores de floating point. */
   const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -814,45 +818,23 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
     }
   };
 
-  /** Guarda los datos propios del caso (actualización parcial). */
-  const guardarDatos = async () => {
-    setErrorDatos(null);
-    setGuardandoDatos(true);
-    try {
-      const input: any = {};
-      if (caso.tipo === "devolucion") {
-        input.moneda = datos.moneda || "PEN";
-        input.montoPagado = datos.montoPagado === "" || datos.montoPagado == null ? null : Number(datos.montoPagado);
-        input.tipoMonto = datos.tipoMonto || null;
-        input.porcentaje = datos.porcentaje === "" || datos.porcentaje == null ? null : Number(datos.porcentaje);
-        input.montoDevuelto = datos.montoDevuelto === "" || datos.montoDevuelto == null ? null : Number(datos.montoDevuelto);
-        input.area = datos.area || null;
-        input.motivo = datos.motivo || null;
-      } else {
-        input.clasificacion = datos.clasificacion || null;
-        input.producto = datos.producto || null;
-        input.area = datos.area || null;
-        input.motivo = datos.motivo || null;
-      }
-      await onActualizar(input);
-    } catch (e: any) {
-      setErrorDatos(e?.response?.data?.error ?? e.message ?? "Error");
-    } finally {
-      setGuardandoDatos(false);
-    }
-  };
-
-  const guardarDominio = async () => {
-    setErrorDominio(null);
-    setGuardandoDominio(true);
-    try {
-      await onAsignarDominio(dominioSel.trim() || null);
-      setEditandoDominio(false);
-    } catch (e: any) {
-      setErrorDominio(e?.response?.data?.error ?? e.message ?? "Error");
-    } finally {
-      setGuardandoDominio(false);
-    }
+  /** Descarta todos los cambios no guardados y restaura los valores del caso. */
+  const descartarTodo = () => {
+    setDominioSel(caso.dominio ?? "");
+    setDominioBusqueda(caso.dominio ?? "");
+    setDatos({
+      moneda: caso.moneda ?? "PEN",
+      montoPagado: caso.monto_pagado,
+      tipoMonto: caso.tipo_monto ?? "",
+      porcentaje: caso.porcentaje,
+      montoDevuelto: caso.monto_devuelto,
+      area: caso.area ?? "",
+      motivo: caso.motivo ?? "",
+      clasificacion: caso.clasificacion ?? "",
+      producto: caso.producto ?? "",
+    });
+    setGestion({ estado: caso.estado ?? "", resultado: caso.resultado ?? "", observacion: caso.observacion ?? "" });
+    setErrorGeneral(null);
   };
 
   const vincular = async () => {
@@ -903,61 +885,53 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
           <Info label="Ticket">{caso.ticket_id ? <Link className="text-primary hover:underline" to={`/atenciones`}><ArrowUpRight size={10} className="inline" /> #{caso.ticket_id}</Link> : "—"}</Info>
           <div className="flex items-center justify-between border-b border-black-5 py-1">
             <span className="text-[10px] text-black-25">Dominio</span>
-            {editandoDominio ? (
-              <div className="relative flex items-center gap-1">
-                <div className="relative w-56">
-                  <input
-                    value={dominioBusqueda}
-                    onChange={(e) => { setDominioBusqueda(e.target.value); setDominioSel(e.target.value.trim()); setDominioAbierto(true); }}
-                    onFocus={() => setDominioAbierto(true)}
-                    placeholder="Buscar o escribir dominio..."
-                    className="h-7 w-full rounded border border-black-10 px-1.5 pr-6 text-[10px] focus:border-primary focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setDominioAbierto((v) => !v)}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 text-black-45 hover:text-black-65"
-                    aria-label="Alternar lista de dominios"
-                  >
-                    <ChevronDown size={12} />
-                  </button>
-                  {dominioAbierto && (
-                    <div className="absolute right-0 top-full z-20 mt-1 max-h-44 w-full overflow-y-auto rounded border border-black-10 bg-white shadow">
-                      <button
-                        type="button"
-                        onClick={() => { setDominioSel(""); setDominioBusqueda(""); setDominioAbierto(false); }}
-                        className="block w-full px-2 py-1 text-left text-[10px] text-black-45 hover:bg-light"
-                      >
-                        SIN DOMINIO
-                      </button>
-                      {dominios
-                        .filter((d) => d.toLowerCase().includes(dominioBusqueda.toLowerCase()))
-                        .slice(0, 50)
-                        .map((d) => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => { setDominioSel(d); setDominioBusqueda(d); setDominioAbierto(false); }}
-                            className={cn("block w-full truncate px-2 py-1 text-left text-[10px]", dominioSel === d ? "bg-primary-5 font-medium text-primary" : "text-black-65 hover:bg-light")}
-                          >
-                            {d}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </div>
-                <button type="button" onClick={guardarDominio} disabled={guardandoDominio} className="rounded bg-primary px-2 py-1 text-[9px] font-medium text-white disabled:opacity-50">{guardandoDominio ? "…" : "Guardar"}</button>
-                <button type="button" onClick={() => { setEditandoDominio(false); setDominioSel(caso.dominio ?? ""); setDominioBusqueda(caso.dominio ?? ""); }} className="rounded border border-black-10 px-1.5 py-1 text-[9px] text-black-45 hover:bg-light">×</button>
+            {puedeEditar ? (
+              <div className="relative w-56">
+                <input
+                  value={dominioBusqueda}
+                  onChange={(e) => { setDominioBusqueda(e.target.value); setDominioSel(e.target.value.trim()); setDominioAbierto(true); }}
+                  onFocus={() => setDominioAbierto(true)}
+                  placeholder="Buscar o escribir dominio..."
+                  className="h-7 w-full rounded border border-black-10 px-1.5 pr-6 text-[10px] focus:border-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setDominioAbierto((v) => !v)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-black-45 hover:text-black-65"
+                  aria-label="Alternar lista de dominios"
+                >
+                  <ChevronDown size={12} />
+                </button>
+                {dominioAbierto && (
+                  <div className="absolute right-0 top-full z-20 mt-1 max-h-44 w-full overflow-y-auto rounded border border-black-10 bg-white shadow">
+                    <button
+                      type="button"
+                      onClick={() => { setDominioSel(""); setDominioBusqueda(""); setDominioAbierto(false); }}
+                      className="block w-full px-2 py-1 text-left text-[10px] text-black-45 hover:bg-light"
+                    >
+                      SIN DOMINIO
+                    </button>
+                    {dominios
+                      .filter((d) => (normalizeDomain(d) ?? "").includes(normalizeDomain(dominioBusqueda) ?? ""))
+                      .slice(0, 50)
+                      .map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => { setDominioSel(d); setDominioBusqueda(d); setDominioAbierto(false); }}
+                          className={cn("block w-full truncate px-2 py-1 text-left text-[10px]", dominioSel === d ? "bg-primary-5 font-medium text-primary" : "text-black-65 hover:bg-light")}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-1">
                 <span className="ml-2 max-w-[55%] truncate text-right text-[10px] font-medium text-black-85">{caso.dominio ? caso.dominio : <SinDominioBadge />}</span>
-                {puedeEditar && (
-                  <button type="button" onClick={() => { setDominioSel(caso.dominio ?? ""); setDominioBusqueda(caso.dominio ?? ""); setErrorDominio(null); setEditandoDominio(true); setDominioAbierto(true); }} className="rounded border border-black-10 px-1.5 py-0.5 text-[9px] text-primary hover:bg-light">Asignar</button>
-                )}
               </div>
             )}
-            {errorDominio && <p className="mt-0.5 w-full text-right text-[9px] text-danger">{errorDominio}</p>}
           </div>
           <Info label="País">{caso.pais || "—"}</Info>
           <Info label="Asesor">{caso.asesor || "—"}</Info>
@@ -1008,11 +982,6 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
                   <CampoDato label="Motivo">
                     <textarea value={datos.motivo} onChange={(e) => setDato("motivo", e.target.value)} placeholder="Motivo" className="min-h-[56px] w-full rounded border border-black-10 px-2 py-1.5 text-[11px] focus:border-primary focus:outline-none" />
                   </CampoDato>
-                  {errorDatos && <p className="text-[10px] text-danger">{errorDatos}</p>}
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => { setDatos({ montoPagado: caso.monto_pagado, tipoMonto: caso.tipo_monto ?? "", porcentaje: caso.porcentaje, montoDevuelto: caso.monto_devuelto, area: caso.area ?? "", motivo: caso.motivo ?? "", clasificacion: caso.clasificacion ?? "", producto: caso.producto ?? "" }); setErrorDatos(null); }} disabled={guardandoDatos} className="rounded border border-black-10 px-3 py-1 text-[10px] text-black-45 hover:bg-light disabled:opacity-50">Descartar</button>
-                    <button type="button" onClick={guardarDatos} disabled={guardandoDatos} className="rounded bg-primary px-3 py-1 text-[10px] font-medium text-white disabled:opacity-50">{guardandoDatos ? "Guardando…" : "Guardar"}</button>
-                  </div>
                 </div>
               </>
             ) : (
@@ -1060,11 +1029,6 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
                   <CampoDato label="Motivo">
                     <textarea value={datos.motivo} onChange={(e) => setDato("motivo", e.target.value)} placeholder="Motivo" className="min-h-[56px] w-full rounded border border-black-10 px-2 py-1.5 text-[11px] focus:border-primary focus:outline-none" />
                   </CampoDato>
-                  {errorDatos && <p className="text-[10px] text-danger">{errorDatos}</p>}
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => { setDatos({ montoPagado: caso.monto_pagado, tipoMonto: caso.tipo_monto ?? "", porcentaje: caso.porcentaje, montoDevuelto: caso.monto_devuelto, area: caso.area ?? "", motivo: caso.motivo ?? "", clasificacion: caso.clasificacion ?? "", producto: caso.producto ?? "" }); setErrorDatos(null); }} disabled={guardandoDatos} className="rounded border border-black-10 px-3 py-1 text-[10px] text-black-45 hover:bg-light disabled:opacity-50">Descartar</button>
-                    <button type="button" onClick={guardarDatos} disabled={guardandoDatos} className="rounded bg-primary px-3 py-1 text-[10px] font-medium text-white disabled:opacity-50">{guardandoDatos ? "Guardando…" : "Guardar"}</button>
-                  </div>
                 </div>
               </>
             ) : (
@@ -1108,11 +1072,6 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
                 <CampoDato label="Observación">
                   <textarea value={gestion.observacion} onChange={(e) => setGestionCampo("observacion", e.target.value)} placeholder="Observación" className="min-h-[50px] w-full rounded border border-black-10 px-2 py-1.5 text-[11px] focus:border-primary focus:outline-none" />
                 </CampoDato>
-                {errorGestion && <p className="text-[10px] text-danger">{errorGestion}</p>}
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => { setGestion({ estado: caso.estado ?? "", resultado: caso.resultado ?? "", observacion: caso.observacion ?? "" }); setErrorGestion(null); }} disabled={guardandoGestion} className="rounded border border-black-10 px-3 py-1 text-[10px] text-black-45 hover:bg-light disabled:opacity-50">Descartar</button>
-                  <button type="button" onClick={guardarGestion} disabled={guardandoGestion} className="rounded bg-primary px-3 py-1 text-[10px] font-medium text-white disabled:opacity-50">{guardandoGestion ? "Guardando…" : "Guardar"}</button>
-                </div>
               </div>
             </>
           ) : (
@@ -1124,6 +1083,19 @@ function CasoDetalle({ caso, interacciones, auditoria, dominios, puedeEditar, pu
             </>
           )}
         </Section>
+
+        {/* Botones de acción unificados */}
+        {puedeEditar && !caso.caso_cerrado && (
+          <div className="space-y-2 rounded border border-black-10 bg-light p-3">
+            {errorGeneral && <p className="text-[10px] text-danger">{errorGeneral}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={descartarTodo} disabled={guardando} className="rounded border border-black-10 px-3 py-1.5 text-[10px] text-black-45 hover:bg-white disabled:opacity-50">Descartar cambios</button>
+              <button type="button" onClick={guardarTodo} disabled={guardando} className="rounded bg-primary px-4 py-1.5 text-[10px] font-medium text-white hover:bg-primary-85 disabled:opacity-50">
+                {guardando ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Interacciones relacionadas */}
         <Section titulo="Interacciones relacionadas">

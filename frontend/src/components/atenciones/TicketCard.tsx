@@ -1,6 +1,7 @@
 import { Clock, User } from "lucide-react";
 import type { Ticket, CanalTicket } from "./types";
 import { cn } from "@/lib/utils";
+import { normalizeDomain } from "@/domain/normalizacion";
 import { Badge } from "@/components/ui";
 import { ESTADO_LABELS, TIPO_CLIENTE_LABELS } from "./types";
 
@@ -82,7 +83,7 @@ export function TicketCard({ ticket, onClick }: Props) {
               </span>
             )}
           </div>
-          <p className="truncate text-xs text-black-45">{ticket.dominio}</p>
+          <p className="truncate text-xs text-black-45">{normalizeDomain(ticket.dominio)}</p>
         </div>
         <Badge variant={CANAL_BADGE[ticket.canal]} className="text-[10px] px-2 py-0.5">
           {CANAL_LABEL[ticket.canal]}

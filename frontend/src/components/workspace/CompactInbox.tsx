@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import type { InboxItemFE } from "@/components/zendesk/useZendeskInbox";
+import { useAuth } from "@/modules/auth";
 
 interface Props {
   tickets: (InboxItemFE & { canal?: string })[];
@@ -25,12 +26,10 @@ const SUBCANALES: { key: FiltroSub; label: string }[] = [
   { key: "whaticket", label: "Whatsicket" },
 ];
 
-const FILTROS_ESTADO: { key: string; label: string }[] = [
-  { key: "", label: "Todos" },
-  { key: "new", label: "Nuevo" },
-  { key: "open", label: "Abierto" },
-  { key: "solved_today", label: "Resueltos hoy" },
-  { key: "closed_today", label: "Cerrados hoy" },
+const FILTROS_ESTADO: { key: "new" | "open" | "closed"; label: string }[] = [
+  { key: "new", label: "Nuevos" },
+  { key: "open", label: "Abiertos" },
+  { key: "closed", label: "Cerrados" },
 ];
 
 const ESTADO_LABEL_PRINCIPAL: Record<string, string> = {
@@ -71,11 +70,25 @@ function esWhatsapp(canal?: string): boolean {
   return canal === "whatsapp" || canal === "meta" || canal === "whaticket";
 }
 
+function normalizar(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+function esSoloMios(nombreUsuario: string, asignado?: string | null): boolean {
+  if (!asignado) return false;
+  const tokens = normalizar(nombreUsuario).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+  const asignadoNorm = normalizar(asignado);
+  return tokens.every((t) => asignadoNorm.includes(t));
+}
+
 export function CompactInbox({ tickets, activa, onSelect }: Props) {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [canal, setCanal] = useState<FiltroCanal>("");
   const [subc, setSubc] = useState<FiltroSub>("");
   const [estado, setEstado] = useState("");
+  const [soloMios, setSoloMios] = useState(false);
 
   const mostrarSubcanales = canal === "whatsapp";
 
@@ -92,14 +105,14 @@ export function CompactInbox({ tickets, activa, onSelect }: Props) {
       }
     }
     if (mostrarSubcanales && subc && t.canal !== subc) return false;
+    if (soloMios && user) {
+      const nombreCompleto = `${user.nombre} ${user.apellido ?? ""}`.trim();
+      if (!esSoloMios(nombreCompleto, t.assigneeName)) return false;
+    }
     if (estado) {
-      if (estado === "solved_today" && t.status !== "solved") return false;
-      if (estado === "solved_today" && !esHoy(t.updatedAt)) return false;
-      if (estado === "closed_today" && t.status !== "closed" && t.status !== "solved") return false;
-      if (estado === "closed_today" && !esHoy(t.updatedAt)) return false;
-      if (estado === "pending" && t.status !== "pending") return false;
-      if (estado === "open" && t.status !== "open") return false;
       if (estado === "new" && t.status !== "new") return false;
+      if (estado === "open" && t.status !== "open" && t.status !== "pending") return false;
+      if (estado === "closed" && t.status !== "closed" && t.status !== "solved") return false;
     }
     return true;
   });
@@ -149,6 +162,20 @@ export function CompactInbox({ tickets, activa, onSelect }: Props) {
             ))}
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() => setSoloMios((v) => !v)}
+          className={cn(
+            "mt-1 flex items-center gap-1.5 rounded px-1.5 py-1 text-[9px] font-medium transition-colors",
+            soloMios ? "bg-primary text-white" : "bg-black-5 text-black-45 hover:bg-black-10",
+          )}
+        >
+          <span className={cn("relative flex h-3 w-3 items-center justify-center rounded-[3px] border transition-colors", soloMios ? "border-white" : "border-black-25")}>
+            <span className={cn("h-1.5 w-1.5 rounded-[2px]", soloMios ? "bg-white" : "bg-transparent")} />
+          </span>
+          Solo míos
+        </button>
 
         <div className="mt-1 flex flex-wrap gap-1">
           {FILTROS_ESTADO.map((e) => (
@@ -209,6 +236,12 @@ export function CompactInbox({ tickets, activa, onSelect }: Props) {
                     <span className="text-black-25">·</span>
                     <span className="text-black-45">{estadoLabel}</span>
                   </div>
+                  {t.assigneeName && (
+                    <div className="mt-0.5 flex items-center gap-1 text-[9px] text-black-45">
+                      <User size={9} className="shrink-0" />
+                      <span className="truncate">Responsable: {t.assigneeName}</span>
+                    </div>
+                  )}
                 </div>
               </button>
             );
