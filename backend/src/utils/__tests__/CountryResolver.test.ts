@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import {
   resolveCountryFromPhone,
   resolveCountryFromDomain,
@@ -256,7 +256,7 @@ describe("countrySource coverage", () => {
 describe("normalizeCountryName", () => {
   const rd = CANONICAL_RD;
 
-  const cases: [string | null, string | null, string?][] = [
+  const cases: [string | null | undefined, string | null, string?][] = [
     // 13 variantes de RD → todas a REPUBLICA DOMINICANA
     ["Dominican Republic", rd],
     ["DOMINICAN REPUBLIC", rd],

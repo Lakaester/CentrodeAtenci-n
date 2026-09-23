@@ -4,7 +4,7 @@ const pdfMake = require("pdfmake/build/pdfmake");
 const pdfFonts = require("pdfmake/build/vfs_fonts");
 import * as fs from "fs";
 import * as path from "path";
-import type { TDocumentDefinitions, Content, TableCell, Column } from "pdfmake/interfaces.js";
+import type { TDocumentDefinitions, Content, TableCell, Column, DynamicContent } from "pdfmake/interfaces.js";
 import type { AgendaRow } from "../repositories/agendas.repository";
 
 // ── Register fonts via VFS ──
@@ -514,7 +514,7 @@ export const actaPdfService = {
       },
 
       // Footer on all pages
-      footer: buildFooter(agenda, actaNumero, fechaCorta),
+      footer: buildFooter(agenda, actaNumero, fechaCorta) as DynamicContent,
 
       content: contentSections,
 

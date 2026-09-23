@@ -12,7 +12,7 @@ export class OperationsService {
     ]);
 
     const kpis: OperationsKPI = {
-      mttr: null, mtd: null, sla: 94.5,
+      mttr: null, mttd: null, sla: 94.5,
       casosAbiertos: casesData.byStatus?.abierto ?? casesData.byStatus?.nuevo ?? 0,
       casosCriticos: 0,
       providersDisponibles: healthData.healthy,

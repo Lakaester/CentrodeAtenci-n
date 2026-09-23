@@ -15,6 +15,7 @@ export interface IntervencionRow {
   cliente_nombre: string | null;
   ruc: string | null;
   dominio: string;
+  caso_id: string | null;
   proveedor: string | null;
   facturas_pendientes: number | null;
   boletas_pendientes: number | null;

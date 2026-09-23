@@ -90,14 +90,15 @@ export interface WorkspaceResponse {
   contextoOperativo: {
     tipoAtencion: {
       id: string; nombre: string; descripcion: string;
-      widgets: { id: string; tipo: string; titulo: string; descripcion: string; icono?: string; acciones: { id: string; label: string; icono: string; disponible: boolean }[]; orden: number; seccion: string; datosDisponibles: boolean; mensajeNoDisponible?: string }[];
+      widgets: { id: string; tipo: string; titulo: string; descripcion: string; icono?: string; acciones?: { id: string; label: string; icono: string; disponible: boolean }[]; orden: number; seccion: string; datosDisponibles: boolean; mensajeNoDisponible?: string }[];
       herramientas: string[];
-      guia: { objetivo: string; pasos: string[]; buenasPracticas: string[] } | null;
+      guia?: { objetivo: string; pasos: string[]; buenasPracticas: string[] } | null;
     } | null;
-    widgets: { id: string; tipo: string; titulo: string; descripcion: string; icono?: string; acciones: { id: string; label: string; icono: string; disponible: boolean }[]; orden: number; seccion: string; datosDisponibles: boolean; mensajeNoDisponible?: string }[];
+    widgets: { id: string; tipo: string; titulo: string; descripcion: string; icono?: string; acciones?: { id: string; label: string; icono: string; disponible: boolean }[]; orden: number; seccion: string; datosDisponibles: boolean; mensajeNoDisponible?: string }[];
     herramientas: string[];
-    guia: { objetivo: string; pasos: string[]; buenasPracticas: string[] } | null;
+    guia?: { objetivo: string; pasos: string[]; buenasPracticas: string[] } | null;
   };
+  actividades: { fecha: string; tipo?: string; detalle?: string; usuario?: string }[];
 }
 
 interface HistorialRow {
@@ -300,6 +301,7 @@ export class TicketWorkspaceAssembler {
 
   private async obtenerHistorial(dominio: string, excludeId: string): Promise<HistorialRow[]> {
     if (!dominio) return [];
+    const domNorm = normalizeDomain(dominio);
     return prisma.$queryRaw<HistorialRow[]>`
       SELECT ctid::text, fecha, canal, categoria, subcategoria, asesor, estado_homologado
       FROM public.v_unificado_norm
@@ -314,6 +316,7 @@ export class TicketWorkspaceAssembler {
 
   private async obtenerCategoriasFrecuentes(dominio: string): Promise<string[]> {
     if (!dominio) return [];
+    const domNorm = normalizeDomain(dominio);
     const rows = await prisma.$queryRaw<{ categoria: string; total: number }[]>`
       SELECT COALESCE(NULLIF(TRIM(categoria), ''), 'Sin categoría') AS categoria, COUNT(*)::int AS total
       FROM public.v_unificado_norm
@@ -352,6 +355,7 @@ export class TicketWorkspaceAssembler {
 
   private async obtenerAsesorFrecuente(dominio: string): Promise<string | null> {
     if (!dominio) return null;
+    const domNorm = normalizeDomain(dominio);
     const rows = await prisma.$queryRaw<{ asesor: string; total: number }[]>`
       SELECT COALESCE(NULLIF(TRIM(asesor), ''), 'Sin asesor') AS asesor, COUNT(*)::int AS total
       FROM public.v_unificado_norm

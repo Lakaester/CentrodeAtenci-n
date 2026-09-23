@@ -41,7 +41,7 @@ export const facturacionCasosService = {
     const caso = await facturacionCasosRepository.crearOConsultarPorDominio(dominio, datos);
     // Si el caso no existía, se acaba de crear (PENDIENTE): auditar.
     const existe = await facturacionCasosRepository.porId(caso.id);
-    if (existe?.created_at.getTime() >= Date.now() - 2000) {
+    if ((existe?.created_at?.getTime() ?? 0) >= Date.now() - 2000) {
       await facturacionCasosRepository.registrarAuditoria({
         entidad: "caso", entidadId: caso.id, accion: "CASO_CREADO",
         asesor: usuario, detalle: `Caso creado para dominio ${caso.dominio} (PENDIENTE)`,

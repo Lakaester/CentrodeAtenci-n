@@ -1,4 +1,5 @@
-import type { AtencionData, DiagnosticoData } from "../atencion/Atencion";
+import type { AtencionData } from "../atencion/Atencion";
+import type { DiagnosticoData } from "../atencion/Diagnostico";
 import type { Cliente } from "../clientes/types";
 import type { Conversacion } from "../conversacion/types";
 import type { EventoTimeline } from "../timeline/types";

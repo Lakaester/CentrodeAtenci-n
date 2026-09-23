@@ -127,7 +127,7 @@ export const facturacionController = {
   async pausar(req: Request, res: Response, next: NextFunction) {
     try {
       const parsed = pausarSchema.safeParse(req.body);
-      const data = await facturacionService.pausar(req.params.id, asesorDe(req), parsed.success ? parsed.data.motivo : null);
+      const data = await facturacionService.pausar(req.params.id, asesorDe(req), parsed.success ? (parsed.data.motivo ?? null) : null);
       res.json({ ok: true, data });
     } catch (err) {
       res.status(toHttp(err)).json({ ok: false, error: err instanceof Error ? err.message : "Error" });

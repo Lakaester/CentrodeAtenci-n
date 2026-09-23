@@ -1,14 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
-import { Plus, CalendarClock, Clock, CheckCircle2, XCircle, X, ChevronLeft, ChevronRight, PlayCircle, Download, Timer, ExternalLink, RefreshCw, FileText, Trash2, Save, Video } from "lucide-react";
+import { Plus, CalendarClock, Clock, CheckCircle2, XCircle, X, ChevronLeft, ChevronRight, PlayCircle, Download, Timer, ExternalLink, RefreshCw, FileText, Save, Video } from "lucide-react";
 import {
   useAgendaLista, useAgendaDetalle, useAgendaKpis, useAgendaCrear, useAgendaActualizar,
   useAgendaActualizarEstado, useApoyoAsesores, useAgendaExportar,
   useAgendaRegistrarInicioReal, useAgendaRegistrarFinReal,
-  useAgendaSetResultado, useAgendaGuardarActa,
+  useAgendaSetResultado,
   useAgendaSincronizarCalendar, useAgendaReintentarSyncCalendar,
   useGoogleCalendarStatus, useGoogleCalendarConnect, useGoogleCalendarDisconnect,
   useGoogleCalendarInfo, useVerificarDisponibilidad,
-  type Agenda, type CrearAgendaInput, type ActaContenido, type ActaParticipante, type ActaAcuerdo,
+  type Agenda, type CrearAgendaInput,
 } from "@/modules/gestion";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Badge } from "@/components/ui/Badge";
@@ -593,8 +593,8 @@ function DetalleAgenda({ agenda: agendaInitial, onCerrar, onEditar, onVerActa }:
             </div>
             {editandoGrabacion ? (
               <div className="space-y-2">
+                <label className="mb-0.5 block text-[10px] font-medium text-black-45">URL de grabación</label>
                 <Input
-                  label="URL de grabación"
                   value={grabacionInput}
                   onChange={(e) => setGrabacionInput(e.target.value)}
                   placeholder="https://..."

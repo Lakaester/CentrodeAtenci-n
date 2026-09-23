@@ -1,4 +1,4 @@
-/** @deprecated Este módulo ha sido reemplazado por modules/zendesk-test/. Se eliminará en M2. */
+/** @deprecated Este mï¿½dulo ha sido reemplazado por modules/zendesk-test/. Se eliminarï¿½ en M2. */
 /**
  * ZendeskMapper â€” Anti Corruption Layer.
  * Traduce modelos internos de Zendesk a DTOs de frontera de COPE.
@@ -22,7 +22,7 @@ export class ZendeskMapper {
       clienteId: usuario ? String(usuario.id) : undefined,
       clienteNombre: usuario?.name ?? "Usuario Zendesk",
       clienteEmail: usuario?.email,
-      clienteTelefono: usuario?.phone,
+      clienteTelefono: usuario?.phone ?? undefined,
       pais: usuario?.organization_id ? `Org #${usuario.organization_id}` : undefined,
       dominio: undefined,
       categoria: catField?.value as string | undefined,
@@ -49,7 +49,7 @@ export class ZendeskMapper {
       id: String(usuario.id),
       nombre: usuario.name,
       email: usuario.email,
-      telefono: usuario.phone,
+      telefono: usuario.phone ?? undefined,
     };
   }
 

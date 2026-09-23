@@ -1,5 +1,5 @@
 import { RuleRegistry } from "../registry/RuleRegistry";
-import type { IRuleEngine } from "../interfaces/IRule";
+import type { IRule, IRuleEngine } from "../interfaces/IRule";
 import type { DecisionResult, DecisionFinding, DecisionRisk, DecisionRecommendation } from "../models";
 
 export class RuleEngine implements IRuleEngine {

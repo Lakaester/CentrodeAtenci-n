@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { Plus, Trash2, X, CheckCircle2, Clock, FileText, Save, Download } from "lucide-react";
 import {
   useAgendaGuardarActa,
@@ -14,6 +14,36 @@ const ESTADO_BADGE: Record<string, "warning" | "primary" | "success" | "danger">
 };
 const ACTA_TIPOS_CASO = ["Consulta", "Soporte técnico", "Capacitación", "Incidente", "Reclamo", "Queja", "Solicitud", "Migración", "Otro"];
 const ACTA_RESULTADOS = ["Realizada", "Realizada con pendientes", "Requiere seguimiento", "No realizada"];
+
+/** Wrappers locales que añaden label/help a los controles base (los ui/* no soportan label). */
+function CampoTexto({ label, help, ...rest }: { label?: string; help?: string } & ComponentProps<typeof Input>) {
+  return (
+    <div className="w-full">
+      {label ? <label className="mb-0.5 block text-[10px] font-medium text-black-45">{label}</label> : null}
+      <Input {...rest} />
+      {help ? <p className="mt-0.5 text-[9px] text-black-45">{help}</p> : null}
+    </div>
+  );
+}
+
+function CampoSelect({ label, ...rest }: { label?: string } & ComponentProps<typeof Select>) {
+  return (
+    <div className="w-full">
+      {label ? <label className="mb-0.5 block text-[10px] font-medium text-black-45">{label}</label> : null}
+      <Select {...rest} />
+    </div>
+  );
+}
+
+function CampoArea({ label, help, ...rest }: { label?: string; help?: string } & ComponentProps<typeof Textarea>) {
+  return (
+    <div className="w-full">
+      {label ? <label className="mb-0.5 block text-[10px] font-medium text-black-45">{label}</label> : null}
+      <Textarea {...rest} />
+      {help ? <p className="mt-0.5 text-[9px] text-black-45">{help}</p> : null}
+    </div>
+  );
+}
 
 function fmtHora(v: string | null | undefined): string {
   if (!v) return "—";
@@ -148,10 +178,10 @@ export function ActaForm({ agenda, onCerrar }: { agenda: Agenda; onCerrar: () =>
             <div className="space-y-2">
               {contenido.participantes.map((p, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_100px_28px] gap-2 items-end">
-                  <Input label="Nombre" value={p.nombre} onChange={(e) => actualizarParticipante(idx, "nombre", e.target.value)} disabled={noFinalizado} />
-                  <Input label="Empresa / Área" value={p.empresa} onChange={(e) => actualizarParticipante(idx, "empresa", e.target.value)} disabled={noFinalizado} />
-                  <Input label="Cargo / Rol" value={p.cargo} onChange={(e) => actualizarParticipante(idx, "cargo", e.target.value)} disabled={noFinalizado} />
-                  <Input label="Participación" value={p.participacion} onChange={(e) => actualizarParticipante(idx, "participacion", e.target.value)} disabled={noFinalizado} />
+                  <CampoTexto label="Nombre" value={p.nombre} onChange={(e) => actualizarParticipante(idx, "nombre", e.target.value)} disabled={noFinalizado} />
+                  <CampoTexto label="Empresa / Área" value={p.empresa} onChange={(e) => actualizarParticipante(idx, "empresa", e.target.value)} disabled={noFinalizado} />
+                  <CampoTexto label="Cargo / Rol" value={p.cargo} onChange={(e) => actualizarParticipante(idx, "cargo", e.target.value)} disabled={noFinalizado} />
+                  <CampoTexto label="Participación" value={p.participacion} onChange={(e) => actualizarParticipante(idx, "participacion", e.target.value)} disabled={noFinalizado} />
                   {!noFinalizado && (
                     <button onClick={() => eliminarParticipante(idx)} className="text-danger hover:text-danger-85 p-1 mb-0.5"><Trash2 size={14} /></button>
                   )}
@@ -166,28 +196,28 @@ export function ActaForm({ agenda, onCerrar }: { agenda: Agenda; onCerrar: () =>
           {/* 2. MOTIVO DE LA ATENCIÓN */}
           <Section icon={<Clock size={12} />} title="Motivo de la atención">
             <div className="space-y-2">
-              <Select label="Tipo de caso" value={contenido.tipo_caso} onChange={(e) => set("tipo_caso", e.target.value)} disabled={noFinalizado}
+              <CampoSelect label="Tipo de caso" value={contenido.tipo_caso} onChange={(e) => set("tipo_caso", e.target.value)} disabled={noFinalizado}
                 options={ACTA_TIPOS_CASO.map((t) => ({ value: t, label: t }))} placeholder="Seleccionar..." />
               {agenda.descripcion && (
                 <div className="text-[10px] text-black-45 bg-light rounded p-2">
                   <strong>Descripción de Agenda:</strong> {agenda.descripcion}
                 </div>
               )}
-              <Textarea label="Descripción del motivo de la atención" value={contenido.motivo} onChange={(e) => set("motivo", e.target.value)} rows={3} disabled={noFinalizado} />
+              <CampoArea label="Descripción del motivo de la atención" value={contenido.motivo} onChange={(e) => set("motivo", e.target.value)} rows={3} disabled={noFinalizado} />
             </div>
           </Section>
 
           {/* 3. DESARROLLO */}
           <Section icon={<FileText size={12} />} title="Desarrollo de la atención">
-            <Textarea label="Temas tratados y hechos relevantes" help="Describa objetivamente los principales temas tratados durante la atención." value={contenido.desarrollo} onChange={(e) => set("desarrollo", e.target.value)} rows={4} disabled={noFinalizado} />
+            <CampoArea label="Temas tratados y hechos relevantes" help="Describa objetivamente los principales temas tratados durante la atención." value={contenido.desarrollo} onChange={(e) => set("desarrollo", e.target.value)} rows={4} disabled={noFinalizado} />
           </Section>
 
           {/* 4. DIAGNÓSTICO Y GESTIÓN */}
           <Section icon={<CheckCircle2 size={12} />} title="Diagnóstico y gestión realizada">
             <div className="space-y-2">
-              <Textarea label="Diagnóstico / análisis" value={contenido.diagnostico} onChange={(e) => set("diagnostico", e.target.value)} rows={3} disabled={noFinalizado} />
-              <Textarea label="Gestión realizada" value={contenido.gestion} onChange={(e) => set("gestion", e.target.value)} rows={3} disabled={noFinalizado} />
-              <Textarea label="Solución brindada" value={contenido.solucion} onChange={(e) => set("solucion", e.target.value)} rows={3} disabled={noFinalizado} />
+              <CampoArea label="Diagnóstico / análisis" value={contenido.diagnostico} onChange={(e) => set("diagnostico", e.target.value)} rows={3} disabled={noFinalizado} />
+              <CampoArea label="Gestión realizada" value={contenido.gestion} onChange={(e) => set("gestion", e.target.value)} rows={3} disabled={noFinalizado} />
+              <CampoArea label="Solución brindada" value={contenido.solucion} onChange={(e) => set("solucion", e.target.value)} rows={3} disabled={noFinalizado} />
             </div>
           </Section>
 
@@ -238,7 +268,7 @@ export function ActaForm({ agenda, onCerrar }: { agenda: Agenda; onCerrar: () =>
           {/* 6. RESULTADO Y SEGUIMIENTO */}
           <Section icon={<CheckCircle2 size={12} />} title="Resultado y seguimiento">
             <div className="space-y-2">
-              <Select label="Resultado de la atención" value={contenido.resultado_acta} onChange={(e) => set("resultado_acta", e.target.value)} disabled={noFinalizado}
+              <CampoSelect label="Resultado de la atención" value={contenido.resultado_acta} onChange={(e) => set("resultado_acta", e.target.value)} disabled={noFinalizado}
                 options={ACTA_RESULTADOS.map((r) => ({ value: r, label: r }))} placeholder="Seleccionar..." />
               <div className="flex items-center gap-3">
                 <label className="text-[10px] font-medium text-black-45">¿Requiere seguimiento?</label>
@@ -247,8 +277,8 @@ export function ActaForm({ agenda, onCerrar }: { agenda: Agenda; onCerrar: () =>
               </div>
               {contenido.requiere_seguimiento && (
                 <div className="space-y-2">
-                  <Input label="Fecha estimada de seguimiento" type="date" value={contenido.seguimiento_fecha} onChange={(e) => set("seguimiento_fecha", e.target.value)} disabled={noFinalizado} />
-                  <Textarea label="Detalle del seguimiento" value={contenido.seguimiento_detalle} onChange={(e) => set("seguimiento_detalle", e.target.value)} rows={3} disabled={noFinalizado} />
+                  <CampoTexto label="Fecha estimada de seguimiento" type="date" value={contenido.seguimiento_fecha} onChange={(e) => set("seguimiento_fecha", e.target.value)} disabled={noFinalizado} />
+                  <CampoArea label="Detalle del seguimiento" value={contenido.seguimiento_detalle} onChange={(e) => set("seguimiento_detalle", e.target.value)} rows={3} disabled={noFinalizado} />
                 </div>
               )}
             </div>
@@ -263,7 +293,7 @@ export function ActaForm({ agenda, onCerrar }: { agenda: Agenda; onCerrar: () =>
 
           {/* 8. OBSERVACIONES FINALES */}
           <Section icon={<FileText size={12} />} title="Observaciones finales">
-            <Textarea label="Observaciones finales" value={contenido.observaciones} onChange={(e) => set("observaciones", e.target.value)} rows={4} disabled={noFinalizado} />
+            <CampoArea label="Observaciones finales" value={contenido.observaciones} onChange={(e) => set("observaciones", e.target.value)} rows={4} disabled={noFinalizado} />
           </Section>
         </div>
 

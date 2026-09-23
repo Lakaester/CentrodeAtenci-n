@@ -18,7 +18,7 @@ export interface DecisionRisk {
 export interface DecisionRecommendation {
   findingId: string;
   accion: string;
-  prioridad: "inmediata" | programada | "informativa";
+  prioridad: "inmediata" | "programada" | "informativa";
 }
 
 export interface DecisionResult {

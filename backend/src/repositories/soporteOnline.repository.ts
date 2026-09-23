@@ -111,7 +111,7 @@ export const soporteOnlineRepository = {
         prom_solucion_min: conSolucion.length ? Math.round(conSolucion.reduce((a, f) => a + (f.tiempo_solucion_minutos ?? 0), 0) / conSolucion.length) : null,
         categorias: agrupar(filasD, (f) => f.tipoproblema),
         estados: agrupar(filasD, (f) => f.estado),
-        porLocal: agrupar(filasD, (f) => f.local_nombre),
+        porLocal: agrupar(filasD, (f) => f.local_nombre).map((g) => ({ local: g.nombre, cantidad: g.cantidad })),
       };
       // últimas incidencias ordenadas por fecha desc
       ultimas[d] = [...filasD].sort((a, b) => b.ticket_timestamp.getTime() - a.ticket_timestamp.getTime()).slice(0, 20);

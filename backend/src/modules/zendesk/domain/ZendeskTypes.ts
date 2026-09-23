@@ -1,4 +1,4 @@
-/** @deprecated Este módulo ha sido reemplazado por modules/zendesk-test/. Se eliminará en M2. */
+/** @deprecated Este mï¿½dulo ha sido reemplazado por modules/zendesk-test/. Se eliminarï¿½ en M2. */
 export type ZendeskTicketStatus = "new" | "open" | "pending" | "solved" | "closed";
 export type ZendeskPriority = "low" | "normal" | "high" | "urgent";
 export type ZendeskTicketType = "problem" | "incident" | "question" | "task";
@@ -17,8 +17,14 @@ export interface ZendeskTicket {
   requester_id: number;
   assignee_id: number | null;
   group_id: number;
-  tags: string[];
+tags: string[];
   custom_fields: { id: number; value: string }[];
+  organization_id?: number | null;
+  via?: {
+    channel?: string;
+    source?: { rel?: string | null; from?: { ticket_id?: number | null; subject?: string } };
+  } | null;
+  followup_ids?: number[];
 }
 
 export interface ZendeskUser {

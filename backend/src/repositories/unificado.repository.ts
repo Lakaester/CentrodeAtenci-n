@@ -5,7 +5,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import type { DashboardFilters, PaisRow, PaisDominioFila, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse } from "../types";
+import type { DashboardFilters, PaisRow, PaisDominioFila, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse, ClientesV2Response } from "../types";
 import { construirWhere, rangoAnterior, comparar, KpiComparado } from "../utils/filtros";
 
 /** Expresiones SQL de normalización (homologación de nombres en toda la app). */
@@ -706,7 +706,7 @@ async function desglose(where: Prisma.Sql, col: Prisma.Sql): Promise<Desglose[]>
 }
 
 /** Igual que desglose pero acotado a los N más frecuentes (para los "tops"). */
-async function desgloseTop(where: Prisma.Sql, col: Prisma.Sql, limite: number): Promise<Desglose[]> {
+async function desgloseTop(where: Prisma.Sql, col: Prisma.Sql, limite: number = 10): Promise<Desglose[]> {
   return (await prisma.$queryRaw(Prisma.sql`
     SELECT COALESCE(${col}, 'Sin dato') AS etiqueta, COUNT(*)::int AS total
     FROM public.v_unificado_norm
@@ -822,11 +822,13 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
       if (i === j || consumido.has(j)) continue;
       if (raw[i].asesor.includes(raw[j].asesor)) {
         total += raw[j].total;
-        if (raw[j].prom_primera !== null) {
-          promPri = promPri !== null ? (promPri + raw[j].prom_primera) / 2 : raw[j].prom_primera;
+        const p = raw[j].prom_primera;
+        if (p !== null) {
+          promPri = promPri !== null ? (promPri + p) / 2 : p;
         }
-        if (raw[j].prom_resolucion !== null) {
-          promRes = promRes !== null ? (promRes + raw[j].prom_resolucion) / 2 : raw[j].prom_resolucion;
+        const r = raw[j].prom_resolucion;
+        if (r !== null) {
+          promRes = promRes !== null ? (promRes + r) / 2 : r;
         }
         prCon += raw[j].pr_con_dato;
         prDentro += raw[j].pr_dentro;
@@ -3724,49 +3726,49 @@ export const unificadoRepository = {
     let tiemposRaw: { tipo: string; respuesta_prom: number | null; resolucion_prom: number | null }[] = [];
     let totalClientesRaw: { total: number }[] = [];
 
-    kpisRaw = await prisma.$queryRaw`SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>;
+    kpisRaw = await prisma.$queryRaw`SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual}`;
     evolRaw = await prisma.$queryRaw`
       SELECT TO_CHAR(fecha, 'YYYY-MM') AS periodo,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY TO_CHAR(fecha, 'YYYY-MM') ORDER BY periodo
-    ` as Promise<{ periodo: string; quejas: number; devoluciones: number }[]>;
+    `;
     canalRaw = await prisma.$queryRaw`
       SELECT ${G} AS canal,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY canal ORDER BY canal
-    ` as Promise<{ canal: string; quejas: number; devoluciones: number }[]>;
+    `;
     paisRaw = await prisma.$queryRaw`
       SELECT ${N_PAIS} AS pais,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY ${N_PAIS} ORDER BY COUNT(*) DESC
-    ` as Promise<{ pais: string; quejas: number; devoluciones: number }[]>;
+    `;
     asesorRaw = await prisma.$queryRaw`
       SELECT ${N_ASESOR_COALESCE} AS asesor,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY ${N_ASESOR_COALESCE} ORDER BY COUNT(*) DESC
-    ` as Promise<{ asesor: string; quejas: number; devoluciones: number }[]>;
+    `;
     clienteRaw = await prisma.$queryRaw`
       SELECT ${CL} AS cliente,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY ${CL} ORDER BY COUNT(*) DESC
-    ` as Promise<{ cliente: string; quejas: number; devoluciones: number }[]>;
+    `;
     diaRaw = await prisma.$queryRaw`
       SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
              COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
       FROM public.v_unificado_norm ${w}
       GROUP BY fecha::date ORDER BY fecha
-    ` as Promise<{ fecha: string; quejas: number; devoluciones: number }[]>;
+    `;
     diaSemanaRaw = await prisma.$queryRaw`
       SELECT TRIM(TO_CHAR(fecha, 'Day')) AS dia,
              EXTRACT(DOW FROM fecha)::int AS orden,
@@ -3775,7 +3777,7 @@ export const unificadoRepository = {
       FROM public.v_unificado_norm ${w}
       GROUP BY TRIM(TO_CHAR(fecha, 'Day')), EXTRACT(DOW FROM fecha)
       ORDER BY orden
-    ` as Promise<{ dia: string; orden: number; quejas: number; devoluciones: number }[]>;
+    `;
     horaRaw = await prisma.$queryRaw`
       SELECT SPLIT_PART(hora::text, ':', 1)::int AS hora,
              COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
@@ -3783,7 +3785,7 @@ export const unificadoRepository = {
       FROM public.v_unificado_norm ${w}
       GROUP BY SPLIT_PART(hora::text, ':', 1)::int
       ORDER BY hora
-    ` as Promise<{ hora: number; quejas: number; devoluciones: number }[]>;
+    `;
     tiemposRaw = await prisma.$queryRaw`
       SELECT 'QUEJA' AS tipo,
              ROUND(AVG(primera_respuesta_min_norm) FILTER (WHERE ${NORM} = 'queja')::numeric, 1)::float8 AS respuesta_prom,
@@ -3794,12 +3796,12 @@ export const unificadoRepository = {
              ROUND(AVG(primera_respuesta_min_norm) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::numeric, 1)::float8 AS respuesta_prom,
              ROUND(AVG(resolucion_min_norm) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::numeric, 1)::float8 AS resolucion_prom
       FROM public.v_unificado_norm ${w}
-    ` as Promise<{ tipo: string; respuesta_prom: number | null; resolucion_prom: number | null }[]>;
+    `;
     totalClientesRaw = await prisma.$queryRaw`
       SELECT COUNT(DISTINCT contacto)::int AS total
       FROM public.v_unificado_norm ${w}
         AND contacto IS NOT NULL AND TRIM(contacto) <> ''
-    ` as Promise<{ total: number }[]>;
+    `;
 
     const totalGeneral = kpisRaw[0]?.total ?? 0;
     const totalQuejas = evolRaw.reduce((s, r) => s + r.quejas, 0);

@@ -20,7 +20,7 @@ export class CaseManager {
       closedAt: null,
     };
     this.registry.register(c);
-    this.history.add(c.id, "created", data.assignedTo ?? "system", "Caso creado", null, "nuevo");
+    this.history.add(c.id, "created", data.assignedTo ?? "system", "Caso creado", undefined, "nuevo");
     return c;
   }
 

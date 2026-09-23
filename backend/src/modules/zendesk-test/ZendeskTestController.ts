@@ -53,7 +53,7 @@ export const zendeskTestController = {
     } catch (err) { next(err); }
   },
 
-  async atencionCompleta(req: Request, res: Response, next: NextFunction) {
+  async atencionCompletaViewModel(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
       if (isNaN(id)) return res.status(400).json({ ok: false, error: "ID inválido" });

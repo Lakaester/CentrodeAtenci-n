@@ -55,6 +55,17 @@ const zdCommentSchema = z.object({
   })).optional().default([]),
 });
 
+/**
+ * Frontera de validación de tickets. El schema es deliberadamente permisivo
+ * (los datos reales de Zendesk incluyen campos opcionales/nulos: via, followup_ids,
+ * organization_id, group_id, priority, type); la interfaz ZendeskTicket es el
+ * contrato estático de salida de este cliente. El cast aquí es el único punto
+ * donde el runtime del schema se reduce al contrato tipado.
+ */
+function toTicket(raw: unknown): ZendeskTicket {
+  return zdTicketSchema.parse(raw) as ZendeskTicket;
+}
+
 export class ZendeskClient {
   private baseUrl = "";
   private auth = "";
@@ -95,7 +106,7 @@ export class ZendeskClient {
     if (params?.assigneeId) query.set("assignee_id", params.assigneeId);
     if (params?.page) query.set("page", String(params.page));
     const data = await this.get<any>(`/tickets.json?${query}`);
-    const tickets = (data.tickets ?? []).map((t: any) => zdTicketSchema.parse(t));
+    const tickets = (data.tickets ?? []).map((t: any) => toTicket(t));
     return { tickets, total: data.count ?? tickets.length };
   }
 
@@ -104,7 +115,7 @@ export class ZendeskClient {
     const query = new URLSearchParams({ query: query_str, sort: "updated_at", order: "desc" });
     if (limit) query.set("per_page", String(Math.min(limit, 100)));
     const data = await this.get<any>(`/search.json?${query}`);
-    const tickets = (data.results ?? []).map((t: any) => zdTicketSchema.parse(t));
+    const tickets = (data.results ?? []).map((t: any) => toTicket(t));
     return { tickets, total: data.count ?? tickets.length };
   }
 
@@ -112,7 +123,7 @@ export class ZendeskClient {
     this.verificarConfig();
     try {
       const data = await this.get<any>(`/tickets/${id}.json`);
-      return zdTicketSchema.parse(data.ticket);
+      return toTicket(data.ticket);
     } catch {
       return null;
     }
@@ -189,7 +200,7 @@ export class ZendeskClient {
     const query = new URLSearchParams();
     if (page) query.set("page", String(page));
     const ticketsData = await this.get<any>(`/views/${viewId}/tickets.json?${query}`);
-    const tickets = (ticketsData.tickets ?? []).map((t: any) => zdTicketSchema.parse(t));
+    const tickets = (ticketsData.tickets ?? []).map((t: any) => toTicket(t));
     return { tickets, total: ticketsData.count ?? tickets.length, viewTitle: `View #${viewId}` };
   }
 
@@ -197,7 +208,7 @@ export class ZendeskClient {
     this.verificarConfig();
     const query = new URLSearchParams({ requester_id: String(requesterId) });
     const data = await this.get<any>(`/tickets.json?${query}`);
-    const tickets = (data.tickets ?? []).map((t: any) => zdTicketSchema.parse(t));
+    const tickets = (data.tickets ?? []).map((t: any) => toTicket(t));
     return { tickets, total: data.count ?? tickets.length };
   }
 
@@ -217,7 +228,7 @@ export class ZendeskClient {
       console.error(`[ZDAPI] Schema validation error in agregarComentario:`, parsed.error.issues);
       return null;
     }
-    return parsed.data;
+    return parsed.data as ZendeskTicket;
   }
 
   /** Upload a file to Zendesk and return the upload token */
@@ -231,7 +242,7 @@ export class ZendeskClient {
           Authorization: `Basic ${this.auth}`,
           "Content-Type": "application/binary",
         },
-        body: fileBuffer,
+        body: new Uint8Array(fileBuffer),
       });
       if (!response.ok) {
         console.error(`[ZDAPI] Upload error ${response.status}: ${await response.text()}`);
@@ -272,7 +283,7 @@ export class ZendeskClient {
         console.error(`[ZDAPI] Schema validation error in responderYResolver:`, parsed.error.issues);
         return null;
       }
-      return parsed.data;
+      return parsed.data as ZendeskTicket;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[ZDAPI] Error in responderYResolver #${ticketId}: ${msg}`);
@@ -286,7 +297,7 @@ export class ZendeskClient {
       const data = await this.put<any>(`/tickets/${ticketId}.json`, {
         ticket: { assignee_id: assigneeId },
       });
-      return zdTicketSchema.parse(data.ticket);
+      return toTicket(data.ticket);
     } catch { return null; }
   }
 
@@ -300,7 +311,7 @@ export class ZendeskClient {
       console.error(`[ZDAPI] Schema validation error in cambiarEstado:`, parsed.error.issues);
       return null;
     }
-    return parsed.data;
+    return parsed.data as ZendeskTicket;
   }
 
   async actualizarCampos(ticketId: number, fields: { id: number; value: string }[]): Promise<ZendeskTicket | null> {
@@ -313,7 +324,7 @@ export class ZendeskClient {
       console.error(`[ZDAPI] Schema validation error in actualizarCampos:`, parsed.error.issues);
       return null;
     }
-    return parsed.data;
+    return parsed.data as ZendeskTicket;
   }
 
   async obtenerOrganizacion(id: number): Promise<{ id: number; name: string } | null> {

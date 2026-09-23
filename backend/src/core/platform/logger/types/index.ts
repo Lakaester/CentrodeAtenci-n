@@ -3,6 +3,7 @@ export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG";
 export interface LogEntry {
   timestamp: string;
   requestId: string;
+  correlationId?: string;
   level: LogLevel;
   usuario?: string;
   dominio?: string;

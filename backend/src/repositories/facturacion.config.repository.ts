@@ -52,7 +52,7 @@ async function actualizar(tabla: string, id: string, patch: { nombre?: string; a
   if (sets.length === 0) return null;
   sets.push("updated_at = now()");
   values.push(id);
-  const rows = await prisma.$queryRawUnsafe(
+  const rows = await prisma.$queryRawUnsafe<ConfigRow[]>(
     `UPDATE ${tabla} SET ${sets.join(", ")} WHERE id = $${values.length} RETURNING *`,
     ...values,
   );

@@ -34,7 +34,7 @@ export class AtencionViewModelService {
         ticketOriginalStatus: ticket.status,
         asunto: ticket.subject,
         descripcion: ticket.description,
-        prioridad: ticket.priority,
+        prioridad: ticket.priority ?? "",
         tipo: ticket.type,
         createdAt: ticket.created_at,
         updatedAt: ticket.updated_at,

@@ -82,6 +82,6 @@ export class TimelineBuilder {
       postman: "postman_abierto",
     };
     const tipo = mapa[herramienta] ?? "dominio_abierto";
-    return TimelineBuilder.crearEvento({ casoId, tipo, usuario, detalle: herramienta });
+    return TimelineBuilder.crearEvento({ atencionId, tipo, usuario, detalle: herramienta });
   }
 }
