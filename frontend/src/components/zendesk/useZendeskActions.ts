@@ -10,7 +10,7 @@ export function useZendeskActions(ticketId: string | null) {
     setLoading(accion);
     setResult(null);
     try {
-      const res = await api.post(`/api/zendesk/tickets/${ticketId}/${accion}`, body);
+      const res = await api.post(`/zendesk/tickets/${ticketId}/${accion}`, body);
       setResult(res.data.ok ? "ok" : "error");
     } catch {
       setResult("error");

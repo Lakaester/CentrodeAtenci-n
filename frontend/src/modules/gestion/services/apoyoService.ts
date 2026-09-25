@@ -1,18 +1,18 @@
 import type { Apoyo, ApoyoKpis, CrearApoyoInput, ActualizarApoyoInput, AsesorInfo } from "../types";
+import { api as http } from "@/lib/api";
 
 const BASE = "/api/gestion/apoyos";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    ...init,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+  const method = (init?.method ?? "GET") as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  const data = init?.body ? JSON.parse(String(init.body)) : undefined;
+  try {
+    const res = await http.request({ url: `${BASE}${path}`, method, data });
+    return res.data as T;
+  } catch (err: any) {
+    const msg = err?.response?.data?.error || (err?.response ? `HTTP ${err.response.status}` : err?.message || "Error de red");
+    throw new Error(msg);
   }
-  return res.json();
 }
 
 function qs(params: Record<string, string | number | undefined>): string {

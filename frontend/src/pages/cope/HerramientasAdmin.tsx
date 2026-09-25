@@ -38,7 +38,7 @@ export default function HerramientasAdmin() {
 
   const handleSave = async () => {
     try {
-      if (form.id) await api.put(`/api/herramientas/${form.id}`, form);
+      if (form.id) await api.put(`/herramientas/${form.id}`, form);
       else await api.post("/herramientas", form);
       await fetchItems();
       setEditando(false);
@@ -46,7 +46,7 @@ export default function HerramientasAdmin() {
   };
 
   const handleDelete = async (id: string) => {
-    await api.delete(`/api/herramientas/${id}`);
+    await api.delete(`/herramientas/${id}`);
     await fetchItems();
   };
 

@@ -53,7 +53,7 @@ export default function GuiasResolucion() {
   const handleSave = async () => {
     try {
       if (form.id) {
-        await api.put(`/api/guias/${form.id}`, form);
+        await api.put(`/guias/${form.id}`, form);
       } else {
         await api.post("/guias", form);
       }
@@ -63,12 +63,12 @@ export default function GuiasResolucion() {
   };
 
   const handleEstado = async (id: string, estado: string) => {
-    await api.put(`/api/guias/${id}`, { estado });
+    await api.put(`/guias/${id}`, { estado });
     await fetchGuias();
   };
 
   const handleDelete = async (id: string) => {
-    await api.delete(`/api/guias/${id}`);
+    await api.delete(`/guias/${id}`);
     await fetchGuias();
     if (selected?.id === id) { setSelected(null); setEditando(false); }
   };

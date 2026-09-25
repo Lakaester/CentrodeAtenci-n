@@ -176,7 +176,7 @@ export const facturacionService = {
 
   async sourceStatus(): Promise<FacturacionSourceStatus> {
     const res = await api.get("/control-facturacion/source/status");
-    return res.data;
+    return res.data.data;
   },
 
   // ── Casos operativos ──

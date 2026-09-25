@@ -85,9 +85,9 @@ export const qdService = {
     return res.data.data;
   },
 
-  async asociarInteraccion(casoId: string, ticketId: string): Promise<unknown> {
+  async asociarInteraccion(casoId: string, ticketId: string): Promise<{ data: unknown; mensaje?: string }> {
     const res = await api.post(`/quejas-devoluciones/casos/${casoId}/interacciones`, { ticketId });
-    return res.data.data;
+    return res.data as { data: unknown; mensaje?: string };
   },
 
   /** Asigna/actualiza manualmente el dominio de un caso. */
@@ -115,9 +115,9 @@ export const qdService = {
   },
 
   /** Vincula un ticket existente a un caso como contacto. */
-  async vincularTicket(casoId: string, ticketId: string, canal?: string | null): Promise<unknown> {
+  async vincularTicket(casoId: string, ticketId: string, canal?: string | null): Promise<{ data: unknown; mensaje?: string }> {
     const res = await api.post(`/quejas-devoluciones/casos/${casoId}/vincular-ticket`, { ticketId, canal });
-    return res.data.data;
+    return res.data as { data: unknown; mensaje?: string };
   },
 
   async estados(): Promise<QdCatalogoItem[]> {
