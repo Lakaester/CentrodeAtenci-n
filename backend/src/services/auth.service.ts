@@ -7,6 +7,21 @@ import { DomainError } from "../core/errors/types";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12h
 const COOKIE_NAME = "cope_session";
 
+/**
+ * Dummy bcrypt hash PRECOMPUTADO (bcryptjs, cost 12, igual que el hashing real).
+ * Se usa únicamente para usuarios inexistentes: garantiza que `bcrypt.compare`
+ * se ejecute siempre, sin revelar si el email existe (anti-enumeración por timing).
+ * Nunca se genera por request, no se expone, no se loguea.
+ */
+export const DUMMY_PASSWORD_HASH =
+  "$2b$12$0KH.gLXeADqqAgy3ktR1x.eCfI/iJCKrRJ1igUMnyEvv3GMaMW8tG";
+
+/** Log interno seguro de fallos de autenticación (solo categoría, nunca secretos). */
+function logAuthFailure(reason: string): void {
+  // eslint-disable-next-line no-console
+  console.warn(`[AUTH] login fallido: reason=${reason}`);
+}
+
 export interface AuthMe {
   id: string;
   nombre: string;
@@ -46,15 +61,27 @@ export const authService = {
   COOKIE_NAME,
 
   async login(email: string, password: string): Promise<{ token: string; user: AuthMe }> {
-    const usuario = await authRepository.findUserByEmail(email.trim().toLowerCase());
-    // Respuesta genérica: no revelar si el correo existe.
-    if (!usuario) throw new DomainError("Correo o contraseña incorrectos.", "INVALID_CREDENTIALS");
+    const emailNorm = email.trim().toLowerCase();
+    const usuario = await authRepository.findUserByEmail(emailNorm);
 
-    const ok = await verifyPassword(password, usuario.password_hash);
-    if (!ok) throw new DomainError("Correo o contraseña incorrectos.", "INVALID_CREDENTIALS");
+    // Anti-enumeración: bcrypt.compare SIEMPRE se ejecuta, con el hash real si el
+    // usuario existe o con el DUMMY_PASSWORD_HASH si no existe. Sin early return.
+    const hash = usuario?.password_hash ?? DUMMY_PASSWORD_HASH;
+    const ok = await verifyPassword(password, hash);
 
+    // Misma respuesta pública para los tres casos (usuario inexistente, password
+    // incorrecta, usuario deshabilitado). La causa solo se conserva internamente.
+    if (!ok) {
+      logAuthFailure(usuario ? "INVALID_PASSWORD" : "USER_NOT_FOUND");
+      throw new DomainError("Correo o contraseña incorrectos.", "INVALID_CREDENTIALS");
+    }
+    if (!usuario) {
+      logAuthFailure("USER_NOT_FOUND");
+      throw new DomainError("Correo o contraseña incorrectos.", "INVALID_CREDENTIALS");
+    }
     if (usuario.estado !== "activo") {
-      throw new DomainError("Tu usuario está desactivado. Contacta al administrador.", "USER_DISABLED");
+      logAuthFailure("USER_DISABLED");
+      throw new DomainError("Correo o contraseña incorrectos.", "INVALID_CREDENTIALS");
     }
 
     await authRepository.actualizarLastLogin(usuario.id);

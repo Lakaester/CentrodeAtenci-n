@@ -12,7 +12,6 @@ const loginSchema = z.object({
 function toHttp(err: unknown): number {
   if (err instanceof DomainError) {
     if (err.code === "INVALID_CREDENTIALS") return 401;
-    if (err.code === "USER_DISABLED") return 403;
     return 400;
   }
   return 500;
