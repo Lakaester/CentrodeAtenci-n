@@ -14,6 +14,7 @@ import {
 import { Atencion } from "../domain/atencion/Atencion";
 import { Hipotesis } from "../domain/atencion/Hipotesis";
 import { AtencionMapper } from "../mappers/AtencionMapper";
+import { AuthedRequest } from "../middlewares/auth.middleware";
 
 const repo = new InMemoryAtencionRepository();
 
@@ -83,6 +84,7 @@ export const atencionController = {
       const data = await repo.findById(req.params.id);
       if (!data) return res.status(404).json({ ok: false, error: "Atencion no encontrada" });
       const atencion = new Atencion(data);
+      const auth = (req as AuthedRequest).auth;
       const hipotesis = new Hipotesis({
         id: `hip_${Date.now()}`,
         titulo: parsed.data.titulo,
@@ -91,7 +93,8 @@ export const atencionController = {
         confianza: parsed.data.confianza,
         causas: parsed.data.causas,
         recomendaciones: parsed.data.recomendaciones,
-        autor: req.body.autor ?? "Sistema",
+        autor: auth?.nombre ?? "Sistema",
+        autorId: auth?.personabi_id ?? undefined,
         fecha: new Date().toISOString(),
       });
       atencion.agregarHipotesis(hipotesis);
