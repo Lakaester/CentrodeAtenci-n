@@ -8,6 +8,7 @@ import { notFound } from "./middlewares/notFound.middleware";
 import { MotorContexto } from "./domain/contexto/MotorContexto";
 import { initEvents } from "./core/events/bootstrap";
 import { securityHeaders, rateLimiter } from "./middlewares/security.middleware";
+import { validateOrigin } from "./middlewares/validateOrigin.middleware";
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
   // CORS: CORS_ORIGIN admite varios orígenes separados por coma (ej. localhost + IP local de la LAN).
   const origenesPermitidos = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
   app.use(cors({ origin: origenesPermitidos, credentials: true }));
+  app.use(validateOrigin);
   app.use(express.json({ limit: "50mb" }));
   app.disable("x-powered-by");
 
