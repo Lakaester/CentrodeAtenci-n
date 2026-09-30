@@ -5,6 +5,7 @@ import {
 } from "../repositories/agendas.repository";
 import { googleCalendarService } from "../integrations/google/googleCalendar.service";
 import { actaPdfService } from "./actaPdf.service";
+import { prisma } from "../repositories/prisma";
 import { DomainError } from "../core/errors/types";
 
 const ESTADOS_VALIDOS = ["PENDIENTE", "ACTIVA", "FINALIZADA", "CANCELADA"];
@@ -125,11 +126,22 @@ export const agendasService = {
     if (estado === "CANCELADA") {
       resultado = "CANCELADA";
     }
-    if (resultado) {
-      await agendasRepository.registrarTiempoReal(id, { resultado });
-    }
-    const updated = await agendasRepository.actualizarEstado(id, estado, calendarEventId);
-    // Si se cancela, intentar cancelar el evento de Google Calendar
+    // Transacción + CAS: el estado esperado es el leído; si dos requests
+    // cambian el estado simultáneamente, solo una gana (AUD-230).
+    const updated = await prisma.$transaction(async (tx) => {
+      if (resultado) {
+        await agendasRepository.registrarTiempoReal(id, { resultado }, tx);
+      }
+      const fila = await agendasRepository.actualizarEstado(id, estado, calendarEventId, existente.estado, tx);
+      if (!fila) {
+        throw new DomainError(
+          `Estado de la agenda cambió concurrentemente: ${existente.estado} → ${estado}`,
+          "TRANSICION_CONFLICTO"
+        );
+      }
+      return fila;
+    });
+    // Side effect externo (Google Calendar) FUERA de la transacción.
     if (estado === "CANCELADA" && existente.calendar_event_id) {
       await this.cancelarEnCalendar(id).catch(() => {});
     }

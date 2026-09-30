@@ -1,6 +1,9 @@
 import { prisma } from "./prisma";
 import { normalizeDomain } from "../domain/contacto/normalizacion";
 
+/** Ejecutor de SQL (cliente Prisma o transacción) para atomicidad (O4-B). */
+export type AgendasDbExecutor = Pick<typeof prisma, "$executeRawUnsafe" | "$queryRawUnsafe">;
+
 export interface AgendaRow {
   id: string;
   ticket: string;
@@ -278,16 +281,17 @@ export const agendasRepository = {
     return rows.length > 0 ? mapRow(rows[0]) : null;
   },
 
-  async actualizarEstado(id: string, estado: string, calendarEventId?: string | null): Promise<AgendaRow | null> {
-    const rows = await prisma.$queryRawUnsafe<any[]>(
+  async actualizarEstado(id: string, estado: string, calendarEventId?: string | null, estadoEsperado?: string | null, executor: AgendasDbExecutor = prisma): Promise<AgendaRow | null> {
+    const rows = await executor.$queryRawUnsafe<any[]>(
       `UPDATE agendas
        SET estado = $2, updated_at = NOW(),
            calendar_event_id = COALESCE($3, calendar_event_id)
-       WHERE id = $1 AND eliminado = FALSE
+       WHERE id = $1 AND eliminado = FALSE${estadoEsperado !== undefined ? ` AND estado = $4` : ""}
        RETURNING *`,
       id,
       estado,
-      calendarEventId ?? null
+      calendarEventId ?? null,
+      ...(estadoEsperado !== undefined ? [estadoEsperado] : [])
     );
     return rows.length > 0 ? mapRow(rows[0]) : null;
   },
@@ -383,7 +387,8 @@ export const agendasRepository = {
       hora_fin_real?: string | null;
       duracion_real_min?: number | null;
       resultado?: string | null;
-    }
+    },
+    executor: AgendasDbExecutor = prisma
   ): Promise<AgendaRow | null> {
     const sets: string[] = ["updated_at = NOW()"];
     const params: any[] = [];
@@ -412,7 +417,7 @@ export const agendasRepository = {
 
     if (sets.length === 1) return this.porId(id);
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(
+    const rows = await executor.$queryRawUnsafe<any[]>(
       `UPDATE agendas SET ${sets.join(", ")} WHERE id = $${idx} AND eliminado = FALSE RETURNING *`,
       ...params,
       id
