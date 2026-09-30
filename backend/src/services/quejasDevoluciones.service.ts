@@ -1,4 +1,5 @@
 import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow } from "../repositories/quejasDevoluciones.repository";
+import { prisma } from "../repositories/prisma";
 import { reconstruirCasosBackfill, reconciliarCasosQD, normalizarDominio, dominioValido, canalValido, estadoZendeskCandidato, type ReconstruccionResultado } from "./quejasCasos.service";
 import { DomainError } from "../core/errors/types";
 
@@ -171,11 +172,14 @@ export const qdService = {
     if (input.ticketPadreId) {
       const casoPadre = await qdRepository.porTicketGeneral(input.ticketPadreId, tipo);
       if (casoPadre) {
-        const interaccion = await qdRepository.asociarInteraccion(casoPadre.id, ticketId, usuario ?? input.asesor);
-        await qdRepository.registrarAuditoria(
-          casoPadre.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
-          null, `Ticket #${ticketId} asociado al caso ${casoPadre.numero} (hilo follow_up de #${input.ticketPadreId})`,
-        );
+        const interaccion = await prisma.$transaction(async (tx) => {
+          const i = await qdRepository.asociarInteraccion(casoPadre.id, ticketId, usuario ?? input.asesor, "relacionada", null, null, tx);
+          await qdRepository.registrarAuditoria(
+            casoPadre.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
+            null, `Ticket #${ticketId} asociado al caso ${casoPadre.numero} (hilo follow_up de #${input.ticketPadreId})`, tx,
+          );
+          return i;
+        });
         return { caso: casoPadre, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
       }
     }
@@ -187,11 +191,14 @@ export const qdService = {
     if (input.dominio && !input.ticketPadreId) {
       const casoAbierto = await qdRepository.buscarCasoAbiertoParaTicket({ tipo, dominio: input.dominio });
       if (casoAbierto) {
-        const interaccion = await qdRepository.asociarInteraccion(casoAbierto.id, ticketId, usuario ?? input.asesor, "relacionada", null, new Date());
-        await qdRepository.registrarAuditoria(
-          casoAbierto.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
-          null, `Ticket #${ticketId} vinculado al caso abierto ${casoAbierto.numero} (mismo dominio ${input.dominio})`,
-        );
+        const interaccion = await prisma.$transaction(async (tx) => {
+          const i = await qdRepository.asociarInteraccion(casoAbierto.id, ticketId, usuario ?? input.asesor, "relacionada", null, new Date(), tx);
+          await qdRepository.registrarAuditoria(
+            casoAbierto.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
+            null, `Ticket #${ticketId} vinculado al caso abierto ${casoAbierto.numero} (mismo dominio ${input.dominio})`, tx,
+          );
+          return i;
+        });
         return { caso: casoAbierto, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
       }
     }
@@ -221,14 +228,16 @@ export const qdService = {
   async asociarInteraccion(casoId: string, ticketId: string, usuario: string | null): Promise<QdInteraccionRow | null> {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    const interaccion = await qdRepository.asociarInteraccion(casoId, ticketId, usuario);
-    if (interaccion) {
-      await qdRepository.registrarAuditoria(
-        casoId, usuario, "interaccion_asociada", "ticket",
-        null, `Ticket #${ticketId} asociado al caso ${caso.numero}`,
-      );
-    }
-    return interaccion;
+    return prisma.$transaction(async (tx) => {
+      const interaccion = await qdRepository.asociarInteraccion(casoId, ticketId, usuario, "relacionada", null, null, tx);
+      if (interaccion) {
+        await qdRepository.registrarAuditoria(
+          casoId, usuario, "interaccion_asociada", "ticket",
+          null, `Ticket #${ticketId} asociado al caso ${caso.numero}`, tx,
+        );
+      }
+      return interaccion;
+    });
   },
 
   /** Asigna (o actualiza) el dominio de un caso manualmente. Auditable. NO fusiona casos. */
@@ -236,54 +245,57 @@ export const qdService = {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
     const d = dominio ? normalizarDominio(dominio) : "";
-    const actualizado = await qdRepository.asignarDominio(casoId, d || null, usuario);
-    if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    if (normalizarDominio(String(caso.dominio ?? "")) !== d) {
-      await qdRepository.registrarAuditoria(
-        casoId, usuario, "asignacion_dominio", "dominio",
-        caso.dominio, d || null,
-      );
-    }
-    return actualizado;
+    return prisma.$transaction(async (tx) => {
+      const actualizado = await qdRepository.asignarDominio(casoId, d || null, usuario, tx);
+      if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+      if (normalizarDominio(String(caso.dominio ?? "")) !== d) {
+        await qdRepository.registrarAuditoria(
+          casoId, usuario, "asignacion_dominio", "dominio",
+          caso.dominio, d || null, tx,
+        );
+      }
+      return actualizado;
+    });
   },
 
-  /** Cierra un caso manualmente. Un nuevo asunto posterior creará un caso nuevo. */
+  /** Cierra un caso manualmente. Transacción + CAS: solo gana si estaba abierto. */
   async cerrarCaso(casoId: string, usuario: string | null): Promise<QdCasoRow> {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
     if (caso.caso_cerrado) throw new DomainError("El caso ya está cerrado", "CASO_CERRADO");
-    const cerrado = await qdRepository.cerrarCaso(casoId, usuario);
-    if (!cerrado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    await qdRepository.registrarAuditoria(
-      casoId, usuario, "cierre_caso", "caso",
-      "ABIERTO", "CERRADO",
-    );
-    return cerrado;
+    return prisma.$transaction(async (tx) => {
+      const cerrado = await qdRepository.cerrarCaso(casoId, usuario, tx);
+      if (!cerrado) throw new DomainError("El caso ya está cerrado", "CASO_CERRADO"); // CAS pierde → rollback, sin auditoría
+      await qdRepository.registrarAuditoria(
+        casoId, usuario, "cierre_caso", "caso",
+        "ABIERTO", "CERRADO", tx,
+      );
+      return cerrado;
+    });
   },
 
   /**
-   * Reabre un caso cerrado. Conserva tickets, interacciones y datos; solo
-   * revierte el estado de cierre para que pueda volver a recibir tickets
-   * relacionados.
+   * Reabre un caso cerrado. Transacción + CAS: solo gana si estaba cerrado.
    */
   async reabrirCaso(casoId: string, usuario: string | null): Promise<QdCasoRow> {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
     if (!caso.caso_cerrado) throw new DomainError("El caso ya está abierto", "CASO_ABIERTO");
-    const reabierto = await qdRepository.reabrirCaso(casoId, usuario);
-    if (!reabierto) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    await qdRepository.registrarAuditoria(
-      casoId, usuario, "reapertura_caso", "caso",
-      "CERRADO", "ABIERTO",
-    );
-    return reabierto;
+    return prisma.$transaction(async (tx) => {
+      const reabierto = await qdRepository.reabrirCaso(casoId, usuario, tx);
+      if (!reabierto) throw new DomainError("El caso ya está abierto", "CASO_ABIERTO"); // CAS pierde → rollback, sin auditoría
+      await qdRepository.registrarAuditoria(
+        casoId, usuario, "reapertura_caso", "caso",
+        "CERRADO", "ABIERTO", tx,
+      );
+      return reabierto;
+    });
   },
 
   /**
    * CONSOLIDA varios casos secundarios en un caso principal.
-   * Reglas: mismo tipo; el caso principal no debe ser secundario ni cerrado.
-   * Todos los tickets pasan al caso principal; los secundarios quedan marcados
-   * como consolidados (consolidado_en) conservando trazabilidad.
+   * Transacción + CAS: el principal no debe estar consolidado/cerrado; los
+   * secundarios solo se marcan si aún no lo estaban. Sin auditoría si no consolidó.
    */
   async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null, motivo?: string | null): Promise<{ principal: QdCasoRow; consolidados: number }> {
     const principal = await qdRepository.porId(principalId);
@@ -305,21 +317,24 @@ export const qdService = {
       if (c.caso_cerrado) throw new DomainError(`El caso ${c.numero} está cerrado`, "CONSOLIDACION_INVALIDA");
     }
 
-    const consolidados = await qdRepository.consolidarCasos(principalId, ids, usuario);
-    await qdRepository.registrarAuditoria(
-      principalId, usuario, "consolidacion_casos", "caso",
-      null, `Consolidados ${ids.length} caso(s) en ${principal.numero}${motivo ? ` — Motivo: ${motivo}` : ""}`,
-    );
-    for (const id of ids) {
-      const c = await qdRepository.porId(id);
-      if (c) {
-        await qdRepository.registrarAuditoria(
-          id, usuario, "consolidado_en", "caso",
-          null, `Caso consolidado en ${principal.numero}`,
-        );
+    return prisma.$transaction(async (tx) => {
+      const consolidados = await qdRepository.consolidarCasos(principalId, ids, usuario, tx);
+      if (consolidados === 0) throw new DomainError("No se pudo consolidar (conflicto de estado)", "CONSOLIDACION_INVALIDA"); // CAS pierde → rollback, sin auditoría
+      await qdRepository.registrarAuditoria(
+        principalId, usuario, "consolidacion_casos", "caso",
+        null, `Consolidados ${consolidados} caso(s) en ${principal.numero}${motivo ? ` — Motivo: ${motivo}` : ""}`, tx,
+      );
+      for (const id of ids) {
+        const c = await qdRepository.porId(id);
+        if (c) {
+          await qdRepository.registrarAuditoria(
+            id, usuario, "consolidado_en", "caso",
+            null, `Caso consolidado en ${principal.numero}`, tx,
+          );
+        }
       }
-    }
-    return { principal, consolidados };
+      return { principal, consolidados };
+    });
   },
 
   /** Vincula un ticket existente a un caso como contacto/interacción. */

@@ -2,6 +2,9 @@ import { prisma } from "./prisma";
 import { genId } from "./facturacion.types";
 import { normalizeDomain } from "../domain/contacto/normalizacion";
 
+/** Ejecutor de SQL (cliente Prisma o cliente de transacción) para atomicidad. */
+export type DbExecutor = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
+
 export interface QdCasoRow {
   id: string;
   tipo: "devolucion" | "queja";
@@ -212,9 +215,9 @@ export const qdRepository = {
   },
 
   /** Asocia un ticket a un caso como interacción relacionada. Idempotente por (caso_id, ticket_id). */
-  async asociarInteraccion(casoId: string, ticketId: string, usuario: string | null, tipoRelacion = "relacionada", canal: string | null = null, fecha: Date | null = null): Promise<QdInteraccionRow | null> {
+  async asociarInteraccion(casoId: string, ticketId: string, usuario: string | null, tipoRelacion = "relacionada", canal: string | null = null, fecha: Date | null = null, executor: DbExecutor = prisma): Promise<QdInteraccionRow | null> {
     const id = genId();
-    const rows = await prisma.$queryRaw<QdInteraccionRow[]>`
+    const rows = await executor.$queryRaw<QdInteraccionRow[]>`
       INSERT INTO qd_caso_interacciones (id, caso_id, ticket_id, tipo_relacion, created_by, canal, fecha)
       VALUES (${id}, ${casoId}, ${ticketId}, ${tipoRelacion}, ${usuario ?? null}, ${canal ?? null}, ${fecha ?? null})
       ON CONFLICT (caso_id, ticket_id) DO NOTHING
@@ -250,9 +253,9 @@ export const qdRepository = {
    * Asigna (o actualiza) el dominio de un caso manualmente. Auditable.
    * Asignar dominio NO fusiona casos automáticamente.
    */
-  async asignarDominio(casoId: string, dominio: string | null, usuario: string | null): Promise<QdCasoRow | null> {
+  async asignarDominio(casoId: string, dominio: string | null, usuario: string | null, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
     const d = dominio ? normalizeDomain(dominio) : null;
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       UPDATE qd_casos SET dominio = ${d}, updated_at = now()
       WHERE id = ${casoId}
       RETURNING *
@@ -260,26 +263,24 @@ export const qdRepository = {
     return rows[0] ?? null;
   },
 
-  /** Cierra un caso manualmente. Los nuevos asuntos posteriores crearán un caso nuevo. */
-  async cerrarCaso(casoId: string, usuario: string | null): Promise<QdCasoRow | null> {
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+  /** Cierra un caso manualmente. CAS: solo si NO está cerrado ni consolidado. */
+  async cerrarCaso(casoId: string, usuario: string | null, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       UPDATE qd_casos SET caso_cerrado = TRUE, cerrado_at = now(), cerrado_por = ${usuario ?? null}, updated_at = now()
-      WHERE id = ${casoId}
+      WHERE id = ${casoId} AND caso_cerrado = FALSE AND consolidado_en IS NULL
       RETURNING *
     `;
     return rows[0] ?? null;
   },
 
   /**
-   * Reabre un caso cerrado. Conserva tickets, interacciones y datos; solo
-   * revierte el estado de cierre para que pueda volver a recibir tickets
-   * relacionados.
+   * Reabre un caso cerrado. CAS: solo si está cerrado.
    */
-  async reabrirCaso(casoId: string, usuario: string | null): Promise<QdCasoRow | null> {
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+  async reabrirCaso(casoId: string, usuario: string | null, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       UPDATE qd_casos
       SET caso_cerrado = FALSE, cerrado_at = NULL, cerrado_por = NULL, updated_at = now()
-      WHERE id = ${casoId}
+      WHERE id = ${casoId} AND caso_cerrado = TRUE
       RETURNING *
     `;
     return rows[0] ?? null;
@@ -287,15 +288,22 @@ export const qdRepository = {
 
   /**
    * CONSOLIDA varios casos secundarios en un caso principal.
-   * - Todos los tickets de los casos secundarios pasan al caso principal.
-   * - Los casos secundarios se marcan como consolidados (consolidado_en = principal)
-   *   para conservar trazabilidad (no se eliminan físicamente).
-   * Reglas: mismo tipo; el caso principal no debe ser secundario ni cerrado.
+   * CAS: el principal no debe estar consolidado ni cerrado; los secundarios
+   * se marcan solo si aún no lo estaban. Devuelve cuántos se consolidaron.
    */
-  async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null): Promise<number> {
+  async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null, executor: DbExecutor = prisma): Promise<number> {
+    const secs = idsSecundarios.filter((id) => id !== principalId);
+    if (secs.length === 0) return 0;
+    // CAS sobre el principal: no debe estar ya consolidado ni cerrado.
+    const principal = await executor.$queryRaw<QdCasoRow[]>`
+      UPDATE qd_casos SET updated_at = now()
+      WHERE id = ${principalId} AND consolidado_en IS NULL AND caso_cerrado = FALSE
+      RETURNING *
+    `;
+    if (principal.length === 0) return 0;
     // Mover tickets de los secundarios al principal (idempotente por UNIQUE(caso_id,ticket_id)).
-    for (const sec of idsSecundarios) {
-      await prisma.$executeRaw`
+    for (const sec of secs) {
+      await executor.$executeRaw`
         INSERT INTO qd_caso_interacciones (id, caso_id, ticket_id, tipo_relacion, created_by, canal, fecha)
         SELECT gen_random_uuid(), ${principalId}, i.ticket_id, 'relacionada', i.created_by, i.canal, i.fecha
         FROM qd_caso_interacciones i
@@ -303,13 +311,13 @@ export const qdRepository = {
         ON CONFLICT (caso_id, ticket_id) DO NOTHING
       `;
     }
-    // Marcar secundarios como consolidados.
-    await prisma.$executeRaw`
+    // Marcar secundarios como consolidados (CAS: solo los que aún no lo están).
+    const res = await executor.$executeRaw`
       UPDATE qd_casos
       SET consolidado_en = ${principalId}, updated_at = now()
-      WHERE id = ANY(${idsSecundarios}::text[]) AND id <> ${principalId}
+      WHERE id = ANY(${secs}::text[]) AND id <> ${principalId} AND consolidado_en IS NULL
     `;
-    return idsSecundarios.length;
+    return Number(res ?? 0);
   },
 
   async crear(input: CrearCasoInput): Promise<QdCasoRow> {
@@ -414,9 +422,9 @@ export const qdRepository = {
     return prisma.$queryRaw<QdAuditoriaRow[]>`SELECT * FROM qd_auditoria WHERE caso_id = ${casoId} ORDER BY created_at ASC`;
   },
 
-  async registrarAuditoria(casoId: string, usuario: string | null, accion: string, campo: string | null, anterior: string | null, nuevo: string | null): Promise<void> {
+  async registrarAuditoria(casoId: string, usuario: string | null, accion: string, campo: string | null, anterior: string | null, nuevo: string | null, executor: DbExecutor = prisma): Promise<void> {
     const id = genId();
-    await prisma.$executeRaw`
+    await executor.$executeRaw`
       INSERT INTO qd_auditoria (id, caso_id, usuario, accion, campo, valor_anterior, valor_nuevo)
       VALUES (${id}, ${casoId}, ${usuario ?? null}, ${accion}, ${campo ?? null}, ${anterior ?? null}, ${nuevo ?? null})
     `;
