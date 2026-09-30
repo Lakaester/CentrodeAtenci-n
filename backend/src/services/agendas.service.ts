@@ -483,11 +483,11 @@ export const agendasService = {
     // T3: separar PDF (filesystem) de la persistencia PostgreSQL.
     // El artefacto obligatorio se genera/verifica ANTES de marcar FINALIZADA.
     if (estado === "FINALIZADA") {
-      // 1) Generar PDF en memoria (falla → NO persistir FINALIZADA).
-      const buffer = actaPdfService.generarSync(existente, contenido);
-      // 2) Escribir archivo a disco (falla → NO persistir FINALIZADA).
+      // 1) Generar PDF en memoria (sin shell; O5-B/O5-F1).
+      const buffer = await actaPdfService.generarAsync(existente, contenido);
+      // 2) Escribir archivo a disco con nombre saneado (falla → NO persistir FINALIZADA).
       const { tamano } = actaPdfService.guardarPdf(existente.ticket, buffer);
-      const nombrePdf = `ACTA-${existente.ticket}.pdf`;
+      const nombrePdf = actaPdfService.nombreArchivoActa(existente.ticket);
       try {
         // 3) Persistir acta + metadatos ATÓMICAMENTE (una sola transacción PostgreSQL).
         await prisma.$transaction(async (tx) => {

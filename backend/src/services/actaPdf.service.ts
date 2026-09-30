@@ -260,38 +260,15 @@ export const actaPdfService = {
     return Buffer.from(buf);
   },
 
-  generarSync(agenda: AgendaRow, contenido: any): Buffer {
-    const { execSync } = require("child_process") as typeof import("child_process");
-    const tmpId = `${agenda.ticket}-${Date.now()}`;
-    const storageDir = this.getStorageDir();
-    const tmpScript = path.join(storageDir, `.gen-${tmpId}.js`);
-    const tmpDef = path.join(storageDir, `.def-${tmpId}.json`);
+  /** Sanitiza el identificador para uso en nombre de archivo (O5-B, O5-F1). */
+  sanitizarNombre(valor: string): string {
+    const limpio = String(valor ?? "").replace(/[^A-Za-z0-9._-]/g, "_");
+    return limpio.slice(0, 64) || "acta";
+  },
 
-    const docDefinition = this._buildDocDef(agenda, contenido);
-
-    // Write the script that reads the JSON and generates PDF to stdout
-    const scriptContent = `
-      const pdfMake = require("pdfmake/build/pdfmake");
-      const pdfFonts = require("pdfmake/build/vfs_fonts");
-      pdfMake.vfs = pdfFonts;
-      const fs = require("fs");
-      const docDef = JSON.parse(fs.readFileSync(${JSON.stringify(tmpDef)}, "utf8"));
-      pdfMake.createPdf(docDef).getBuffer().then(buf => {
-        process.stdout.write(Buffer.from(buf));
-        process.exit(0);
-      }).catch(() => process.exit(1));
-    `;
-
-    fs.writeFileSync(tmpScript, scriptContent);
-    fs.writeFileSync(tmpDef, JSON.stringify(docDefinition));
-
-    try {
-      const result = execSync(`node "${tmpScript}"`, { stdio: "pipe", timeout: 30000 });
-      return Buffer.from(result);
-    } finally {
-      try { fs.unlinkSync(tmpScript); } catch {}
-      try { fs.unlinkSync(tmpDef); } catch {}
-    }
+  /** Nombre de archivo del acta, derivado de un identificador saneado (no texto libre). */
+  nombreArchivoActa(ticket: string): string {
+    return `ACTA-${this.sanitizarNombre(ticket)}.pdf`;
   },
 
   _buildDocDef(agenda: AgendaRow, contenido: any): TDocumentDefinitions {
@@ -536,7 +513,7 @@ export const actaPdfService = {
   },
 
   getFilePath(ticket: string): string {
-    return path.join(this.getStorageDir(), `ACTA-${ticket}.pdf`);
+    return path.join(this.getStorageDir(), this.nombreArchivoActa(ticket));
   },
 
   guardarPdf(ticket: string, buffer: Buffer): { filePath: string; tamano: number } {

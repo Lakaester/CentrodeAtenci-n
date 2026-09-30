@@ -281,17 +281,17 @@ export const agendasRepository = {
     return rows.length > 0 ? mapRow(rows[0]) : null;
   },
 
-  async actualizarEstado(id: string, estado: string, calendarEventId?: string | null, estadoEsperado?: string | null, executor: AgendasDbExecutor = prisma): Promise<AgendaRow | null> {
+  async actualizarEstado(id: string, estado: string, calendarEventId: string | null | undefined, estadoEsperado: string, executor: AgendasDbExecutor = prisma): Promise<AgendaRow | null> {
     const rows = await executor.$queryRawUnsafe<any[]>(
       `UPDATE agendas
        SET estado = $2, updated_at = NOW(),
            calendar_event_id = COALESCE($3, calendar_event_id)
-       WHERE id = $1 AND eliminado = FALSE${estadoEsperado !== undefined ? ` AND estado = $4` : ""}
+       WHERE id = $1 AND eliminado = FALSE AND estado = $4
        RETURNING *`,
       id,
       estado,
       calendarEventId ?? null,
-      ...(estadoEsperado !== undefined ? [estadoEsperado] : [])
+      estadoEsperado
     );
     return rows.length > 0 ? mapRow(rows[0]) : null;
   },
