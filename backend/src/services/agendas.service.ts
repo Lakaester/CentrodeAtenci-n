@@ -584,8 +584,18 @@ export const agendasService = {
           );
         });
       } catch (err) {
-        // Compensación: el archivo ya fue escrito; si la DB falló, eliminar el temporal.
-        actaPdfService.eliminarPdf(existente.ticket);
+        // Compensación: el archivo ya fue escrito; si la DB falló, eliminar el archivo.
+        const comp = actaPdfService.eliminarPdf(existente.ticket);
+        if (!comp.ok) {
+          // F05: log específico y accionable del archivo potencialmente huérfano.
+          // eslint-disable-next-line no-console
+          console.error(
+            `[ACTA] compensation operation=ACTA_FILE_COMPENSATION result=FAILED ` +
+            `agendaId=${id} file=${actaPdfService.nombreArchivoActa(existente.ticket)} ` +
+            `originalError=${err instanceof Error ? err.message : String(err)} ` +
+            `compensationError=${comp.error ?? "unlink-failed"}`,
+          );
+        }
         throw err;
       }
     } else {
