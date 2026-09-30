@@ -10,7 +10,7 @@ vi.mock("../actaPdf.service", () => ({
   actaPdfService: {
     generarAsync: vi.fn(),
     guardarPdf: vi.fn(),
-    eliminarPdf: vi.fn(),
+    eliminarPdf: vi.fn(() => ({ ok: true })),
     nombreArchivoActa: vi.fn((t: string) => `ACTA-${t}.pdf`),
   },
 }));
