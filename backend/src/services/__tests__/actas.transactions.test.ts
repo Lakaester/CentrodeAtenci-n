@@ -8,9 +8,10 @@ vi.mock("../../repositories/prisma", () => ({
 
 vi.mock("../actaPdf.service", () => ({
   actaPdfService: {
-    generarSync: vi.fn(),
+    generarAsync: vi.fn(),
     guardarPdf: vi.fn(),
     eliminarPdf: vi.fn(),
+    nombreArchivoActa: vi.fn((t: string) => `ACTA-${t}.pdf`),
   },
 }));
 
@@ -38,13 +39,13 @@ describe("Actas T3 (O4-B.5) — PDF/filesystem separado de PostgreSQL", () => {
     (agendasRepository.porId as any).mockResolvedValue(agenda);
     (agendasRepository.guardarActa as any).mockResolvedValue({ ...agenda, acta_estado: "FINALIZADA" });
     (agendasRepository.actualizarMetadatosActa as any).mockResolvedValue(agenda);
-    (actaPdfService.generarSync as any).mockReturnValue(Buffer.from("pdf"));
+    (actaPdfService.generarAsync as any).mockResolvedValue(Buffer.from("pdf"));
     (actaPdfService.guardarPdf as any).mockReturnValue({ filePath: "/tmp/ACTA-T-1.pdf", tamano: 3 });
   });
 
   it("FINALIZADA: PDF generado y guardado ANTES de persistir; DB atómica (acta + metadatos en tx)", async () => {
     await agendasService.guardarActa("a1", { desarrollo: "x" }, "FINALIZADA");
-    expect(actaPdfService.generarSync).toHaveBeenCalled();
+    expect(actaPdfService.generarAsync).toHaveBeenCalled();
     expect(actaPdfService.guardarPdf).toHaveBeenCalledWith("T-1", Buffer.from("pdf"));
     expect(agendasRepository.guardarActa).toHaveBeenCalledWith("a1", { desarrollo: "x" }, "FINALIZADA", tx);
     expect(agendasRepository.actualizarMetadatosActa).toHaveBeenCalledWith(
@@ -55,9 +56,7 @@ describe("Actas T3 (O4-B.5) — PDF/filesystem separado de PostgreSQL", () => {
   });
 
   it("FINALIZADA con PDF que falla → error y NO se persiste (no deja FINALIZADA sin artefacto)", async () => {
-    (actaPdfService.generarSync as any).mockImplementation(() => {
-      throw new Error("pdf boom");
-    });
+    (actaPdfService.generarAsync as any).mockRejectedValue(new Error("pdf boom"));
     await expect(agendasService.guardarActa("a1", { x: 1 }, "FINALIZADA")).rejects.toThrow("pdf boom");
     expect(agendasRepository.guardarActa).not.toHaveBeenCalled();
     expect(actaPdfService.eliminarPdf).not.toHaveBeenCalled();
@@ -81,7 +80,7 @@ describe("Actas T3 (O4-B.5) — PDF/filesystem separado de PostgreSQL", () => {
     (agendasRepository.guardarActa as any).mockResolvedValue({ ...agenda, acta_estado: "BORRADOR" });
     await agendasService.guardarActa("a1", { x: 1 }, "BORRADOR");
     expect(agendasRepository.guardarActa).toHaveBeenCalledWith("a1", { x: 1 }, "BORRADOR", tx);
-    expect(actaPdfService.generarSync).not.toHaveBeenCalled();
+    expect(actaPdfService.generarAsync).not.toHaveBeenCalled();
     expect(agendasRepository.actualizarMetadatosActa).not.toHaveBeenCalled();
   });
 
