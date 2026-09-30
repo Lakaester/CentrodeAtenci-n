@@ -1,4 +1,4 @@
-import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow } from "../repositories/quejasDevoluciones.repository";
+import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow, type DbExecutor } from "../repositories/quejasDevoluciones.repository";
 import { prisma } from "../repositories/prisma";
 import { reconstruirCasosBackfill, reconciliarCasosQD, normalizarDominio, dominioValido, canalValido, estadoZendeskCandidato, type ReconstruccionResultado } from "./quejasCasos.service";
 import { DomainError } from "../core/errors/types";
@@ -57,6 +57,28 @@ function validarCaso(input: CrearCasoInput) {
       throw new DomainError("Para 'No procede' el porcentaje debe ser 0", "PORCENTAJE_INVALIDO");
     }
   }
+}
+
+/**
+ * Primitiva transaccional de creación de caso Q/D (O4-D, F03).
+ * Recibe `tx`; NO abre su propia transacción. Caso + auditoría atómicos.
+ */
+async function createQydCasoConTx(tx: DbExecutor, input: CrearCasoInput, usuario: string | null, parcial: boolean): Promise<QdCasoRow> {
+  const dominio = typeof input.dominio === "string" ? input.dominio.trim() : "";
+  if (!dominio) {
+    throw new DomainError("El dominio es obligatorio para registrar el caso.", "DOMINIO_REQUERIDO");
+  }
+  if (!parcial) validarCaso(input);
+  const montoDevuelto = input.montoDevuelto ?? calcularMontoDevuelto(input.montoPagado, input.porcentaje);
+  if (input.ticketId) {
+    const existente = await qdRepository.porTicket(input.ticketId, input.tipo);
+    if (existente) {
+      throw new DomainError(`Este ticket ya tiene un caso de ${input.tipo} asociado.`, "CASO_DUPLICADO");
+    }
+  }
+  const caso = await qdRepository.crear({ ...input, asesor: input.asesor ?? usuario ?? null, montoDevuelto }, tx);
+  await qdRepository.registrarAuditoria(caso.id, usuario, "creacion", "caso", null, `Caso ${caso.numero} creado`, tx);
+  return caso;
 }
 
 export const qdService = {
@@ -337,18 +359,20 @@ export const qdService = {
     });
   },
 
-  /** Vincula un ticket existente a un caso como contacto/interacción. */
+  /** Vincula un ticket existente a un caso como contacto/interacción. Atómico (F03). */
   async vincularTicket(casoId: string, ticketId: string, usuario: string | null, canal?: string | null): Promise<QdInteraccionRow | null> {
     const caso = await qdRepository.porId(casoId);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-    const interaccion = await qdRepository.asociarInteraccion(casoId, ticketId, usuario, "relacionada", canal ?? null, new Date());
-    if (interaccion) {
-      await qdRepository.registrarAuditoria(
-        casoId, usuario, "interaccion_asociada", "ticket",
-        null, `Ticket #${ticketId} vinculado al caso ${caso.numero}`,
-      );
-    }
-    return interaccion;
+    return prisma.$transaction(async (tx) => {
+      const interaccion = await qdRepository.asociarInteraccion(casoId, ticketId, usuario, "relacionada", canal ?? null, new Date(), tx);
+      if (interaccion) {
+        await qdRepository.registrarAuditoria(
+          casoId, usuario, "interaccion_asociada", "ticket",
+          null, `Ticket #${ticketId} vinculado al caso ${caso.numero}`, tx,
+        );
+      }
+      return interaccion;
+    });
   },
 
   /**
@@ -356,62 +380,43 @@ export const qdService = {
    * Solo se permite para casos de origen MANUAL.
    * Los casos creados desde categorización (CATEGORIZACION) no pueden eliminarse.
    */
-  async eliminar(id: string, usuario: string | null): Promise<QdCasoRow> {
+async eliminar(id: string, usuario: string | null): Promise<QdCasoRow> {
     const caso = await qdRepository.porId(id);
     if (!caso) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
 
     if (caso.origen !== "MANUAL") {
       throw new DomainError(
-        "Los casos creados desde una categorización de atención no pueden eliminarse desde este módulo.",
+        "Los casos creados desde una categorizaci��n de atenci��n no pueden eliminarse desde este m��dulo.",
         "ORIGEN_NO_ELIMINABLE",
       );
     }
 
-    const eliminado = await qdRepository.eliminarLogico(id, usuario);
-    if (!eliminado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
-
-    // Auditoría de eliminación con trazabilidad completa.
-    await qdRepository.registrarAuditoria(
-      id, usuario, "ELIMINACION", "caso",
-      JSON.stringify({
-        tipo: caso.tipo,
-        origen: caso.origen,
-        dominio: caso.dominio,
-        ticket_id: caso.ticket_id,
-      }),
-      `Caso ${caso.numero} eliminado lógicamente (${caso.tipo}, origen ${caso.origen})`,
-    );
-
-    return eliminado;
+    // Soft delete + auditoría atómicos (F03).
+    return prisma.$transaction(async (tx) => {
+      const eliminado = await qdRepository.eliminarLogico(id, usuario, tx);
+      if (!eliminado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+      await qdRepository.registrarAuditoria(
+        id, usuario, "ELIMINACION", "caso",
+        JSON.stringify({
+          tipo: caso.tipo,
+          origen: caso.origen,
+          dominio: caso.dominio,
+          ticket_id: caso.ticket_id,
+        }),
+        JSON.stringify({
+          eliminado: true,
+          eliminado_at: new Date().toISOString(),
+          eliminado_por: usuario,
+        }),
+        tx,
+      );
+      return eliminado;
+    });
   },
 
   /** Crear caso. Si viene con ticket, evita duplicados (ticket_id + tipo únicos). */
-  async crear(input: CrearCasoInput, usuario: string | null, parcial = false) {
-    // Dominio obligatorio SIEMPRE (manual y automático): no puede ser null, "" ni solo espacios.
-    const dominio = typeof input.dominio === "string" ? input.dominio.trim() : "";
-    if (!dominio) {
-      throw new DomainError("El dominio es obligatorio para registrar el caso.", "DOMINIO_REQUERIDO");
-    }
-    // La creación automática desde categorización permite datos incompletos
-    // (el asesor completará clasificación/área/producto/motivo después).
-    if (!parcial) validarCaso(input);
-
-    // Monto devuelto: calcular desde monto_pagado × porcentaje / 100.
-    const montoDevuelto = input.montoDevuelto ?? calcularMontoDevuelto(input.montoPagado, input.porcentaje);
-
-    if (input.ticketId) {
-      const existente = await qdRepository.porTicket(input.ticketId, input.tipo);
-      if (existente) {
-        throw new DomainError(
-          `Este ticket ya tiene un caso de ${input.tipo} asociado.`,
-          "CASO_DUPLICADO",
-        );
-      }
-    }
-
-    const caso = await qdRepository.crear({ ...input, asesor: input.asesor ?? usuario ?? null, montoDevuelto });
-    await qdRepository.registrarAuditoria(caso.id, usuario, "creacion", "caso", null, `Caso ${caso.numero} creado`);
-    return caso;
+async crear(input: CrearCasoInput, usuario: string | null, parcial = false) {
+    return prisma.$transaction((tx) => createQydCasoConTx(tx, input, usuario, parcial));
   },
 
   async actualizar(id: string, patch: Partial<Omit<CrearCasoInput, "tipo" | "ticketId">> & { ticketId?: string | null }, usuario: string | null) {
@@ -467,25 +472,29 @@ export const qdService = {
     });
 
     const final = { ...patch, montoDevuelto, montoPagado, porcentaje };
-    const actualizado = await qdRepository.actualizar(id, final);
-    if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
+    // Actualización + auditoría atómicas (F03).
+    return prisma.$transaction(async (tx) => {
+      const actualizado = await qdRepository.actualizar(id, final, tx);
+      if (!actualizado) throw new DomainError("Caso no encontrado", "NO_ENCONTRADO");
 
-    // Auditoría: registrar campos modificados.
-    for (const [campo, valorNuevo] of Object.entries(final)) {
-      const key = campo as keyof CrearCasoInput;
-      const columna = campo === "ticketId" ? "ticket_id" : campo;
-      const anterior = (caso as any)[columna];
-      const nuevo = valorNuevo;
-      if (String(anterior ?? "") !== String(nuevo ?? "")) {
-        await qdRepository.registrarAuditoria(
-          id, usuario, "edicion", campo,
-          anterior == null ? null : String(anterior),
-          nuevo == null ? null : String(nuevo),
-        );
+      // Auditoría: registrar campos modificados.
+      for (const [campo, valorNuevo] of Object.entries(final)) {
+        const key = campo as keyof CrearCasoInput;
+        const columna = campo === "ticketId" ? "ticket_id" : campo;
+        const anterior = (caso as any)[columna];
+        const nuevo = valorNuevo;
+        if (String(anterior ?? "") !== String(nuevo ?? "")) {
+          await qdRepository.registrarAuditoria(
+            id, usuario, "edicion", campo,
+            anterior == null ? null : String(anterior),
+            nuevo == null ? null : String(nuevo),
+            tx,
+          );
+        }
       }
-    }
 
-    return actualizado;
+      return actualizado;
+    });
   },
 
   // ── Catálogos ──

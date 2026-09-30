@@ -641,23 +641,28 @@ export async function reconciliarCasosQD(desde: string, hasta: string): Promise<
     }
 
     // 5. Crear caso.
-    const dominio = normalizarDominio(h.dominio);
+const dominio = normalizarDominio(h.dominio);
     try {
-      const caso = await qdRepository.crear({
-        tipo,
-        ticketId,
-        dominio,
-        pais: h.pais ?? null,
-        asesor: h.asesor ?? null,
-        estado: "Pendiente de conciliación",
-        observacion: h.subcategoria ?? null,
-        origen: "BACKFILL",
-      });
+      // Frontera transaccional por unidad (O4-D, F03): caso + auditoría atómicos.
+      const caso = await prisma.$transaction(async (tx) => {
+        const c = await qdRepository.crear({
+          tipo,
+          ticketId,
+          dominio,
+          pais: h.pais ?? null,
+          asesor: h.asesor ?? null,
+          estado: "Pendiente de conciliaci��n",
+          observacion: h.subcategoria ?? null,
+          origen: "BACKFILL",
+        }, tx);
 
-      await qdRepository.registrarAuditoria(
-        caso.id, "system", "creacion_reconciliacion", "caso", null,
-        `Caso ${caso.numero} creado por reconciliación automática (ticket #${ticketId})`,
-      );
+        await qdRepository.registrarAuditoria(
+          c.id, "system", "creacion_reconciliacion", "caso", null,
+          `Caso ${c.numero} creado por reconciliaci��n automǭtica (ticket #${ticketId})`,
+          tx,
+        );
+        return c;
+      });
 
       resultados.push({
         ticketId,

@@ -3,7 +3,7 @@ import { genId } from "./facturacion.types";
 import { normalizeDomain } from "../domain/contacto/normalizacion";
 
 /** Ejecutor de SQL (cliente Prisma o cliente de transacción) para atomicidad. */
-export type DbExecutor = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
+export type DbExecutor = Pick<typeof prisma, "$executeRaw" | "$queryRaw" | "$executeRawUnsafe" | "$queryRawUnsafe">;
 
 export interface QdCasoRow {
   id: string;
@@ -320,11 +320,11 @@ export const qdRepository = {
     return Number(res ?? 0);
   },
 
-  async crear(input: CrearCasoInput): Promise<QdCasoRow> {
+  async crear(input: CrearCasoInput, executor: DbExecutor = prisma): Promise<QdCasoRow> {
     const id = genId();
     const numero = `${input.tipo === "devolucion" ? "DEV" : "QUE"}-${String(Date.now()).slice(-5)}`;
     const d = input.dominio ? normalizeDomain(input.dominio) : null;
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       INSERT INTO qd_casos
         (id, tipo, numero, ticket_id, ticket_padre_id, dominio, pais, asesor, estado, resultado,
          moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, fecha_solicitud, origen)
@@ -373,8 +373,8 @@ export const qdRepository = {
   /** Eliminación lógica: marca el caso como eliminado pero conserva el registro.
     * Las interacciones relacionadas no se tocan (trazabilidad).
     */
-  async eliminarLogico(id: string, usuario: string | null): Promise<QdCasoRow | null> {
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+  async eliminarLogico(id: string, usuario: string | null, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       UPDATE qd_casos
       SET eliminado = TRUE, eliminado_at = now(), eliminado_por = ${usuario ?? null}, updated_at = now()
       WHERE id = ${id}
@@ -383,7 +383,7 @@ export const qdRepository = {
     return rows[0] ?? null;
   },
 
-  async actualizar(id: string, patch: Partial<Omit<CrearCasoInput, "tipo" | "ticketId">> & { ticketId?: string | null }): Promise<QdCasoRow | null> {
+  async actualizar(id: string, patch: Partial<Omit<CrearCasoInput, "tipo" | "ticketId">> & { ticketId?: string | null }, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
     const sets: string[] = [];
     const values: unknown[] = [];
     const map: Record<string, unknown> = {
@@ -411,7 +411,7 @@ export const qdRepository = {
     if (sets.length === 0) return this.porId(id);
     sets.push("updated_at = now()");
     values.push(id);
-    const rows = await prisma.$queryRawUnsafe<QdCasoRow[]>(
+    const rows = await executor.$queryRawUnsafe<QdCasoRow[]>(
       `UPDATE qd_casos SET ${sets.join(", ")} WHERE id = $${values.length} RETURNING *`,
       ...values,
     );
