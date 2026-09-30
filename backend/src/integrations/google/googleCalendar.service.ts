@@ -184,6 +184,30 @@ async function getAuthenticatedClient(): Promise<OAuth2Client> {
   return oauth2Client;
 }
 
+export type CalendarErrorCategory = "RETRYABLE" | "NON_RETRYABLE" | "AUTH" | "AMBIGUOUS";
+
+/**
+ * Clasificación de errores de Google Calendar (O5-C).
+ * - RETRYABLE: 429 / 5xx (Google NO procesó → reintentar seguro).
+ * - AMBIGUOUS: timeout/network (pudo haber procesado → reconciliar antes de recrear).
+ * - AUTH: 401 / refresh fallido (sin loop; requiere reconexión).
+ * - NON_RETRYABLE: 400/403/404/409 y deterministas (registrar ERROR).
+ */
+export function clasificarErrorCalendar(err: unknown): { category: CalendarErrorCategory; statusCode?: number } {
+  const anyErr = err as { code?: unknown; status?: unknown };
+  const status = typeof anyErr.status === "number" ? anyErr.status : typeof anyErr.code === "number" ? anyErr.code : undefined;
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+    return { category: "RETRYABLE", statusCode: status };
+  }
+  if (status === 401) return { category: "AUTH", statusCode: status };
+  if (typeof status === "number") return { category: "NON_RETRYABLE", statusCode: status };
+  const str = String(anyErr.code ?? "");
+  if (str === "ECONNRESET" || str === "ETIMEDOUT" || str === "ENOTFOUND" || str === "EAI_AGAIN" || str.includes("TIMEOUT") || str.includes("UND_ERR")) {
+    return { category: "AMBIGUOUS" };
+  }
+  return { category: "NON_RETRYABLE" };
+}
+
 export const googleCalendarService = {
   /**
    * Verifica si Google Calendar está configurado (OAuth habilitado).
@@ -369,6 +393,32 @@ export const googleCalendarService = {
       calendarId,
       eventId,
     });
+  },
+
+  /**
+   * Reconciliación ante CREATE ambiguo (timeout/network): busca el evento por
+   * `extendedProperties.private.copeAgendaId` (identificador interno estable).
+   */
+  async buscarEventoPorIdentificador(copeAgendaId: string): Promise<{ eventId: string; htmlLink?: string } | null> {
+    try {
+      const calendar = await this.getCalendarClient();
+      const calendarId = getCalendarId();
+      const response = await calendar.events.list({
+        calendarId,
+        privateExtendedProperty: [`copeAgendaId=${copeAgendaId}`],
+        maxResults: 10,
+        singleEvents: true,
+      });
+      const items = response.data.items ?? [];
+      if (items.length === 0) return null;
+      // Si hay varios, no resolver destructivamente: devolver el primero y dejar
+      // trazabilidad (inconsistencia para reconciliación manual).
+      const first = items[0];
+      return { eventId: first.id ?? "", htmlLink: first.htmlLink ?? undefined };
+    } catch (err: any) {
+      if (err.code === 404) return null;
+      throw err;
+    }
   },
 
   /**

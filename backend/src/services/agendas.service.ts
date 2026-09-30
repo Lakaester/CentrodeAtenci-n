@@ -2,11 +2,24 @@ import {
   agendasRepository,
   type CrearAgendaInput,
   type ActualizarAgendaInput,
+  type AgendaRow,
 } from "../repositories/agendas.repository";
-import { googleCalendarService } from "../integrations/google/googleCalendar.service";
+import { googleCalendarService, clasificarErrorCalendar, type CalendarErrorCategory } from "../integrations/google/googleCalendar.service";
 import { actaPdfService } from "./actaPdf.service";
 import { prisma } from "../repositories/prisma";
 import { DomainError } from "../core/errors/types";
+
+function esperarMs(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function jitterMs(): number {
+  return Math.floor(Math.random() * 250);
+}
+function toDomainCalendarError(err: unknown): DomainError {
+  if (err instanceof DomainError) return err;
+  const msg = err instanceof Error ? err.message : String(err);
+  return new DomainError(`Error de sincronización con Google Calendar: ${msg}`, "CALENDAR_SYNC_ERROR");
+}
 
 const ESTADOS_VALIDOS = ["PENDIENTE", "ACTIVA", "FINALIZADA", "CANCELADA"];
 const TIPOS_VALIDOS = ["REUNION", "CAPACITACION"];
@@ -264,10 +277,9 @@ export const agendasService = {
   },
 
   /**
-   * Sincroniza una Agenda con Google Calendar.
-   * Si ya tiene calendar_event_id → actualiza el evento existente.
-   * Si no tiene → crea uno nuevo.
-   * NO crea duplicados: verifica calendar_event_id antes de crear.
+   * Sincroniza una Agenda con Google Calendar (O5-C: retry seguro + reconciliación).
+   * - UPDATE si existe `calendar_event_id` (retry acotado solo para transitorios; 404 → recrear).
+   * - CREATE con reconciliación por `extendedProperties.copeAgendaId` (sin retry ciego en AMBIGUOUS).
    */
   async sincronizarCalendar(id: string): Promise<{
     action: "created" | "updated" | "already_synced";
@@ -299,56 +311,129 @@ export const agendasService = {
 
     const evento = googleCalendarService.buildEventoFromAgenda({ ...agenda, id });
 
-    // Prevenir duplicados: si ya tiene calendar_event_id, intentar actualizar
+    // UPDATE (event_id conocido): retry acotado solo para transitorios; 404 → recrear.
     if (agenda.calendar_event_id) {
-      const existing = await googleCalendarService.obtenerEvento(
-        agenda.calendar_event_id
-      );
+      const existing = await googleCalendarService.obtenerEvento(agenda.calendar_event_id);
       if (existing.exists) {
-        // Actualizar evento existente
-        try {
-          const result = await googleCalendarService.actualizarEvento(
-            agenda.calendar_event_id,
-            evento
-          );
-          await agendasRepository.actualizarSyncCalendar(id, {
-            calendar_sync_status: "SYNCED",
-            calendar_sync_error: null,
-            calendar_html_link: result.htmlLink || null,
-            calendar_meet_link: result.meetLink ?? agenda.calendar_meet_link ?? null,
-          });
-          return { action: "updated", eventId: result.eventId, htmlLink: result.htmlLink, meetLink: result.meetLink };
-        } catch (err: any) {
-          const errorMsg = err.message ?? "Error al actualizar evento";
-          await agendasRepository.actualizarSyncCalendar(id, {
-            calendar_sync_status: "ERROR",
-            calendar_sync_error: errorMsg,
-          });
-          throw new DomainError(`Error al actualizar evento: ${errorMsg}`, "CALENDAR_UPDATE_ERROR");
-        }
+        return this.actualizarConRetry(id, agenda, evento);
       }
-      // El evento ya no existe en Google, crear uno nuevo
+      // evento ya no existe en Google → se crea de nuevo (reconciliando por identificador).
     }
 
-    // Crear nuevo evento
-    try {
-      const result = await googleCalendarService.crearEvento(evento);
-      await agendasRepository.actualizarSyncCalendar(id, {
-        calendar_event_id: result.eventId,
-        calendar_html_link: result.htmlLink || null,
-        calendar_sync_status: "SYNCED",
-        calendar_sync_error: null,
-        calendar_meet_link: result.meetLink ?? null,
-      });
-      return { action: "created", eventId: result.eventId, htmlLink: result.htmlLink, meetLink: result.meetLink };
-    } catch (err: any) {
-      const errorMsg = err.message ?? "Error al crear evento";
-      await agendasRepository.actualizarSyncCalendar(id, {
-        calendar_sync_status: "ERROR",
-        calendar_sync_error: errorMsg,
-      });
-      throw new DomainError(`Error al crear evento: ${errorMsg}`, "CALENDAR_CREATE_ERROR");
+    // CREATE con reconciliación ante ambigüedad (nunca retry ciego).
+    return this.crearConRetryYReconciliacion(id, agenda, evento);
+  },
+
+  /** UPDATE idempotente con retry acotado (RETRYABLE/AMBIGUOUS); 404 → recrear. */
+  async actualizarConRetry(id: string, agenda: AgendaRow, evento: ReturnType<typeof googleCalendarService.buildEventoFromAgenda>) {
+    const backoffs = [1000, 2000, 4000];
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      try {
+        const result = await googleCalendarService.actualizarEvento(agenda.calendar_event_id!, evento);
+        await agendasRepository.actualizarSyncCalendar(id, {
+          calendar_sync_status: "SYNCED",
+          calendar_sync_error: null,
+          calendar_html_link: result.htmlLink || null,
+          calendar_meet_link: result.meetLink ?? agenda.calendar_meet_link ?? null,
+        });
+        // eslint-disable-next-line no-console
+        console.warn(`[CALENDAR] sync operation=update agendaId=${id} attempt=${attempt + 1} result=ok`);
+        return { action: "updated" as const, eventId: result.eventId, htmlLink: result.htmlLink, meetLink: result.meetLink };
+      } catch (err) {
+        const { category, statusCode } = clasificarErrorCalendar(err);
+        if (category === "NON_RETRYABLE" || category === "AUTH") {
+          if (category === "NON_RETRYABLE" && statusCode === 404) {
+            // evento borrado en Google → recrear (reconciliando).
+            return this.crearConRetryYReconciliacion(id, agenda, evento);
+          }
+          await this.persistirErrorCalendar(id, err, category, statusCode, "update");
+          throw toDomainCalendarError(err);
+        }
+        if (attempt < 3) {
+          await esperarMs(backoffs[attempt] + jitterMs());
+          continue;
+        }
+        await this.persistirErrorCalendar(id, err, category, statusCode, "update");
+        throw toDomainCalendarError(err);
+      }
     }
+    throw new DomainError("Error al actualizar evento en Google Calendar", "CALENDAR_UPDATE_ERROR");
+  },
+
+  /** CREATE con reconciliación por identificador estable; sin retry ciego en AMBIGUOUS. */
+  async crearConRetryYReconciliacion(id: string, agenda: AgendaRow, evento: ReturnType<typeof googleCalendarService.buildEventoFromAgenda>) {
+    const backoffs = [1000, 2000, 4000];
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      // Reconciliar antes de cada create (cubre intentos ambiguos previos).
+      const reconciliado = await googleCalendarService.buscarEventoPorIdentificador(agenda.id).catch(() => null);
+      if (reconciliado?.eventId) {
+        await agendasRepository.actualizarSyncCalendar(id, {
+          calendar_event_id: reconciliado.eventId,
+          calendar_html_link: reconciliado.htmlLink ?? null,
+          calendar_sync_status: "SYNCED",
+          calendar_sync_error: null,
+        });
+        // eslint-disable-next-line no-console
+        console.warn(`[CALENDAR] sync operation=create agendaId=${id} attempt=${attempt + 1} result=reconciled`);
+        return { action: "created" as const, eventId: reconciliado.eventId, htmlLink: reconciliado.htmlLink ?? "", meetLink: undefined };
+      }
+
+      try {
+        const result = await googleCalendarService.crearEvento(evento);
+        await agendasRepository.actualizarSyncCalendar(id, {
+          calendar_event_id: result.eventId,
+          calendar_html_link: result.htmlLink || null,
+          calendar_sync_status: "SYNCED",
+          calendar_sync_error: null,
+          calendar_meet_link: result.meetLink ?? null,
+        });
+        // eslint-disable-next-line no-console
+        console.warn(`[CALENDAR] sync operation=create agendaId=${id} attempt=${attempt + 1} result=ok`);
+        return { action: "created" as const, eventId: result.eventId, htmlLink: result.htmlLink, meetLink: result.meetLink };
+      } catch (err) {
+        const { category, statusCode } = clasificarErrorCalendar(err);
+        if (category === "NON_RETRYABLE" || category === "AUTH") {
+          await this.persistirErrorCalendar(id, err, category, statusCode, "create");
+          throw toDomainCalendarError(err);
+        }
+        if (category === "AMBIGUOUS") {
+          // Puede haber creado el evento y perderse la respuesta: reconciliar una vez más.
+          const r2 = await googleCalendarService.buscarEventoPorIdentificador(agenda.id).catch(() => null);
+          if (r2?.eventId) {
+            await agendasRepository.actualizarSyncCalendar(id, {
+              calendar_event_id: r2.eventId,
+              calendar_html_link: r2.htmlLink ?? null,
+              calendar_sync_status: "SYNCED",
+              calendar_sync_error: null,
+            });
+            // eslint-disable-next-line no-console
+            console.warn(`[CALENDAR] sync operation=create agendaId=${id} attempt=${attempt + 1} result=reconciled-after-ambiguous`);
+            return { action: "created" as const, eventId: r2.eventId, htmlLink: r2.htmlLink ?? "", meetLink: undefined };
+          }
+          // No confirmado y no reconciliado → NO recrear ciegamente: ERROR (retry manual).
+          await this.persistirErrorCalendar(id, err, "AMBIGUOUS", undefined, "create");
+          throw toDomainCalendarError(err);
+        }
+        // RETRYABLE (429/5xx): Google no procesó → reintento acotado.
+        if (attempt < 3) {
+          await esperarMs(backoffs[attempt] + jitterMs());
+          continue;
+        }
+        await this.persistirErrorCalendar(id, err, category, statusCode, "create");
+        throw toDomainCalendarError(err);
+      }
+    }
+    throw new DomainError("Error al crear evento en Google Calendar", "CALENDAR_CREATE_ERROR");
+  },
+
+  async persistirErrorCalendar(id: string, err: unknown, category: CalendarErrorCategory, statusCode: number | undefined, operation: string) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await agendasRepository.actualizarSyncCalendar(id, {
+      calendar_sync_status: "ERROR",
+      calendar_sync_error: msg.slice(0, 500),
+    });
+    // eslint-disable-next-line no-console
+    console.warn(`[CALENDAR] sync operation=${operation} agendaId=${id} result=error errorCategory=${category}${statusCode !== undefined ? ` statusCode=${statusCode}` : ""}`);
   },
 
   /**
