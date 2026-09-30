@@ -549,6 +549,16 @@ export const actaPdfService = {
     return fs.existsSync(this.getFilePath(ticket));
   },
 
+  /** Elimina el PDF del acta (compensación ante fallo de persistencia DB). Best-effort. */
+  eliminarPdf(ticket: string): void {
+    const filePath = this.getFilePath(ticket);
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {
+      // best-effort: no propagar
+    }
+  },
+
   getBuffer(ticket: string): Buffer | null {
     const filePath = this.getFilePath(ticket);
     if (!fs.existsSync(filePath)) return null;

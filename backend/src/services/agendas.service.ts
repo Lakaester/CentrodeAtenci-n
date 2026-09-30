@@ -480,23 +480,34 @@ export const agendasService = {
     const existente = await agendasRepository.porId(id);
     if (!existente) throw new DomainError("Agenda no encontrada", "NO_ENCONTRADO");
 
-    const updated = await agendasRepository.guardarActa(id, contenido, estado);
-
-    // Si se finaliza → generar PDF y almacenar
+    // T3: separar PDF (filesystem) de la persistencia PostgreSQL.
+    // El artefacto obligatorio se genera/verifica ANTES de marcar FINALIZADA.
     if (estado === "FINALIZADA") {
+      // 1) Generar PDF en memoria (falla → NO persistir FINALIZADA).
+      const buffer = actaPdfService.generarSync(existente, contenido);
+      // 2) Escribir archivo a disco (falla → NO persistir FINALIZADA).
+      const { tamano } = actaPdfService.guardarPdf(existente.ticket, buffer);
+      const nombrePdf = `ACTA-${existente.ticket}.pdf`;
       try {
-        const buffer = actaPdfService.generarSync(existente, contenido);
-        const { tamano } = actaPdfService.guardarPdf(existente.ticket, buffer);
-        const nombrePdf = `ACTA-${existente.ticket}.pdf`;
-        await agendasRepository.actualizarMetadatosActa(id, {
-          acta_file_id: nombrePdf,
-          acta_nombre: nombrePdf,
-          acta_tipo: "application/pdf",
-          acta_tamano: tamano,
+        // 3) Persistir acta + metadatos ATÓMICAMENTE (una sola transacción PostgreSQL).
+        await prisma.$transaction(async (tx) => {
+          await agendasRepository.guardarActa(id, contenido, estado, tx);
+          await agendasRepository.actualizarMetadatosActa(
+            id,
+            { acta_file_id: nombrePdf, acta_nombre: nombrePdf, acta_tipo: "application/pdf", acta_tamano: tamano },
+            tx,
+          );
         });
       } catch (err) {
-        console.error("Error generando PDF del acta:", err);
+        // Compensación: el archivo ya fue escrito; si la DB falló, eliminar el temporal.
+        actaPdfService.eliminarPdf(existente.ticket);
+        throw err;
       }
+    } else {
+      // BORRADOR: solo DB, sin artefacto obligatorio.
+      await prisma.$transaction(async (tx) => {
+        await agendasRepository.guardarActa(id, contenido, estado, tx);
+      });
     }
 
     // Re-leer para retornar con metadatos actualizados

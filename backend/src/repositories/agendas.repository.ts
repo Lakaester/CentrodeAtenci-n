@@ -475,8 +475,8 @@ export const agendasRepository = {
     return rows.length > 0 ? mapRow(rows[0]) : null;
   },
 
-  async guardarActa(id: string, contenido: any, estado: string): Promise<AgendaRow | null> {
-    const rows = await prisma.$queryRawUnsafe<any[]>(
+  async guardarActa(id: string, contenido: any, estado: string, executor: AgendasDbExecutor = prisma): Promise<AgendaRow | null> {
+    const rows = await executor.$queryRawUnsafe<any[]>(
       `UPDATE agendas
        SET acta_contenido = $2, acta_estado = $3, updated_at = NOW()
        WHERE id = $1 AND eliminado = FALSE
@@ -495,7 +495,8 @@ export const agendasRepository = {
       acta_nombre?: string | null;
       acta_tipo?: string | null;
       acta_tamano?: number | null;
-    }
+    },
+    executor: AgendasDbExecutor = prisma
   ): Promise<AgendaRow | null> {
     const sets: string[] = ["updated_at = NOW()"];
     const params: any[] = [];
@@ -524,7 +525,7 @@ export const agendasRepository = {
 
     if (sets.length === 1) return this.porId(id);
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(
+    const rows = await executor.$queryRawUnsafe<any[]>(
       `UPDATE agendas SET ${sets.join(", ")} WHERE id = $${idx} AND eliminado = FALSE RETURNING *`,
       ...params,
       id
