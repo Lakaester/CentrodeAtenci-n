@@ -159,6 +159,8 @@ export const qdService = {
     clasificacion?: string | null;
     resultado?: string | null;
     canal?: string | null;
+    /** Estado real del ticket Zendesk (closed/solved) usado para el gate; separado del estado inicial del caso. */
+    estadoTicket?: string | null;
   }, usuario: string | null): Promise<{
     caso: QdCasoRow | null;
     reutilizado: boolean;
@@ -174,8 +176,8 @@ export const qdService = {
     if (!canalValido(input.canal)) {
       return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_CANAL_INVALIDO" };
     }
-    // 2. Estado Zendesk debe ser closed o solved.
-    if (!estadoZendeskCandidato(input.estado)) {
+    // 2. Estado Zendesk debe ser closed o solved (se evalúa el estado real del ticket).
+    if (!estadoZendeskCandidato(input.estadoTicket ?? input.estado)) {
       return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_ESTADO_NO_CERRADO" };
     }
     // 3. Dominio válido.

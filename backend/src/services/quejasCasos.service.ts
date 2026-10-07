@@ -159,6 +159,45 @@ export function estadoZendeskCandidato(estado: string | null | undefined): boole
   return e === "closed" || e === "solved" || e === "cerrado" || e === "resuelto";
 }
 
+export type CategoriaQyd = "QUEJA" | "RECLAMO" | "SOLICITUD_DEVOLUCION" | "QUEJA_Y_DEVOLUCION";
+
+/** Normaliza una categoría: minúsculas, sin tildes, colapsa separadores (FIX QYD realtime). */
+export function normalizarCategoriaQyd(s: string | null | undefined): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s_\-./]+/g, " ")
+    .trim();
+}
+
+/**
+ * Clasifica una categoría (y subcategoría opcional) de QyD. Reconoce:
+ * QUEJA, RECLAMO, SOLICITUD DE DEVOLUCIÓN, QUEJA Y DEVOLUCIÓN (+ variantes
+ * de mayúsculas, tildes y separadores). Devuelve el tipo de caso o null.
+ */
+export function clasificarCategoriaQyd(
+  categoria: string | null | undefined,
+  subcategoria?: string | null,
+): { tipo: "queja" | "devolucion"; categoria: CategoriaQyd } | null {
+  const cat = normalizarCategoriaQyd(categoria);
+  const sub = normalizarCategoriaQyd(subcategoria);
+  if (!cat) return null;
+
+  // QUEJA y DEVOLUCION (incluye variantes): queja-dominante → tipo queja.
+  if (cat.includes("queja") && cat.includes("devolucion")) {
+    return { tipo: "queja", categoria: "QUEJA_Y_DEVOLUCION" };
+  }
+  if (cat === "reclamo") return { tipo: "queja", categoria: "RECLAMO" };
+  if (cat === "queja" || (cat === "gestion" && sub.includes("queja"))) {
+    return { tipo: "queja", categoria: "QUEJA" };
+  }
+  if (cat.includes("devolucion") || cat.includes("devoluciones") || (cat === "gestion" && sub.includes("devolucion")) || sub.includes("devolucion")) {
+    return { tipo: "devolucion", categoria: "SOLICITUD_DEVOLUCION" };
+  }
+  return null;
+}
+
 /**
  * Obtiene las relaciones reales (follow_up) de los tickets desde Zendesk API.
  * Usa la tabla qd_relaciones_ticket como caché para ser idempotente y veloz.

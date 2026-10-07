@@ -365,7 +365,7 @@ export const qdRepository = {
       FROM public.v_unificado_norm
       WHERE fecha::date >= ${desde}::date
         AND fecha::date <= ${hasta}::date
-        AND cope_scat_normalizada(subcategoria) IN ('queja', 'solicitud de devolucion')
+        AND cope_scat_normalizada(subcategoria) IN ('queja', 'solicitud de devolucion', 'reclamo', 'queja y devolucion', 'queja y devoluciones')
       ORDER BY fecha ASC, ticket_id ASC
     `;
   },

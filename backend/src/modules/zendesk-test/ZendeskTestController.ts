@@ -10,6 +10,7 @@ import { AtencionViewModelService } from "./AtencionViewModelService";
 import { AtencionCompletaService } from "./AtencionCompletaService";
 import { ClientStore } from "./ClientStore";
 import { AgentStore } from "./AgentStore";
+import { clasificarCategoriaQyd, normalizarCategoriaQyd, estadoZendeskCandidato } from "../../services/quejasCasos.service";
 import { CustomerMemory } from "./CustomerMemory";
 import { atencionOperativaService } from "../../integrations/atenciones/services/AtencionOperativaService";
 import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
@@ -386,18 +387,19 @@ export const zendeskTestController = {
 
 /** Crea (o reutiliza) un caso de Quejas y Devoluciones cuando la categoría del ticket es QUEJA o DEVOLUCIÓN. */
 async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria: string, subcategoria: string, autor: string) {
-  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  const cat = norm(categoria);
-  const sub = norm(subcategoria);
-
-  if (cat !== "queja" && cat !== "devolucion" && cat !== "gestion") return null;
-  if (cat === "gestion" && !(sub.includes("queja") || sub.includes("devolucion"))) return null;
-
-  const tipo = (cat === "queja" || sub.includes("queja")) ? "queja" : "devolucion";
+  // FIX QYD realtime: clasificación de las 4 categorías QyD (QUEJA / RECLAMO /
+  // SOLICITUD DE DEVOLUCIÓN / QUEJA Y DEVOLUCIÓN + variantes de mayúsculas/tildes/separadores).
+  const clasificacionCat = clasificarCategoriaQyd(categoria, subcategoria);
+  if (!clasificacionCat) {
+    logQyd(ticketId, categoria, subcategoria, null, null, "NOT_QYD_CATEGORY");
+    return null;
+  }
+  const tipo = clasificacionCat.tipo;
 
   // Derivar clasificación de queja desde la subcategoría cuando sea posible.
-  let clasificacion = null;
+  let clasificacion: string | null = null;
   if (tipo === "queja") {
+    const sub = normalizarCategoriaQyd(subcategoria);
     if (sub.includes("servicio")) clasificacion = "Servicio";
     else if (sub.includes("producto")) clasificacion = "Producto";
     else if (sub.includes("otro")) clasificacion = "Otro";
@@ -409,6 +411,7 @@ async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria
   let ticketPadreId: string | null = null;
   let dominioTicket: string | null = null;
   let paisTicket: string | null = null;
+  let estadoTicket: string | null = null;
   const numId = Number(ticketId);
   if (!isNaN(numId)) {
     try {
@@ -416,9 +419,17 @@ async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria
       ticketPadreId = detalle?.ticketPadreId ?? null;
       dominioTicket = detalle?.dominio ?? null;
       paisTicket = detalle?.pais ?? null;
-    } catch {
-      // Si no se puede consultar, continuar sin ticket padre.
+      estadoTicket = detalle?.ticketOriginalStatus ?? null;
+    } catch (err) {
+      // No ocultar: se registra pero se continúa sin datos del ticket.
+      console.error(`[QD] No se pudo consultar ticket #${ticketId}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  // Estado válido: el ticket debe estar cerrado/resuelto (no crear abiertos/pendientes).
+  if (!estadoZendeskCandidato(estadoTicket)) {
+    logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "INVALID_STATE");
+    return null;
   }
 
   const { qdService } = await import("../../services/quejasDevoluciones.service");
@@ -434,18 +445,38 @@ async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria
       dominio,
       pais: (req.body as any)?.pais ?? paisTicket,
       estado: "Pendiente de conciliación",
+      estadoTicket,
       ...(clasificacion ? { clasificacion } : {}),
     }, autor);
+    logQyd(
+      ticketId, categoria, subcategoria, estadoTicket, dominio,
+      resultado?.creado ? "CREATED" : (resultado?.reutilizado ? "ALREADY_EXISTS" : "ERROR"),
+    );
     return resultado;
   } catch (err: any) {
     // Si ya existe un caso para este ticket+tipo, no fallar la categorización.
-    if (err?.code === "CASO_DUPLICADO") return null;
+    if (err?.code === "CASO_DUPLICADO") { logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "ALREADY_EXISTS"); return null; }
     // Sin dominio identificado: no crear caso incompleto; registrar el pendiente.
-    if (err?.code === "DOMINIO_REQUERIDO") {
-      console.warn(`[QD] Caso pendiente por falta de dominio del ticket #${ticketId}`);
-      return null;
-    }
-    console.error(`[QD] No se pudo crear caso desde categorización: ${err?.message}`);
+    if (err?.code === "DOMINIO_REQUERIDO") { logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "INVALID_DOMAIN"); return null; }
+    logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "ERROR");
     return null;
   }
+}
+
+/** Log del procesamiento de un ticket candidato QyD (FIX QYD realtime). Sin secretos. */
+function logQyd(
+  ticketId: string,
+  categoriaOriginal: string,
+  subcategoria: string,
+  estado: string | null,
+  dominio: string | null,
+  resultado: string,
+) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[QD] categoria ticket_id=${ticketId} canal=zendesk estado=${estado ?? "?"} ` +
+    `categoria_original=${categoriaOriginal} subcategoria=${subcategoria ?? ""} ` +
+    `categoria_normalizada=${clasificarCategoriaQyd(categoriaOriginal, subcategoria)?.categoria ?? "no_qyd"} ` +
+    `dominio=${dominio ?? "?"} resultado=${resultado}`,
+  );
 }
