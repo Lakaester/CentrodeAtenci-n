@@ -1,0 +1,71 @@
+{
+  "fecha": "2026-11-03",
+  "total": 23668,
+  "alex": 215,
+  "asesores": [
+    {
+      "asesor": "Alex Lopez",
+      "total": 215
+    },
+    {
+      "asesor": "Andrés",
+      "total": 1743
+    },
+    {
+      "asesor": "Andres Espinoza Franco",
+      "total": 319
+    },
+    {
+      "asesor": "Danilo",
+      "total": 2927
+    },
+    {
+      "asesor": "Danilo P",
+      "total": 21
+    },
+    {
+      "asesor": "Danilo Pena",
+      "total": 402
+    },
+    {
+      "asesor": "Eveling",
+      "total": 3020
+    },
+    {
+      "asesor": "Eveling Lovera",
+      "total": 796
+    },
+    {
+      "asesor": "Lidia",
+      "total": 1995
+    },
+    {
+      "asesor": "Lidia Ceferino",
+      "total": 1148
+    },
+    {
+      "asesor": "Lisbeth",
+      "total": 2506
+    },
+    {
+      "asesor": "Lisbeth Huaman",
+      "total": 1019
+    },
+    {
+      "asesor": "Sheyla",
+      "total": 2396
+    },
+    {
+      "asesor": "Sheyla Guevara",
+      "total": 1463
+    },
+    {
+      "asesor": "Victor",
+      "total": 2605
+    },
+    {
+      "asesor": "Victor Guevara",
+      "total": 1093
+    }
+  ]
+}

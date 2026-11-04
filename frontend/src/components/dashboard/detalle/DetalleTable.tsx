@@ -57,11 +57,6 @@ async function fetchAllDetalle(params: Record<string, string>): Promise<DetalleF
   return all;
 }
 
-const ESTADO_MAP: Record<string, string> = {
-  abiertos: "abierto,open,pendiente,pending,nuevo,new",
-  cerrados: "resuelto,cerrado,solved,closed",
-};
-
 const fmtDur = (min: number | null) => {
   if (min == null) return "—";
   if (min < 60) return `${Math.round(min)} min`;
@@ -112,19 +107,17 @@ export function DetalleTable() {
   const { filters: globalFilters } = useFilters();
   const [localFechaHoraInicio, setLocalFechaHoraInicio] = useState("");
   const [localFechaHoraFin, setLocalFechaHoraFin] = useState("");
-  const [localEstado, setLocalEstado] = useState<string>("");
   const [appliedLocal, setAppliedLocal] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [exporting, setExporting] = useState(false);
 
   const params = useMemo(() => {
-    const p: Record<string, string> = {};
+    const p: Record<string, string> = { universo: "final" };
     if (globalFilters.fechaHoraInicio) p.fechaHoraInicio = globalFilters.fechaHoraInicio;
     if (globalFilters.fechaHoraFin) p.fechaHoraFin = globalFilters.fechaHoraFin;
     if (appliedLocal.fechaHoraInicio) p.fechaHoraInicio = appliedLocal.fechaHoraInicio;
     if (appliedLocal.fechaHoraFin) p.fechaHoraFin = appliedLocal.fechaHoraFin;
-    if (appliedLocal.estado) p.estado = appliedLocal.estado;
     p.pagina = String(page);
     p.limite = String(limit);
     return p;
@@ -142,15 +135,13 @@ export function DetalleTable() {
     const p: Record<string, string> = {};
     if (localFechaHoraInicio) p.fechaHoraInicio = localFechaHoraInicio;
     if (localFechaHoraFin) p.fechaHoraFin = localFechaHoraFin;
-    if (localEstado && ESTADO_MAP[localEstado]) p.estado = ESTADO_MAP[localEstado];
     setAppliedLocal(p);
     setPage(1);
-  }, [localFechaHoraInicio, localFechaHoraFin, localEstado]);
+  }, [localFechaHoraInicio, localFechaHoraFin]);
 
   const limpiar = useCallback(() => {
     setLocalFechaHoraInicio("");
     setLocalFechaHoraFin("");
-    setLocalEstado("");
     setAppliedLocal({});
     setPage(1);
   }, []);
@@ -158,12 +149,11 @@ export function DetalleTable() {
   const exportar = useCallback(async () => {
     setExporting(true);
     try {
-      const exportParams: Record<string, string> = {};
+      const exportParams: Record<string, string> = { universo: "final" };
       if (globalFilters.fechaHoraInicio) exportParams.fechaHoraInicio = globalFilters.fechaHoraInicio;
       if (globalFilters.fechaHoraFin) exportParams.fechaHoraFin = globalFilters.fechaHoraFin;
       if (appliedLocal.fechaHoraInicio) exportParams.fechaHoraInicio = appliedLocal.fechaHoraInicio;
       if (appliedLocal.fechaHoraFin) exportParams.fechaHoraFin = appliedLocal.fechaHoraFin;
-      if (appliedLocal.estado) exportParams.estado = appliedLocal.estado;
       const all = await fetchAllDetalle(exportParams);
       const ws = XLSX.utils.json_to_sheet(
         all.map((r) => ({
@@ -208,7 +198,7 @@ export function DetalleTable() {
       <div className="border-b border-black-10 px-5 py-4">
         <h2 className="text-base font-semibold text-black-85">Detalle de atenciones</h2>
         <p className="mt-0.5 text-xs text-black-25">
-          Vista previa de las atenciones del período seleccionado.
+          Solo atenciones finalizadas (cerradas o resueltas) del período seleccionado.
         </p>
       </div>
 
@@ -224,15 +214,9 @@ export function DetalleTable() {
             <input type="datetime-local" value={localFechaHoraFin.replace(" ", "T")} onChange={(e) => setLocalFechaHoraFin(e.target.value.replace("T", " "))}
               className="mt-0.5 block rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85" />
           </label>
-          <label className="text-[10px] font-medium uppercase tracking-wide text-black-45">
-            Estado
-            <select value={localEstado} onChange={(e) => setLocalEstado(e.target.value)}
-              className="mt-0.5 block rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85">
-              <option value="">Todos</option>
-              <option value="abiertos">Abiertos</option>
-              <option value="cerrados">Resueltos / Cerrados</option>
-            </select>
-          </label>
+          <span className="mb-1 inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700">
+            Universo: cerradas + resueltas
+          </span>
           <button onClick={aplicar}
             className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-[#E8620A]">
             Aplicar
@@ -248,7 +232,7 @@ export function DetalleTable() {
         </div>
         {Object.keys(appliedLocal).length > 0 && (
           <p className="mt-2 text-[10px] text-primary">
-            * Filtros locales activos. Combinados con los filtros globales del dashboard.
+            * Filtros locales de fecha activos. Combinados con los filtros globales del dashboard.
           </p>
         )}
       </div>

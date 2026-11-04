@@ -20,6 +20,7 @@ const COLOR_MAP: Record<string, string> = {
   "Andres Espinoza":  "#6F9FCB",  // azul suave
   "Lisbeth Giron":    "#8585B8",  // indigo suave
   "Sheyla Guevara":   "#B08AB8",  // violeta/malva
+  "Alex López":       "#6FAFB0",  // turquesa suave
 };
 
 /** Color para asesores no mapeados (nuevos asesores). */

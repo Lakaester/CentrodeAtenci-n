@@ -22,13 +22,49 @@ function normalizeDominioFilter(dominios: string[]): string[] {
   return [...new Set(dominios.map(normalizeDomain).filter(Boolean))];
 }
 
-/** Traduce los filtros a un WHERE seguro y parametrizado sobre v_unificado_norm. */
-export function construirWhere(f: DashboardFilters): Prisma.Sql {
+/**
+ * Traduce los filtros a un WHERE seguro y parametrizado sobre v_unificado_norm.
+ *
+ * `endExclusive` es opcional y retrocompatible: cuando se activa, el límite
+ * superior incluye todos los segundos del minuto indicado. Los reportes
+ * existentes no lo usan, por lo que su comportamiento no cambia.
+ */
+export function construirWhere(
+  f: DashboardFilters,
+  opts?: { endExclusive?: boolean; fechaExpr?: Prisma.Sql; fechaRangoSargable?: boolean },
+): Prisma.Sql {
   const c: Prisma.Sql[] = [];
-  if (f.fechaHoraInicio)
-    c.push(Prisma.sql`(fecha::date + hora::time) >= ${f.fechaHoraInicio}::timestamp`);
-  if (f.fechaHoraFin)
-    c.push(Prisma.sql`(fecha::date + hora::time) <= ${f.fechaHoraFin}::timestamp`);
+  const fechaExpr = opts?.fechaExpr ?? Prisma.sql`(fecha::date + hora::time)`;
+  const usarSargable = opts?.fechaRangoSargable === true && opts?.endExclusive !== true;
+
+  if (usarSargable) {
+    // Mismo rango que (fecha::date + hora::time), pero sin calcularlo por fila.
+    // Permite que el motor empuje el filtro de fecha a las ramas de la vista.
+    if (f.fechaHoraInicio) {
+      const dia = f.fechaHoraInicio.slice(0, 10);
+      const hora = f.fechaHoraInicio.slice(11, 16);
+      c.push(Prisma.sql`fecha >= ${dia}::date`);
+      c.push(Prisma.sql`(fecha > ${dia}::date OR hora::time >= ${hora}::time)`);
+    }
+    if (f.fechaHoraFin) {
+      const dia = f.fechaHoraFin.slice(0, 10);
+      const hora = f.fechaHoraFin.slice(11, 16);
+      c.push(Prisma.sql`fecha <= ${dia}::date`);
+      c.push(Prisma.sql`(fecha < ${dia}::date OR hora::time <= ${hora}::time)`);
+    }
+  } else {
+    if (f.fechaHoraInicio)
+      c.push(Prisma.sql`${fechaExpr} >= ${f.fechaHoraInicio}::timestamp`);
+    if (f.fechaHoraFin) {
+      if (opts?.endExclusive) {
+        c.push(
+          Prisma.sql`${fechaExpr} < (${f.fechaHoraFin}::timestamp + interval '1 minute')`,
+        );
+      } else {
+        c.push(Prisma.sql`${fechaExpr} <= ${f.fechaHoraFin}::timestamp`);
+      }
+    }
+  }
   if (f.canal?.length) c.push(Prisma.sql`canal = ANY(${f.canal})`);
   if (f.subcanal?.length) c.push(Prisma.sql`subcanal = ANY(${f.subcanal})`);
   if (f.pais?.length) c.push(Prisma.sql`pais = ANY(${f.pais})`);

@@ -13,6 +13,7 @@ const DATETIME_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
 export const filtersSchema = z.object({
   fechaHoraInicio: z.string().regex(DATETIME_RE).optional(),
   fechaHoraFin: z.string().regex(DATETIME_RE).optional(),
+  universo: z.enum(["final", "todos"]).optional(),
   canal: z.preprocess(toArray, z.array(z.string()).optional()),
   subcanal: z.preprocess(toArray, z.array(z.string()).optional()),
   pais: z.preprocess(toArray, z.array(z.string()).optional()),

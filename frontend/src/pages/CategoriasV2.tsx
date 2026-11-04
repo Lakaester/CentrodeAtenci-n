@@ -1,8 +1,16 @@
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Tags, List, Medal, Award, ChevronRight, ChevronDown } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Medal,
+  Tags,
+} from "lucide-react";
 import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
 import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
@@ -10,20 +18,51 @@ import { fmtNum, fmtPct, fmtDur, KpiCard, Section } from "@/components/dashboard
 
 /* ─── Tipos ─── */
 interface CategoriasV2Response {
+  universo: {
+    total: number;
+    totalRango: number;
+    excluidas: number;
+    abiertas: number;
+    sinEstado: number;
+  };
   totalCategorias: number;
   totalSubcategorias: number;
   categoriaLider: { nombre: string; volumen: number } | null;
   subcategoriaLider: { nombre: string; volumen: number } | null;
-  paretoCategorias: { categoria: string; volumen: number; pct: number; acumulado: number }[];
-  paretoSubcategorias: { subcategoria: string; volumen: number; pct: number; acumulado: number }[];
+  paretoCategorias: {
+    categoria: string;
+    volumen: number;
+    pct: number;
+    acumulado: number;
+    tecnica: boolean;
+  }[];
+  paretoSubcategorias: {
+    categoria: string;
+    subcategoria: string;
+    volumen: number;
+  }[];
   jerarquia: { categoria: string; subcategoria: string; dominio: string; volumen: number }[];
-  categoriasTiempo: { categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[];
-  subcategoriasTiempo: { subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[];
-  categoriasSLA: { categoria: string; volumen: number; sla: number | null }[];
-  subcategoriasSLA: { subcategoria: string; categoria: string; volumen: number; sla: number | null }[];
-  matrizAsesor: { asesor: string; categoria: string; volumen: number }[];
-  matrizSubAsesor: { asesor: string; subcategoria: string; volumen: number }[];
-  impacto: { categoria: string; volumen: number; tiempo: number | null; sla: number | null }[];
+  categoriasTiempo: {
+    categoria: string;
+    volumen: number;
+    conDato: number;
+    tiempo_atencion: number | null;
+    tecnica: boolean;
+  }[];
+  categoriasSLA: {
+    categoria: string;
+    volumen: number;
+    conDato: number;
+    cumple: number;
+    noCumple: number;
+    pctCumple: number | null;
+    pctIncumple: number | null;
+    tecnica: boolean;
+  }[];
+  slaMetas: { whatsapp: number; correo: number; otro: number };
+  asesorDetalle: { asesor: string; categoria: string; subcategoria: string; volumen: number }[];
+  asesorTrazabilidad: { original: string; consolidado: string; volumen: number }[];
+  totalSinAsesor: number;
 }
 
 async function fetchData(params: Record<string, string>): Promise<CategoriasV2Response> {
@@ -31,176 +70,495 @@ async function fetchData(params: Record<string, string>): Promise<CategoriasV2Re
   return data.data as CategoriasV2Response;
 }
 
-function cssVar(name: string) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function cssVar(name: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-/* ─── ValidatedChart wrapper ─── */
-function ValidatedChart({ data, required, title, subtitle, children }: {
-  data: unknown;
-  required: string[];
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
+const fmt1 = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("es-PE", { maximumFractionDigits: 1 });
+const fmtPct1 = (n: number | null | undefined) => (n == null ? "—" : `${fmt1(n)}%`);
+
+const TECNICAS = ["SIN HOMOLOGAR", "SIN CATEGORIA EN ORIGEN", "SIN CATEGORÍA EN ORIGEN"];
+const esTecnica = (categoria: string) => TECNICAS.includes(categoria.toUpperCase());
+
+/* ════════════════════════════════════════════════════════════════ */
+/*  PARETO (categorías y subcategorías contextuales)               */
+/* ════════════════════════════════════════════════════════════════ */
+interface ParetoItem {
+  label: string;
+  volumen: number;
+  pct: number;
+  acumulado: number;
+  tecnica: boolean;
+}
+
+function ParetoChart({
+  items,
+  height = 380,
+  maxItems,
+}: {
+  items: ParetoItem[];
+  height?: number;
+  maxItems?: number;
 }) {
-  const arr = Array.isArray(data) ? data : null;
+  const primary = cssVar("--primary", "#F97316");
+  const muted = cssVar("--muted", "#64748B");
+  const border = cssVar("--border", "#E5E7EB");
+  const top = maxItems ? items.slice(0, maxItems) : items;
 
-  useEffect(() => {
-    if (!arr) {
-      console.warn(`⚠️ [${title}] dataset es null/undefined`);
-      return;
-    }
-    if (arr.length === 0) {
-      console.warn(`⚠️ [${title}] dataset vacío (0 registros)`);
-      return;
-    }
-    const row = arr[0] as Record<string, unknown>;
-    const missing = required.filter((f) => !(f in row));
-    if (missing.length) {
-      console.error(`❌ [${title}] faltan campos: ${missing.join(", ")}`);
-    } else {
-      console.log(`✅ [${title}] ${arr.length} registros, campos OK`);
-    }
-  }, [arr, required, title]);
-
-  if (!arr) {
-    return (
-      <Section title={title} subtitle={subtitle}>
-        <p className="text-sm text-black-25 py-8 text-center">Sin información para el rango seleccionado.</p>
-      </Section>
-    );
-  }
-  if (arr.length === 0) {
-    return (
-      <Section title={title} subtitle={subtitle}>
-        <p className="text-sm text-black-25 py-8 text-center">Sin información para el rango seleccionado.</p>
-      </Section>
-    );
-  }
-  const row = arr[0] as Record<string, unknown>;
-  const missing = required.filter((f) => !(f in row));
-  if (missing.length) {
-    return (
-      <Section title={title} subtitle={subtitle}>
-        <p className="text-sm text-danger py-4">Error: propiedad(es) faltante(s): {missing.join(", ")}</p>
-      </Section>
-    );
-  }
-
-  return <Section title={title} subtitle={subtitle}>{children}</Section>;
-}
-
-const ASESORES_OFICIALES = ["Andres", "Danilo", "Eveling", "Lidia", "Lisbeth", "Sheyla", "Victor"];
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  PARETO CATEGORÍAS                                              */
-/* ════════════════════════════════════════════════════════════════ */
-function ParetoCategoriasChart({ items }: { items: { categoria: string; volumen: number; pct: number; acumulado: number }[] }) {
-  const muted = cssVar("--muted");
-  const primary = cssVar("--primary");
-  const names = items.map(i => i.categoria);
-  const volumes = items.map(i => i.volumen);
-  const acums = items.map(i => i.acumulado);
-
-  const opt = {
+  const option: EChartsOption = {
     tooltip: {
-      trigger: "axis" as const,
-      axisPointer: { type: "cross" as const },
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = items[ps[0]?.dataIndex];
+      trigger: "axis",
+      axisPointer: { type: "cross" },
+      formatter: (params: any) => {
+        const i = top[params?.[0]?.dataIndex];
         if (!i) return "";
         return [
-          `<b>${i.categoria}</b>`,
-          `Volumen: <b>${fmtNum(i.volumen)}</b>`,
-          `%: ${i.pct}%`,
-          `% Acumulado: ${i.acumulado}%`,
-        ].join("<br/>");
+          `<b>${i.label}</b>`,
+          `Atenciones: <b>${fmtNum(i.volumen)}</b>`,
+          `Participación: ${fmtPct1(i.pct)}`,
+          `Acumulado: ${fmtPct1(i.acumulado)}`,
+          i.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+        ]
+          .filter(Boolean)
+          .join("<br/>");
       },
     },
-    grid: { left: 60, right: 60, top: 30, bottom: 70 },
-    xAxis: { type: "category" as const, data: names, axisLabel: { color: muted, fontSize: 10, rotate: 30, interval: 0 } },
+    grid: { left: 58, right: 58, top: 30, bottom: top.length > 8 ? 96 : 62 },
+    xAxis: {
+      type: "category",
+      data: top.map((i) => i.label),
+      axisLabel: {
+        color: muted,
+        fontSize: 10,
+        interval: 0,
+        rotate: top.length > 8 ? 38 : 0,
+        width: 110,
+        overflow: "truncate",
+      },
+      axisLine: { lineStyle: { color: border } },
+    },
     yAxis: [
-      { type: "value" as const, name: "Volumen", axisLabel: { color: muted }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-      { type: "value" as const, name: "% Acumulado", max: 100, axisLabel: { color: muted, formatter: "{value}%" }, splitLine: { show: false } },
+      {
+        type: "value",
+        name: "Atenciones",
+        nameTextStyle: { color: muted, fontSize: 10 },
+        axisLabel: {
+          color: muted,
+          fontSize: 10,
+          formatter: (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`),
+        },
+        splitLine: { lineStyle: { color: border, type: "dashed" } },
+      },
+      {
+        type: "value",
+        name: "% acumulado",
+        max: 100,
+        min: 0,
+        nameTextStyle: { color: muted, fontSize: 10 },
+        axisLabel: { color: muted, fontSize: 10, formatter: "{value}%" },
+        splitLine: { show: false },
+      },
     ],
     series: [
       {
-        type: "bar" as const, data: volumes,
-        itemStyle: { color: primary }, barMaxWidth: 28,
-        label: { show: true, position: "top" as const, formatter: (p: { value: number }) => p.value ? fmtNum(p.value) : "", color: muted, fontSize: 9 },
+        name: "Atenciones",
+        type: "bar",
+        barMaxWidth: 28,
+        data: top.map((i) => ({
+          value: i.volumen,
+          itemStyle: { color: i.tecnica ? "#94a3b8" : primary, borderRadius: [3, 3, 0, 0] },
+        })),
+        label: {
+          show: true,
+          position: "top",
+          color: muted,
+          fontSize: 9,
+          formatter: (p: any) => (p.value ? fmtNum(p.value) : ""),
+        },
       },
       {
-        type: "line" as const, yAxisIndex: 1, data: acums,
-        smooth: true, lineStyle: { color: "#ef4444", width: 2 }, itemStyle: { color: "#ef4444" },
-        areaStyle: { color: "rgba(239,68,68,0.1)" },
-        label: { show: true, position: "top" as const, formatter: (p: { value: number }) => p.value ? `${p.value}%` : "", color: "#ef4444", fontSize: 9 },
+        name: "% acumulado",
+        type: "line",
+        yAxisIndex: 1,
+        data: top.map((i) => i.acumulado),
+        symbol: "circle",
+        symbolSize: 5,
+        smooth: false,
+        lineStyle: { color: "#ef4444", width: 2 },
+        itemStyle: { color: "#ef4444" },
+        label: {
+          show: top.length <= 10,
+          position: "top",
+          color: "#ef4444",
+          fontSize: 9,
+          formatter: (p: any) => `${p.value}%`,
+        },
+        markLine: {
+          silent: true,
+          symbol: "none",
+          lineStyle: { color: "#ef4444", type: "dashed", width: 1 },
+          label: {
+            formatter: "80%",
+            position: "insideEndTop",
+            color: "#ef4444",
+            fontSize: 9,
+          },
+          data: [{ yAxis: 80 }],
+        },
       },
     ],
   };
 
-  return <ReactECharts option={opt} style={{ height: 360 }} notMerge lazyUpdate />;
+  return <ReactECharts option={option} style={{ height }} notMerge lazyUpdate />;
 }
 
 /* ════════════════════════════════════════════════════════════════ */
-/*  PARETO SUBCATEGORÍAS                                           */
+/*  RANKING DE TIEMPO DE RESOLUCIÓN                                */
 /* ════════════════════════════════════════════════════════════════ */
-function ParetoSubcategoriasChart({ items }: { items: { subcategoria: string; volumen: number; pct: number; acumulado: number }[] }) {
-  const muted = cssVar("--muted");
-  const primary = cssVar("--primary");
-  const top = items.slice(0, 20);
-  const names = top.map(i => i.subcategoria);
-  const volumes = top.map(i => i.volumen);
-  const acums = top.map(i => i.acumulado);
+function RankingTiempo({ items }: { items: CategoriasV2Response["categoriasTiempo"] }) {
+  const primary = cssVar("--primary", "#F97316");
+  const muted = cssVar("--muted", "#64748B");
+  const border = cssVar("--border", "#E5E7EB");
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => (b.tiempo_atencion ?? -1) - (a.tiempo_atencion ?? -1)),
+    [items],
+  );
 
-  const opt = {
+  const option: EChartsOption = {
     tooltip: {
-      trigger: "axis" as const,
-      axisPointer: { type: "cross" as const },
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = top[ps[0]?.dataIndex];
-        if (!i) return "";
+      trigger: "axis",
+      formatter: (params: any) => {
+        const r = sorted[params?.[0]?.dataIndex];
+        if (!r) return "";
         return [
-          `<b>${i.subcategoria}</b>`,
-          `Volumen: <b>${fmtNum(i.volumen)}</b>`,
-          `%: ${i.pct}%`,
-          `% Acumulado: ${i.acumulado}%`,
-        ].join("<br/>");
+          `<b>${r.categoria}</b>`,
+          `Tiempo promedio: <b>${fmtDur(r.tiempo_atencion)}</b>`,
+          `Atenciones: ${fmtNum(r.volumen)}`,
+          `Con tiempo registrado: ${fmtNum(r.conDato)}`,
+          r.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+        ]
+          .filter(Boolean)
+          .join("<br/>");
       },
     },
-    grid: { left: 60, right: 60, top: 30, bottom: 70 },
-    xAxis: { type: "category" as const, data: names, axisLabel: { color: muted, fontSize: 10, rotate: 30, interval: 0 } },
-    yAxis: [
-      { type: "value" as const, name: "Volumen", axisLabel: { color: muted }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-      { type: "value" as const, name: "% Acumulado", max: 100, axisLabel: { color: muted, formatter: "{value}%" }, splitLine: { show: false } },
-    ],
+    grid: { left: 176, right: 96, top: 8, bottom: 24 },
+    xAxis: {
+      type: "value",
+      axisLabel: { color: muted, fontSize: 10, formatter: (v: number) => fmtDur(v) },
+      splitLine: { lineStyle: { color: border, type: "dashed" } },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: sorted.map((r) => r.categoria),
+      axisLabel: { color: muted, fontSize: 10, width: 160, overflow: "truncate" },
+      axisLine: { lineStyle: { color: border } },
+    },
     series: [
       {
-        type: "bar" as const, data: volumes,
-        itemStyle: { color: primary }, barMaxWidth: 28,
-        label: { show: true, position: "top" as const, formatter: (p: { value: number }) => p.value ? fmtNum(p.value) : "", color: muted, fontSize: 9 },
-      },
-      {
-        type: "line" as const, yAxisIndex: 1, data: acums,
-        smooth: true, lineStyle: { color: "#ef4444", width: 2 }, itemStyle: { color: "#ef4444" },
-        areaStyle: { color: "rgba(239,68,68,0.1)" },
-        label: { show: true, position: "top" as const, formatter: (p: { value: number }) => p.value ? `${p.value}%` : "", color: "#ef4444", fontSize: 9 },
+        type: "bar",
+        barMaxWidth: 16,
+        data: sorted.map((r) => ({
+          value: r.tiempo_atencion ?? 0,
+          itemStyle: {
+            color: r.tecnica ? "#94a3b8" : primary,
+            borderRadius: [0, 4, 4, 0],
+          },
+        })),
+        label: {
+          show: true,
+          position: "right",
+          color: muted,
+          fontSize: 9,
+          formatter: (p: any) => {
+            const r = sorted[p.dataIndex];
+            return r?.tiempo_atencion == null
+              ? "—"
+              : `${fmtDur(r.tiempo_atencion)} · ${fmtNum(r.conDato)}`;
+          },
+        },
       },
     ],
   };
 
-  return <ReactECharts option={opt} style={{ height: 360 }} notMerge lazyUpdate />;
+  return (
+    <ReactECharts
+      option={option}
+      style={{ height: Math.max(240, sorted.length * 26 + 30) }}
+      notMerge
+      lazyUpdate
+    />
+  );
 }
 
 /* ════════════════════════════════════════════════════════════════ */
-/*  MATRIZ JERÁRQUICA                                              */
+/*  RANKING DE INCUMPLIMIENTO SLA                                  */
 /* ════════════════════════════════════════════════════════════════ */
-function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcategoria: string; dominio: string; volumen: number }[] }) {
+function RankingSLA({ items }: { items: CategoriasV2Response["categoriasSLA"] }) {
+  const muted = cssVar("--muted", "#64748B");
+  const border = cssVar("--border", "#E5E7EB");
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => (b.pctIncumple ?? -1) - (a.pctIncumple ?? -1)),
+    [items],
+  );
+
+  const option: EChartsOption = {
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: any) => {
+        const r = sorted[params?.[0]?.dataIndex];
+        if (!r) return "";
+        return [
+          `<b>${r.categoria}</b>`,
+          `Incumplimiento: <b>${fmtPct1(r.pctIncumple)}</b>`,
+          `Incumplen: ${fmtNum(r.noCumple)} de ${fmtNum(r.conDato)} evaluables`,
+          `Cumplen: ${fmtNum(r.cumple)} (${fmtPct1(r.pctCumple)})`,
+          r.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+        ]
+          .filter(Boolean)
+          .join("<br/>");
+      },
+    },
+    grid: { left: 176, right: 116, top: 8, bottom: 24 },
+    xAxis: {
+      type: "value",
+      max: 100,
+      axisLabel: { color: muted, fontSize: 10, formatter: "{value}%" },
+      splitLine: { lineStyle: { color: border, type: "dashed" } },
+    },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: sorted.map((r) => r.categoria),
+      axisLabel: { color: muted, fontSize: 10, width: 160, overflow: "truncate" },
+      axisLine: { lineStyle: { color: border } },
+    },
+    series: [
+      {
+        type: "bar",
+        barMaxWidth: 16,
+        data: sorted.map((r) => ({
+          value: r.pctIncumple ?? 0,
+          itemStyle: {
+            color: r.tecnica ? "#94a3b8" : "#ef4444",
+            borderRadius: [0, 4, 4, 0],
+          },
+        })),
+        label: {
+          show: true,
+          position: "right",
+          color: muted,
+          fontSize: 9,
+          formatter: (p: any) => {
+            const r = sorted[p.dataIndex];
+            if (!r || r.pctIncumple == null) return "—";
+            return `${fmtPct1(r.pctIncumple)} · ${fmtNum(r.noCumple)}/${fmtNum(r.conDato)}`;
+          },
+        },
+      },
+    ],
+  };
+
+  return (
+    <ReactECharts
+      option={option}
+      style={{ height: Math.max(240, sorted.length * 26 + 30) }}
+      notMerge
+      lazyUpdate
+    />
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+/*  ANÁLISIS POR ASESOR                                            */
+/* ════════════════════════════════════════════════════════════════ */
+function AnalisisAsesor({ data }: { data: CategoriasV2Response }) {
+  const [cat, setCat] = useState("");
+  const [sub, setSub] = useState("");
+
+  const categorias = data.paretoCategorias.map((r) => r.categoria);
+
+  const subcategorias = useMemo(() => {
+    if (!cat) return [];
+    const vistos = new Map<string, number>();
+    for (const r of data.paretoSubcategorias) {
+      if (r.categoria !== cat) continue;
+      vistos.set(r.subcategoria, (vistos.get(r.subcategoria) ?? 0) + r.volumen);
+    }
+    return [...vistos.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s);
+  }, [cat, data.paretoSubcategorias]);
+
+  const filas = useMemo(() => {
+    const filtrado = data.asesorDetalle.filter(
+      (r) => (!cat || r.categoria === cat) && (!sub || r.subcategoria === sub),
+    );
+    const total = filtrado.reduce((s, r) => s + r.volumen, 0);
+    const mapa = new Map<string, number>();
+    for (const r of filtrado) mapa.set(r.asesor, (mapa.get(r.asesor) ?? 0) + r.volumen);
+    const orden = [...mapa.entries()]
+      .map(([asesor, volumen]) => ({
+        asesor,
+        volumen,
+        pct: total > 0 ? (volumen / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.volumen - a.volumen);
+    return {
+      total,
+      oficiales: orden.filter((r) => r.asesor !== "Sin asignar"),
+      sinAsignar: orden.find((r) => r.asesor === "Sin asignar") ?? null,
+    };
+  }, [cat, sub, data.asesorDetalle]);
+
+  const max = Math.max(1, ...filas.oficiales.map((r) => r.volumen));
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-black-45">
+            Categoría
+          </span>
+          <select
+            value={cat}
+            onChange={(e) => {
+              setCat(e.target.value);
+              setSub("");
+            }}
+            className="min-w-[190px] rounded-lg border border-black-10 bg-white px-3 py-1.5 text-xs text-black-85"
+          >
+            <option value="">Todas las categorías</option>
+            {categorias.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-black-45">
+            Subcategoría
+          </span>
+          <select
+            value={sub}
+            onChange={(e) => setSub(e.target.value)}
+            disabled={!cat}
+            className="min-w-[190px] rounded-lg border border-black-10 bg-white px-3 py-1.5 text-xs text-black-85 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Todas las subcategorías</option>
+            {subcategorias.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <span className="ml-auto text-xs text-black-45">
+          {fmtNum(filas.total)} atenciones · {filas.oficiales.length} asesores
+        </span>
+      </div>
+
+      {filas.oficiales.length === 0 ? (
+        <p className="py-8 text-center text-sm text-black-25">
+          Sin información para el filtro seleccionado.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {filas.oficiales.map((r) => (
+            <li key={r.asesor}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="truncate text-black-85">{r.asesor}</span>
+                <span className="whitespace-nowrap text-right">
+                  <span className="font-semibold text-black-85">{fmtNum(r.volumen)}</span>
+                  <span className="ml-2 text-xs text-black-45">{fmtPct1(r.pct)}</span>
+                </span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#F1F5F9]">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(r.volumen / max) * 100}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {filas.sinAsignar && filas.sinAsignar.volumen > 0 ? (
+        <div className="mt-4 border-t border-dashed border-black-10 pt-3">
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="flex items-center gap-2 text-black-45">
+              <span className="inline-block h-2 w-2 rounded-full bg-[#94a3b8]" />
+              Sin asignar <span className="text-[10px] uppercase">(calidad)</span>
+            </span>
+            <span className="whitespace-nowrap text-right">
+              <span className="font-semibold text-black-45">
+                {fmtNum(filas.sinAsignar.volumen)}
+              </span>
+              <span className="ml-2 text-xs text-black-45">{fmtPct1(filas.sinAsignar.pct)}</span>
+            </span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#F1F5F9]">
+            <div
+              className="h-full rounded-full bg-[#94a3b8]"
+              style={{ width: `${(filas.sinAsignar.volumen / max) * 100}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <details className="mt-4 rounded-lg border border-black-10 bg-[#F8F9FA] p-3">
+        <summary className="cursor-pointer text-xs font-medium text-black-45">
+          Ver equivalencias de nombres ({data.asesorTrazabilidad.length} originales →{" "}
+          {new Set(data.asesorTrazabilidad.map((r) => r.consolidado)).size} asesores)
+        </summary>
+        <table className="mt-2 w-full text-xs">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-wider text-black-45">
+              <th className="pb-1 pr-3">Nombre original</th>
+              <th className="pb-1 pr-3">Asesor consolidado</th>
+              <th className="pb-1 text-right">Atenciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.asesorTrazabilidad.map((r) => (
+              <tr key={r.original} className="border-t border-black-5">
+                <td className="py-1 pr-3 text-black-45">{r.original}</td>
+                <td className="py-1 pr-3 text-black-85">{r.consolidado}</td>
+                <td className="py-1 text-right text-black-85">{fmtNum(r.volumen)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+
+      <p className="mt-3 text-[11px] text-black-25">
+        Volumen asignado en origen, no resuelto por el asesor. La consolidación usa una tabla
+        explícita de equivalencias; la suma de asesores coincide con el total del reporte.
+      </p>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+/*  TABLA JERÁRQUICA                                               */
+/* ════════════════════════════════════════════════════════════════ */
+function TablaJerarquica({
+  items,
+}: {
+  items: CategoriasV2Response["jerarquia"];
+}) {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
 
-  // Construir árbol Categoría → Subcategoría → Dominio, ordenado por volumen desc en cada nivel.
   const tree = useMemo(() => {
-    const catMap = new Map<string, { total: number; subs: Map<string, { total: number; dominios: Map<string, number> }> }>();
+    const catMap = new Map<
+      string,
+      { total: number; subs: Map<string, { total: number; dominios: Map<string, number> }> }
+    >();
     for (const r of items) {
       if (!catMap.has(r.categoria)) catMap.set(r.categoria, { total: 0, subs: new Map() });
       const entry = catMap.get(r.categoria)!;
@@ -218,7 +576,9 @@ function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcateg
           .map(([subcategoria, s]) => ({
             subcategoria,
             total: s.total,
-            dominios: [...s.dominios.entries()].map(([dominio, total]) => ({ dominio, total })).sort((a, b) => b.total - a.total),
+            dominios: [...s.dominios.entries()]
+              .map(([dominio, total]) => ({ dominio, total }))
+              .sort((a, b) => b.total - a.total),
           }))
           .sort((a, b) => b.total - a.total),
       }))
@@ -227,21 +587,36 @@ function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcateg
     return { cats, grandTotal };
   }, [items]);
 
-  const toggleCat = (cat: string) => setExpandedCats((prev) => { const n = new Set(prev); if (n.has(cat)) n.delete(cat); else n.add(cat); return n; });
-  const toggleSub = (key: string) => setExpandedSubs((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const toggleCat = (cat: string) =>
+    setExpandedCats((prev) => {
+      const n = new Set(prev);
+      if (n.has(cat)) n.delete(cat);
+      else n.add(cat);
+      return n;
+    });
 
-  if (!tree.cats.length) return null;
+  const toggleSub = (key: string) =>
+    setExpandedSubs((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+
+  if (!tree.cats.length) {
+    return <p className="py-8 text-center text-sm text-black-25">Sin información.</p>;
+  }
 
   return (
-    <div className="max-h-96 overflow-y-auto">
+    <div className="max-h-[480px] overflow-y-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-white">
-          <tr className="text-left text-xs font-semibold uppercase tracking-wider text-black-45">
-            <th className="pb-3 pr-4 w-8" />
-            <th className="pb-3 pr-4">Categoría</th>
-            <th className="pb-3 pr-4">Subcategoría</th>
-            <th className="pb-3 pr-4">Dominio</th>
-            <th className="pb-3 pr-4 text-right">Cantidad</th>
+          <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-black-45">
+            <th className="w-8 pb-3 pr-3" />
+            <th className="pb-3 pr-3">Categoría</th>
+            <th className="pb-3 pr-3">Subcategoría</th>
+            <th className="pb-3 pr-3">Dominio</th>
+            <th className="pb-3 pr-3 text-right">Cantidad</th>
             <th className="pb-3 text-right">%</th>
           </tr>
         </thead>
@@ -250,42 +625,85 @@ function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcateg
             const catOpen = expandedCats.has(cat.categoria);
             return (
               <Fragment key={cat.categoria}>
-                {/* Nivel 1: Categoría */}
-                <tr className="border-t border-black-5 cursor-pointer hover:bg-light" onClick={() => toggleCat(cat.categoria)}>
-                  <td className="py-2.5 pr-4">{catOpen ? <ChevronDown size={14} className="text-black-45" /> : <ChevronRight size={14} className="text-black-45" />}</td>
-                  <td className="py-2.5 pr-4 font-semibold text-black-85">{cat.categoria}</td>
-                  <td className="py-2.5 pr-4 text-black-25 text-xs">{cat.subcategorias.length} subcategorías</td>
-                  <td className="py-2.5 pr-4 text-black-25 text-xs" />
-                  <td className="py-2.5 pr-4 text-right font-medium text-black-85">{fmtNum(cat.total)}</td>
-                  <td className="py-2.5 text-right font-medium text-black-85">{fmtPct((cat.total / tree.grandTotal) * 100)}</td>
+                <tr
+                  className="cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]"
+                  onClick={() => toggleCat(cat.categoria)}
+                >
+                  <td className="py-2.5 pr-3">
+                    {catOpen ? (
+                      <ChevronDown size={14} className="text-black-45" />
+                    ) : (
+                      <ChevronRight size={14} className="text-black-45" />
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-3 font-semibold text-black-85">
+                    <span className="flex flex-wrap items-center gap-2">
+                      {cat.categoria}
+                      {esTecnica(cat.categoria) ? (
+                        <span className="rounded border border-black-10 bg-[#F8F9FA] px-1.5 py-0.5 text-[9px] font-medium uppercase text-black-45">
+                          técnica
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="py-2.5 pr-3 text-xs text-black-45">
+                    {cat.subcategorias.length} subcategorías
+                  </td>
+                  <td className="py-2.5 pr-3" />
+                  <td className="py-2.5 pr-3 text-right font-medium text-black-85">
+                    {fmtNum(cat.total)}
+                  </td>
+                  <td className="py-2.5 text-right font-medium text-black-85">
+                    {fmtPct((cat.total / tree.grandTotal) * 100)}
+                  </td>
                 </tr>
-                {catOpen && cat.subcategorias.map((sub) => {
-                  const subKey = `${cat.categoria}|${sub.subcategoria}`;
-                  const subOpen = expandedSubs.has(subKey);
-                  return (
-                    <Fragment key={subKey}>
-                      {/* Nivel 2: Subcategoría */}
-                      <tr className="border-t border-[#F8F9FA] cursor-pointer hover:bg-light" onClick={() => toggleSub(subKey)}>
-                        <td className="py-2 pr-4" />
-                        <td className="py-2 pr-4" />
-                        <td className="py-2 pr-4 pl-6 text-[#475569] text-xs">{sub.subcategoria}</td>
-                        <td className="py-2 pr-4 text-black-25 text-xs">{subOpen ? "" : `${sub.dominios.length} dominios`}</td>
-                        <td className="py-2 pr-4 text-right text-[#475569] text-xs">{fmtNum(sub.total)}</td>
-                        <td className="py-2 text-right text-[#475569] text-xs">{fmtPct((sub.total / tree.grandTotal) * 100)}</td>
-                      </tr>
-                      {subOpen && sub.dominios.map((dom) => (
-                        <tr key={`${subKey}|${dom.dominio}`} className="border-t border-[#F8F9FA]">
-                          <td className="py-2 pr-4" />
-                          <td className="py-2 pr-4" />
-                          <td className="py-2 pr-4" />
-                          <td className="py-2 pr-4 pl-10 font-mono text-[#475569] text-xs">{dom.dominio}</td>
-                          <td className="py-2 pr-4 text-right text-[#475569] text-xs">{fmtNum(dom.total)}</td>
-                          <td className="py-2 text-right text-[#475569] text-xs">{fmtPct((dom.total / tree.grandTotal) * 100)}</td>
+
+                {catOpen &&
+                  cat.subcategorias.map((sub) => {
+                    const subKey = `${cat.categoria}|${sub.subcategoria}`;
+                    const subOpen = expandedSubs.has(subKey);
+                    return (
+                      <Fragment key={subKey}>
+                        <tr
+                          className="cursor-pointer border-t border-[#F8F9FA] hover:bg-[#F8F9FA]"
+                          onClick={() => toggleSub(subKey)}
+                        >
+                          <td className="py-2 pr-3" />
+                          <td className="py-2 pr-3" />
+                          <td className="py-2 pl-6 pr-3 text-xs text-[#475569]">
+                            {sub.subcategoria}
+                          </td>
+                          <td className="py-2 pr-3 text-xs text-black-25">
+                            {subOpen ? "" : `${sub.dominios.length} dominios`}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-xs text-[#475569]">
+                            {fmtNum(sub.total)}
+                          </td>
+                          <td className="py-2 text-right text-xs text-[#475569]">
+                            {fmtPct((sub.total / tree.grandTotal) * 100)}
+                          </td>
                         </tr>
-                      ))}
-                    </Fragment>
-                  );
-                })}
+
+                        {subOpen &&
+                          sub.dominios.map((dom) => (
+                            <tr key={`${subKey}|${dom.dominio}`} className="border-t border-[#F8F9FA]">
+                              <td className="py-2 pr-3" />
+                              <td className="py-2 pr-3" />
+                              <td className="py-2 pr-3" />
+                              <td className="py-2 pl-10 pr-3 font-mono text-xs text-[#475569]">
+                                {dom.dominio}
+                              </td>
+                              <td className="py-2 pr-3 text-right text-xs text-[#475569]">
+                                {fmtNum(dom.total)}
+                              </td>
+                              <td className="py-2 text-right text-xs text-[#475569]">
+                                {fmtPct((dom.total / tree.grandTotal) * 100)}
+                              </td>
+                            </tr>
+                          ))}
+                      </Fragment>
+                    );
+                  })}
               </Fragment>
             );
           })}
@@ -296,344 +714,70 @@ function MatrizJerarquicaChart({ items }: { items: { categoria: string; subcateg
 }
 
 /* ════════════════════════════════════════════════════════════════ */
-/*  CATEGORÍAS VS TIEMPO DE RESOLUCIÓN                              */
-/* ════════════════════════════════════════════════════════════════ */
-function CategoriasTiempoChart({ items }: { items: { categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const sorted = useMemo(() => [...items].sort((a, b) => (b.tiempo_resolucion ?? 0) - (a.tiempo_resolucion ?? 0)), [items]);
-  const maxVal = Math.max(...sorted.map(i => i.tiempo_resolucion ?? 0), 1);
-
-  const opt = {
-    tooltip: {
-      trigger: "axis" as const,
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = sorted[ps[0]?.dataIndex];
-        if (!i) return "";
-        return [
-          `<b>${i.categoria}</b>`,
-          `Volumen: ${fmtNum(i.volumen)}`,
-          `Tiempo resolución: ${fmtDur(i.tiempo_resolucion)}`,
-          `Tiempo espera: ${fmtDur(i.tiempo_espera)}`,
-          `Tiempo atención: ${fmtDur(i.tiempo_atencion)}`,
-          `SLA: ${fmtPct(i.sla)}`,
-        ].join("<br/>");
-      },
-    },
-    grid: { left: 180, right: 60, top: 10, bottom: 20 },
-    xAxis: { type: "value" as const, axisLabel: { color: muted, formatter: (v: number) => fmtDur(v) }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted.map(i => i.categoria), axisLabel: { color: textColor, fontSize: 10 } },
-    series: [{
-      type: "bar" as const, data: sorted.map(i => i.tiempo_resolucion),
-      barMaxWidth: 18,
-      itemStyle: {
-        color: (p: { value: number }) => {
-          const r = (p.value ?? 0) / maxVal;
-          return r > 0.7 ? "#ef4444" : r > 0.4 ? "#f59e0b" : "#22c55e";
-        },
-        borderRadius: [0, 4, 4, 0],
-      },
-      label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: textColor, fontSize: 10 },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(160, sorted.length * 22 + 40) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  SUBCATEGORÍAS VS TIEMPO DE RESOLUCIÓN (Top 15)                  */
-/* ════════════════════════════════════════════════════════════════ */
-function SubcategoriasTiempoChart({ items }: { items: { subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const sorted = useMemo(() => {
-    const top = [...items].sort((a, b) => b.volumen - a.volumen).slice(0, 15);
-    return top.sort((a, b) => (b.tiempo_resolucion ?? 0) - (a.tiempo_resolucion ?? 0));
-  }, [items]);
-  const maxVal = Math.max(...sorted.map(i => i.tiempo_resolucion ?? 0), 1);
-
-  const opt = {
-    tooltip: {
-      trigger: "axis" as const,
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = sorted[ps[0]?.dataIndex];
-        if (!i) return "";
-        return [
-          `<b>${i.subcategoria}</b>`,
-          `Categoría: ${i.categoria}`,
-          `Volumen: ${fmtNum(i.volumen)}`,
-          `Tiempo resolución: ${fmtDur(i.tiempo_resolucion)}`,
-          `SLA: ${fmtPct(i.sla)}`,
-        ].join("<br/>");
-      },
-    },
-    grid: { left: 200, right: 60, top: 10, bottom: 20 },
-    xAxis: { type: "value" as const, axisLabel: { color: muted, formatter: (v: number) => fmtDur(v) }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted.map(i => i.subcategoria), axisLabel: { color: textColor, fontSize: 10 } },
-    series: [{
-      type: "bar" as const, data: sorted.map(i => i.tiempo_resolucion),
-      barMaxWidth: 18,
-      itemStyle: {
-        color: (p: { value: number }) => {
-          const r = (p.value ?? 0) / maxVal;
-          return r > 0.7 ? "#ef4444" : r > 0.4 ? "#f59e0b" : "#22c55e";
-        },
-        borderRadius: [0, 4, 4, 0],
-      },
-      label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: textColor, fontSize: 10 },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(160, sorted.length * 22 + 40) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  CATEGORÍAS VS SLA                                               */
-/* ════════════════════════════════════════════════════════════════ */
-function CategoriasSLAChart({ items }: { items: { categoria: string; volumen: number; sla: number | null }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const sorted = useMemo(() => [...items].sort((a, b) => (a.sla ?? 0) - (b.sla ?? 0)), [items]);
-
-  const opt = {
-    tooltip: {
-      trigger: "axis" as const,
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = sorted[ps[0]?.dataIndex];
-        if (!i) return "";
-        return [
-          `<b>${i.categoria}</b>`,
-          `Volumen: ${fmtNum(i.volumen)}`,
-          `SLA: ${fmtPct(i.sla)}`,
-        ].join("<br/>");
-      },
-    },
-    grid: { left: 180, right: 60, top: 10, bottom: 20 },
-    xAxis: { type: "value" as const, max: 100, axisLabel: { color: muted, formatter: "{value}%" }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted.map(i => i.categoria), axisLabel: { color: textColor, fontSize: 10 } },
-    series: [{
-      type: "bar" as const, data: sorted.map(i => i.sla),
-      barMaxWidth: 18,
-      itemStyle: {
-        color: (p: { value: number }) => p.value >= 95 ? "#22c55e" : p.value >= 80 ? "#f59e0b" : "#ef4444",
-        borderRadius: [0, 4, 4, 0],
-      },
-      label: { show: true, position: "right" as const, formatter: (p: { value: number }) => `${p.value}%`, color: textColor, fontSize: 10 },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(160, sorted.length * 22 + 40) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  SUBCATEGORÍAS VS SLA                                            */
-/* ════════════════════════════════════════════════════════════════ */
-function SubcategoriasSLAChart({ items }: { items: { subcategoria: string; categoria: string; volumen: number; sla: number | null }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const sorted = useMemo(() => {
-    const top = [...items].sort((a, b) => b.volumen - a.volumen).slice(0, 15);
-    return top.sort((a, b) => (a.sla ?? 0) - (b.sla ?? 0));
-  }, [items]);
-
-  const opt = {
-    tooltip: {
-      trigger: "axis" as const,
-      formatter: (ps: { dataIndex: number }[]) => {
-        const i = sorted[ps[0]?.dataIndex];
-        if (!i) return "";
-        return [
-          `<b>${i.subcategoria}</b>`,
-          `Categoría: ${i.categoria}`,
-          `Volumen: ${fmtNum(i.volumen)}`,
-          `SLA: ${fmtPct(i.sla)}`,
-        ].join("<br/>");
-      },
-    },
-    grid: { left: 200, right: 60, top: 10, bottom: 20 },
-    xAxis: { type: "value" as const, max: 100, axisLabel: { color: muted, formatter: "{value}%" }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted.map(i => i.subcategoria), axisLabel: { color: textColor, fontSize: 10 } },
-    series: [{
-      type: "bar" as const, data: sorted.map(i => i.sla),
-      barMaxWidth: 18,
-      itemStyle: {
-        color: (p: { value: number }) => p.value >= 95 ? "#22c55e" : p.value >= 80 ? "#f59e0b" : "#ef4444",
-        borderRadius: [0, 4, 4, 0],
-      },
-      label: { show: true, position: "right" as const, formatter: (p: { value: number }) => `${p.value}%`, color: textColor, fontSize: 10 },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(160, sorted.length * 22 + 40) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  HEATMAP CATEGORÍA × ASESOR                                     */
-/* ════════════════════════════════════════════════════════════════ */
-function HeatmapCatAsesorChart({ items }: { items: { asesor: string; categoria: string; volumen: number }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const { cats, ases, maxV } = useMemo(() => {
-    const filtered = items.filter(i => ASESORES_OFICIALES.includes(i.asesor));
-    const catSet = [...new Set(filtered.map(i => i.categoria))];
-    const aseSet = [...new Set(filtered.map(i => i.asesor))].sort((a, b) => ASESORES_OFICIALES.indexOf(a) - ASESORES_OFICIALES.indexOf(b));
-    return { cats: catSet, ases: aseSet, maxV: Math.max(...filtered.map(i => i.volumen), 1) };
-  }, [items]);
-
-  const data = cats.flatMap((cat, ci) => ases.map((asesor, ai) => {
-    const f = items.find(i => i.categoria === cat && i.asesor === asesor);
-    return [ai, ci, f?.volumen ?? 0] as number[];
-  }));
-
-  const opt = {
-    tooltip: {
-      formatter: (p: { value: number[] }) => {
-        const cat = cats[p.value[1]];
-        const ase = ases[p.value[0]];
-        const v = p.value[2];
-        return [`<b>${cat}</b>`, `Asesor: ${ase}`, `Cantidad: ${fmtNum(v)}`].join("<br/>");
-      },
-    },
-    grid: { left: 140, right: 60, top: 10, bottom: 70 },
-    xAxis: { type: "category" as const, data: ases, axisLabel: { color: muted, fontSize: 10, rotate: 30 } },
-    yAxis: { type: "category" as const, data: cats, axisLabel: { color: textColor, fontSize: 10 } },
-    visualMap: { min: 0, max: maxV, calculable: true, orient: "horizontal", left: "center", bottom: 0, inRange: { color: ["#f0f9ff", "#3b82f6", "#1d4ed8"] } },
-    series: [{
-      type: "heatmap" as const, data,
-      label: { show: true, color: "#fff", fontSize: 10, formatter: (p: { value: number[] }) => p.value[2] ? fmtNum(p.value[2]) : "" },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(200, cats.length * 24 + 80) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  HEATMAP SUBCATEGORÍA × ASESOR (Top 20)                         */
-/* ════════════════════════════════════════════════════════════════ */
-function HeatmapSubAsesorChart({ items }: { items: { asesor: string; subcategoria: string; volumen: number }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const { subs, ases, maxV } = useMemo(() => {
-    const topSubs = [...new Set(items.map(i => i.subcategoria))].slice(0, 20);
-    const filtered = items.filter(i => topSubs.includes(i.subcategoria) && ASESORES_OFICIALES.includes(i.asesor));
-    const aseSet = [...new Set(filtered.map(i => i.asesor))].sort((a, b) => ASESORES_OFICIALES.indexOf(a) - ASESORES_OFICIALES.indexOf(b));
-    return { subs: topSubs, ases: aseSet, maxV: Math.max(...filtered.map(i => i.volumen), 1) };
-  }, [items]);
-
-  const data = subs.flatMap((sub, si) => ases.map((asesor, ai) => {
-    const f = items.find(i => i.subcategoria === sub && i.asesor === asesor);
-    return [ai, si, f?.volumen ?? 0] as number[];
-  }));
-
-  const opt = {
-    tooltip: {
-      formatter: (p: { value: number[] }) => {
-        const sub = subs[p.value[1]];
-        const ase = ases[p.value[0]];
-        const v = p.value[2];
-        return [`<b>${sub}</b>`, `Asesor: ${ase}`, `Cantidad: ${fmtNum(v)}`].join("<br/>");
-      },
-    },
-    grid: { left: 200, right: 60, top: 10, bottom: 70 },
-    xAxis: { type: "category" as const, data: ases, axisLabel: { color: muted, fontSize: 10, rotate: 30 } },
-    yAxis: { type: "category" as const, data: subs, axisLabel: { color: textColor, fontSize: 10 } },
-    visualMap: { min: 0, max: maxV, calculable: true, orient: "horizontal", left: "center", bottom: 0, inRange: { color: ["#f0f9ff", "#3b82f6", "#1d4ed8"] } },
-    series: [{
-      type: "heatmap" as const, data,
-      label: { show: true, color: "#fff", fontSize: 10, formatter: (p: { value: number[] }) => p.value[2] ? fmtNum(p.value[2]) : "" },
-    }],
-  };
-
-  return <ReactECharts option={opt} style={{ height: Math.max(200, subs.length * 24 + 80) }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  BURBUJA — IMPACTO OPERATIVO                                    */
-/* ════════════════════════════════════════════════════════════════ */
-function ImpactoBubbleChart({ items }: { items: { categoria: string; volumen: number; tiempo: number | null; sla: number | null }[] }) {
-  const muted = cssVar("--muted");
-  const textColor = cssVar("--text");
-
-  const { data, avgX, avgY } = useMemo(() => {
-    const vals = items.filter(i => i.tiempo != null && i.volumen > 0).map(i => ({
-      value: [i.tiempo! * 60, i.volumen, i.volumen],
-      name: i.categoria,
-      tiempo: i.tiempo! * 60,
-      volumen: i.volumen,
-      sla: i.sla,
-    }));
-    const sx = vals.reduce((s, d) => s + d.tiempo, 0);
-    const sy = vals.reduce((s, d) => s + d.volumen, 0);
-    return { data: vals, avgX: vals.length ? sx / vals.length : 0, avgY: vals.length ? sy / vals.length : 0 };
-  }, [items]);
-
-  const opt = {
-    tooltip: {
-      formatter: (p: { data: { name: string; volumen: number; tiempo: number; sla: number | null } }) => {
-        const d = p.data;
-        return [
-          `<b>${d.name}</b>`,
-          `Volumen: ${fmtNum(d.volumen)}`,
-          `Tiempo: ${fmtDur(d.tiempo)}`,
-          `SLA: ${fmtPct(d.sla)}`,
-        ].join("<br/>");
-      },
-    },
-    grid: { left: 70, right: 30, top: 60, bottom: 50 },
-    xAxis: { type: "value" as const, name: "Tiempo resolución (min)", nameTextStyle: { color: muted, fontSize: 11 }, axisLabel: { color: muted, formatter: (v: number) => `${Math.round(v)} min` }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    yAxis: { type: "value" as const, name: "Volumen", nameTextStyle: { color: muted, fontSize: 11 }, axisLabel: { color: muted }, splitLine: { lineStyle: { color: cssVar("--border"), type: "dashed" as const } } },
-    series: [{
-      type: "scatter" as const,
-      data: data.map(d => ({ value: d.value, name: d.name, tiempo: d.tiempo, volumen: d.volumen, sla: d.sla })),
-      symbolSize: (val: number[]) => Math.max(14, Math.min(60, (val[2] / 500) * 40 + 14)),
-      itemStyle: {
-        color: (p: { data: { sla: number | null } }) => {
-          const s = p.data?.sla ?? 0;
-          return s >= 95 ? "#22c55e" : s >= 80 ? "#f59e0b" : "#ef4444";
-        },
-        shadowBlur: 6, shadowColor: "rgba(0,0,0,0.15)", opacity: 0.85,
-      },
-      label: { show: true, position: "right" as const, formatter: (p: { name: string }) => p.name, color: textColor, fontSize: 10 },
-      markLine: {
-        silent: true, lineStyle: { type: "dashed" as const, color: "#64748B", width: 1.5 }, label: { show: false },
-        data: [{ xAxis: avgX }, { yAxis: avgY }],
-      },
-    }],
-    graphic: [
-      { type: "text" as const, left: "12%", top: 8, style: { text: "MUCHO VOLUMEN", fill: "#64748B", fontSize: 10, fontWeight: "bold" as const } },
-      { type: "text" as const, right: "12%", top: 8, style: { text: "ALTA PRIORIDAD", fill: "#ef4444", fontSize: 10, fontWeight: "bold" as const } },
-      { type: "text" as const, left: "12%", bottom: 8, style: { text: "BAJO IMPACTO", fill: "#22c55e", fontSize: 10, fontWeight: "bold" as const } },
-      { type: "text" as const, right: "12%", bottom: 8, style: { text: "CASOS COMPLEJOS", fill: "#f59e0b", fontSize: 10, fontWeight: "bold" as const } },
-    ],
-  };
-
-  return <ReactECharts option={opt} style={{ height: 460 }} notMerge lazyUpdate />;
-}
-
-/* ════════════════════════════════════════════════════════════════ */
-/*  PAGE                                                            */
+/*  PAGE                                                           */
 /* ════════════════════════════════════════════════════════════════ */
 export default function CategoriasV2() {
   const { filters } = useFilters();
   const params = useMemo(() => filtersToParams(filters), [filters]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["categorias-v2", params],
     queryFn: () => fetchData(params),
     refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    if (data) {
-      console.log("📊 Dataset categorias-v2:", JSON.parse(JSON.stringify(data)));
-    }
-  }, [data]);
+  const [catPareto, setCatPareto] = useState("");
+
+  const categorias = data?.paretoCategorias.map((r) => r.categoria) ?? [];
+  const catActual =
+    catPareto && categorias.includes(catPareto) ? catPareto : categorias[0] ?? "";
+
+  const subItems = useMemo<ParetoItem[]>(() => {
+    if (!data) return [];
+    const rows = data.paretoSubcategorias
+      .filter((r) => r.categoria === catActual)
+      .sort((a, b) => b.volumen - a.volumen);
+    const total = rows.reduce((s, r) => s + r.volumen, 0);
+    let acum = 0;
+    return rows.map((r) => {
+      acum += r.volumen;
+      return {
+        label: r.subcategoria,
+        volumen: r.volumen,
+        pct: total > 0 ? Math.round((r.volumen / total) * 1000) / 10 : 0,
+        acumulado: total > 0 ? Math.round((acum / total) * 1000) / 10 : 0,
+        tecnica: false,
+      };
+    });
+  }, [data, catActual]);
+
+  const paretoItems = useMemo<ParetoItem[]>(
+    () =>
+      (data?.paretoCategorias ?? []).map((r) => ({
+        label: r.categoria,
+        volumen: r.volumen,
+        pct: r.pct,
+        acumulado: r.acumulado,
+        tecnica: r.tecnica,
+      })),
+    [data],
+  );
+
+  const kpiTiempo = useMemo(
+    () =>
+      [...(data?.categoriasTiempo ?? [])]
+        .filter((r) => r.tiempo_atencion != null)
+        .sort((a, b) => (b.tiempo_atencion ?? 0) - (a.tiempo_atencion ?? 0)),
+    [data],
+  );
+
+  const kpiSLA = useMemo(
+    () =>
+      [...(data?.categoriasSLA ?? [])]
+        .filter((r) => r.pctIncumple != null)
+        .sort((a, b) => (b.pctIncumple ?? 0) - (a.pctIncumple ?? 0)),
+    [data],
+  );
 
   if (isLoading) {
     return (
@@ -643,85 +787,224 @@ export default function CategoriasV2() {
     );
   }
 
-  if (!data) {
+  if (isError || !data) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center">
-        <p className="text-sm text-black-25">Sin información para el rango seleccionado.</p>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex h-full items-center justify-center"
+      >
+        <p className="text-sm text-black-25">
+          No se pudieron cargar los datos. Revisa que el backend esté encendido y conectado.
+        </p>
       </motion.div>
     );
   }
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h1 className="text-lg font-semibold text-text">Análisis de Categorías</h1>
+  const lider = data.paretoCategorias[0] ?? null;
+  const tiempoTop = kpiTiempo[0] ?? null;
+  const tiempoSinTecnica = kpiTiempo.find((r) => !r.tecnica) ?? null;
+  const slaTop = kpiSLA[0] ?? null;
+  const slaSinTecnica = kpiSLA.find((r) => !r.tecnica) ?? null;
+  const subtotalTecnicas = data.paretoCategorias
+    .filter((r) => r.tecnica)
+    .reduce((s, r) => s + r.volumen, 0);
+  const pctTecnicas =
+    data.universo.total > 0 ? (subtotalTecnicas / data.universo.total) * 100 : 0;
 
-      {/* Cards */}
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-text">Análisis de Categorías</h1>
+          <p className="mt-1 text-sm text-muted">
+            Atenciones finalizadas por categoría y subcategoría. Mismo universo en todos los
+            componentes.
+          </p>
+        </div>
+        <div className="text-right text-xs text-muted">
+          <span className="rounded-full border border-border bg-surface px-3 py-1">
+            {fmtNum(data.universo.total)} atenciones finalizadas
+          </span>
+          <p className="mt-1">
+            {fmtNum(data.totalCategorias)} categorías · {fmtNum(data.totalSubcategorias)}{" "}
+            subcategorías
+          </p>
+          <p className="mt-0.5">
+            {fmtNum(data.universo.excluidas)} excluidas: {fmtNum(data.universo.abiertas)} abiertas ·{" "}
+            {fmtNum(data.universo.sinEstado)} sin estado homologado
+          </p>
+        </div>
+      </div>
+
+      {/* 4 KPI */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon={<Tags size={18} />} label="Total categorías" value={fmtNum(data.totalCategorias)} />
-        <KpiCard icon={<List size={18} />} label="Total subcategorías" value={fmtNum(data.totalSubcategorias)} />
+        <KpiCard
+          icon={<Tags size={18} />}
+          label="Atenciones analizadas"
+          value={fmtNum(data.universo.total)}
+          hint={`${fmtNum(data.totalCategorias)} categorías · ${fmtNum(
+            data.totalSubcategorias,
+          )} subcategorías`}
+        />
         <KpiCard
           icon={<Medal size={18} />}
           label="Categoría líder"
-          value={data.categoriaLider ? data.categoriaLider.nombre : "—"}
-          hint={data.categoriaLider ? `${fmtNum(data.categoriaLider.volumen)} atenciones` : undefined}
+          value={lider?.categoria ?? "—"}
+          hint={
+            lider
+              ? `${fmtNum(lider.volumen)} atenciones · ${fmtPct1(lider.pct)} del total`
+              : undefined
+          }
         />
         <KpiCard
-          icon={<Award size={18} />}
-          label="Subcategoría líder"
-          value={data.subcategoriaLider ? data.subcategoriaLider.nombre : "—"}
-          hint={data.subcategoriaLider ? `${fmtNum(data.subcategoriaLider.volumen)} atenciones` : undefined}
+          icon={<Clock size={18} />}
+          label="Mayor tiempo de resolución"
+          value={fmtDur(tiempoTop?.tiempo_atencion)}
+          hint={
+            tiempoTop
+              ? `${tiempoTop.categoria}${tiempoTop.tecnica ? " (técnica)" : ""}${
+                  tiempoSinTecnica && tiempoSinTecnica !== tiempoTop
+                    ? ` · sin técnicas: ${tiempoSinTecnica.categoria} ${fmtDur(
+                        tiempoSinTecnica.tiempo_atencion,
+                      )}`
+                    : ""
+                }`
+              : undefined
+          }
+        />
+        <KpiCard
+          icon={<AlertTriangle size={18} />}
+          label="Mayor incumplimiento SLA"
+          value={fmtPct1(slaTop?.pctIncumple)}
+          hint={
+            slaTop
+              ? `${slaTop.categoria}${slaTop.tecnica ? " (técnica)" : ""} · ${fmtNum(
+                  slaTop.noCumple,
+                )} de ${fmtNum(slaTop.conDato)} evaluables${
+                  slaSinTecnica && slaSinTecnica !== slaTop
+                    ? ` · sin técnicas: ${slaSinTecnica.categoria} ${fmtPct1(
+                        slaSinTecnica.pctIncumple,
+                      )}`
+                    : ""
+                }`
+              : undefined
+          }
         />
       </div>
 
-      {/* Pareto Categorías | Pareto Subcategorías */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ValidatedChart data={data.paretoCategorias} required={["categoria", "volumen", "pct", "acumulado"]} title="Pareto de categorías" subtitle="Barras = volumen · Línea = % acumulado">
-          <ParetoCategoriasChart items={data.paretoCategorias} />
-        </ValidatedChart>
-        <ValidatedChart data={data.paretoSubcategorias} required={["subcategoria", "volumen", "pct", "acumulado"]} title="Pareto de subcategorías" subtitle="Barras = volumen · Línea = % acumulado (Top 20)">
-          <ParetoSubcategoriasChart items={data.paretoSubcategorias} />
-        </ValidatedChart>
+      {/* Pareto de categorías */}
+      <Section
+        title="Pareto de categorías"
+        subtitle="Barras = atenciones · Línea = % acumulado · Referencia 80%. Las categorías técnicas se muestran en gris."
+      >
+        <ParetoChart items={paretoItems} height={390} />
+        <p className="mt-2 text-[11px] text-black-25">
+          {(() => {
+            const cruce = data.paretoCategorias.find((r) => r.acumulado >= 80);
+            return cruce ? (
+              <>
+                El 80% se alcanza con <b>{cruce.categoria}</b> ({fmtPct1(cruce.acumulado)} del
+                volumen acumulado).
+              </>
+            ) : null;
+          })()}{" "}
+          Categorías técnicas: {fmtNum(subtotalTecnicas)} atenciones ({fmtPct1(pctTecnicas)}). Se
+          conservan en todos los cálculos y se identifican visualmente.
+        </p>
+      </Section>
+
+      {/* Pareto contextual de subcategorías */}
+      <Section
+        title="Pareto contextual de subcategorías"
+        subtitle="Selecciona una categoría. Los porcentajes y el acumulado se calculan dentro de esa categoría."
+      >
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-black-45">
+              Categoría
+            </span>
+            <select
+              value={catActual}
+              onChange={(e) => setCatPareto(e.target.value)}
+              className="min-w-[230px] rounded-lg border border-black-10 bg-white px-3 py-1.5 text-xs text-black-85"
+            >
+              {categorias.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs text-black-45">
+            {fmtNum(subItems.reduce((s, r) => s + r.volumen, 0))} atenciones ·{" "}
+            {fmtNum(subItems.length)} subcategorías
+          </span>
+        </div>
+
+        {subItems.length === 0 ? (
+          <p className="py-10 text-center text-sm text-black-25">
+            Sin subcategorías para la categoría seleccionada.
+          </p>
+        ) : (
+          <>
+            <ParetoChart items={subItems} height={330} maxItems={20} />
+            <p className="mt-2 text-[11px] text-black-25">
+              Se muestran las 20 subcategorías de mayor volumen de {catActual}. El detalle completo
+              está en la tabla jerárquica.
+            </p>
+          </>
+        )}
+      </Section>
+
+      {/* Rankings */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section
+          title="Ranking de tiempo de resolución"
+          subtitle="Promedio de resolución por categoría. Solo atenciones con tiempo registrado."
+        >
+          <RankingTiempo items={data.categoriasTiempo} />
+          <p className="mt-2 text-[11px] text-black-25">
+            Tiempo promedio = AVG(resolucion_min_norm). Los registros sin tiempo no se convierten en
+            cero. Las categorías técnicas se muestran en gris.
+          </p>
+        </Section>
+
+        <Section
+          title="Ranking de incumplimiento SLA"
+          subtitle="Porcentaje de atenciones que superan la meta de resolución de su canal."
+        >
+          <RankingSLA items={data.categoriasSLA} />
+          <p className="mt-2 text-[11px] text-black-25">
+            Metas: WhatsApp {fmtNum(data.slaMetas.whatsapp)} min · Correo/Zendesk{" "}
+            {fmtNum(data.slaMetas.correo)} min · Otro {fmtNum(data.slaMetas.otro)} min. Denominador:
+            atenciones con tiempo de resolución.
+          </p>
+        </Section>
       </div>
 
-      {/* Matriz Jerárquica */}
-      <ValidatedChart data={data.jerarquia} required={["categoria", "subcategoria", "dominio", "volumen"]} title="Matriz jerárquica" subtitle="Categoría → Subcategoría → Dominio · Ordenado por volumen descendente">
-        <MatrizJerarquicaChart items={data.jerarquia} />
-      </ValidatedChart>
+      {/* Asesor */}
+      <Section
+        title="Análisis comparativo por asesor"
+        subtitle="Volumen asignado y participación sobre el total filtrado. Los registros sin asesor se muestran aparte cuando existen."
+      >
+        <AnalisisAsesor data={data} />
+      </Section>
 
-      {/* Categorías vs Tiempo | Categorías vs SLA */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ValidatedChart data={data.categoriasTiempo} required={["categoria", "volumen", "tiempo_resolucion", "tiempo_espera", "tiempo_atencion", "sla"]} title="Categorías vs Tiempo de Resolución" subtitle="Ordenado de mayor a menor tiempo promedio">
-          <CategoriasTiempoChart items={data.categoriasTiempo} />
-        </ValidatedChart>
-        <ValidatedChart data={data.categoriasSLA} required={["categoria", "volumen", "sla"]} title="Categorías vs SLA" subtitle="Ordenado de menor a mayor cumplimiento">
-          <CategoriasSLAChart items={data.categoriasSLA} />
-        </ValidatedChart>
+      {/* Tabla jerárquica */}
+      <Section
+        title="Tabla jerárquica"
+        subtitle="Categoría → Subcategoría → Dominio. Colapsada por defecto; los porcentajes se calculan sobre el total del reporte."
+      >
+        <TablaJerarquica items={data.jerarquia} />
+      </Section>
+
+      <div className="rounded-xl border border-border bg-bg px-4 py-3 text-[11px] text-muted">
+        Universo: atenciones con estado homologado <b>cerrado</b> o <b>resuelto</b>. Se excluyen{" "}
+        {fmtNum(data.universo.abiertas)} abiertas y {fmtNum(data.universo.sinEstado)} sin estado
+        homologado. Los registros sin categoría permanecen en los totales. No se deduplican los
+        tickets presentes en más de un canal, para mantener la reconciliación con Resumen.
       </div>
-
-      {/* Subcategorías vs Tiempo | Subcategorías vs SLA */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ValidatedChart data={data.subcategoriasTiempo} required={["subcategoria", "volumen", "tiempo_resolucion", "sla"]} title="Subcategorías vs Tiempo de Resolución" subtitle="Top 15 por volumen">
-          <SubcategoriasTiempoChart items={data.subcategoriasTiempo} />
-        </ValidatedChart>
-        <ValidatedChart data={data.subcategoriasSLA} required={["subcategoria", "volumen", "sla"]} title="Subcategorías vs SLA" subtitle="Top 15 por volumen">
-          <SubcategoriasSLAChart items={data.subcategoriasSLA} />
-        </ValidatedChart>
-      </div>
-
-      {/* Heatmap Categoría × Asesor */}
-      <ValidatedChart data={data.matrizAsesor} required={["asesor", "categoria", "volumen"]} title="Categorías × Asesores" subtitle="Solo asesores de Soporte Especializado">
-        <HeatmapCatAsesorChart items={data.matrizAsesor} />
-      </ValidatedChart>
-
-      {/* Heatmap Subcategoría × Asesor */}
-      <ValidatedChart data={data.matrizSubAsesor} required={["asesor", "subcategoria", "volumen"]} title="Subcategorías × Asesores" subtitle="Top 20 subcategorías">
-        <HeatmapSubAsesorChart items={data.matrizSubAsesor} />
-      </ValidatedChart>
-
-      {/* Bubble Impacto Operativo */}
-      <ValidatedChart data={data.impacto} required={["categoria", "volumen", "tiempo", "sla"]} title="Impacto Operativo" subtitle="Tamaño = volumen · Color = SLA · Líneas = promedios">
-        <ImpactoBubbleChart items={data.impacto} />
-      </ValidatedChart>
     </motion.div>
   );
 }

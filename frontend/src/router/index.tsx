@@ -14,7 +14,7 @@ import CategoriasV2 from "@/pages/CategoriasV2";
 import Clientes from "@/pages/Clientes";
 import WhatsApp from "@/pages/WhatsApp";
 import Zendesk from "@/pages/Zendesk";
-import Tendencias from "@/pages/Tendencias";
+import CalidadRegistro from "@/pages/calidad-registro/CalidadRegistroPage";
 import Pais from "@/pages/Pais";
 import QuejasDevoluciones from "@/pages/QuejasDevoluciones";
 import ApoyosPage from "@/pages/gestion/ApoyosPage";
@@ -119,7 +119,9 @@ export const router = createBrowserRouter([
               { path: "pais", element: <Pais /> },
               { path: "whatsapp", element: <WhatsApp /> },
               { path: "zendesk", element: <Zendesk /> },
-              { path: "tendencias", element: <Tendencias /> },
+              // Tendencias se retiró; enlaces antiguos vuelven a Reportes.
+              { path: "tendencias", element: <Navigate to="/reportes" replace /> },
+              { path: "calidad-registro", element: <CalidadRegistro /> },
               { path: "quejas", element: <QuejasDevoluciones /> },
             ],
           },

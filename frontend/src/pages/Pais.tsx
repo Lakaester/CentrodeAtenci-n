@@ -48,12 +48,19 @@ export interface PaisDominioFila {
   total: number;
 }
 
+interface PaisEvolucionFila {
+  periodo: string;
+  pais: string;
+  total: number;
+}
+
 interface PaisResponse {
   filas: PaisRow[];
   totales: PaisRow;
   paisCanal: PaisCanalFila[];
   paisCanalSub: PaisCanalSubFila[];
   dominiosPais: PaisDominioFila[];
+  evolucionPais: PaisEvolucionFila[];
 }
 
 /* ── Country normalization ── */
@@ -500,12 +507,8 @@ export default function Pais() {
     refetchOnWindowFocus: false,
   });
 
-  interface EvolucionRow { periodo: string; pais: string; total: number; }
-  const { data: evolucionData, isLoading: evolLoading } = useQuery({
-    queryKey: ["pais-evolucion", params],
-    queryFn: () => api.get("/dashboard/tendencias", { params }).then((r) => r.data.data.evolucionPais as EvolucionRow[]),
-    refetchOnWindowFocus: false,
-  });
+  const evolucionData = data?.evolucionPais;
+  const evolLoading = isLoading;
 
   const MESES_ABR: Record<string, string> = {
     "01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr",

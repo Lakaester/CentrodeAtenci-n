@@ -5,8 +5,24 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import type { DashboardFilters, PaisRow, PaisDominioFila, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse, ClientesV2Response } from "../types";
+import type { DashboardFilters, PaisRow, PaisDominioFila, PaisResponse, AsesorRow, AsesoresMatrixResponse, DetalleFila, DetalleResponse, CategoriasV2Response, QuejasDevolucionesResponse, ClientesV2Response, ClientesListaResponse, ClienteCategoriasResponse, ClienteSubcategoriasResponse, ClienteTicketsResponse, ClienteEvolucionResponse, ClienteResumen, ClienteSeguimiento } from "../types";
 import { construirWhere, rangoAnterior, comparar, KpiComparado } from "../utils/filtros";
+import {
+  etiquetaPeriodo as etiquetaPeriodoOp,
+  generarPeriodos as generarPeriodosOp,
+  inicioPeriodo,
+} from "../utils/operacionPeriodos";
+import { ASESOR_SIN_ASIGNAR, consolidarAsesor } from "../utils/asesorEquivalencias";
+import {
+  CLIENTE_KEY,
+  CLIENTE_NOMBRE,
+  DOMINIO_NORMALIZADO,
+  DOMINIO_VALIDO,
+  IDENTIFICADO_POR_CORREO,
+  SIN_IDENTIFICAR_KEY,
+  SIN_IDENTIFICAR_LABEL,
+  nombreCliente,
+} from "../utils/clientesIdentificacion";
 
 /** Expresiones SQL de normalización (homologación de nombres en toda la app). */
 const N_PAIS = Prisma.sql`INITCAP(TRANSLATE(REPLACE(TRIM(pais), '_', ' '), 'áéíóúÁÉÍÓÚüñ', 'aeiouAEIOUun'))`;
@@ -14,7 +30,10 @@ const N_ASESOR = Prisma.sql`INITCAP(TRANSLATE(SPLIT_PART(REPLACE(asesor, '_', ' 
 const N_SUBCATEGORIA = Prisma.sql`REPLACE(subcategoria, '_', ' ')`;
 const N_CATEGORIA = Prisma.sql`COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')), ''), 'Sin categoría')`;
 const N_ASESOR_COALESCE = Prisma.sql`COALESCE(${N_ASESOR}, 'Sin asesor')`;
-const OFFICIAL_FILTER = Prisma.sql`${N_ASESOR} = ANY(ARRAY['Andres','Danilo','Eveling','Lidia','Lisbeth','Sheyla','Victor']::text[])`;
+const OFFICIAL_FILTER = Prisma.sql`${N_ASESOR} = ANY(ARRAY['Alex','Andres','Danilo','Eveling','Lidia','Lisbeth','Sheyla','Victor']::text[])`;
+
+/** Universo del reporte Resumen: atenciones finalizadas (cerradas o resueltas). */
+const FINALIZADAS = Prisma.sql`estado_homologado IN ('cerrado', 'resuelto')`;
 
 /**
  * Normalización SQL de dominio — equivalente a normalizeDomain() de JS.
@@ -58,11 +77,24 @@ interface FilaTotales {
 export interface ResumenResponse {
   rango: { inicio: string; fin: string; comparadoCon: { inicio: string; fin: string } } | null;
   kpis: {
+    /** Total de atenciones finalizadas (cerradas + resueltas). */
     total: KpiComparado;
     cerrados: KpiComparado;
     resueltos: KpiComparado;
     cumplimientos: KpiComparado;
+    /** Compatibilidad: equivale a cumplimientoPrimeraPct. */
     cumplimientoSlaPct: KpiComparado;
+
+    cumplimientoPrimeraPct: KpiComparado;
+    primeraDentro: KpiComparado;
+    primeraFuera: KpiComparado;
+    primeraConDato: KpiComparado;
+
+    cumplimientoResolucionPct: KpiComparado;
+    resolucionDentro: KpiComparado;
+    resolucionFuera: KpiComparado;
+    resolucionConDato: KpiComparado;
+
     promPrimeraRespMin: KpiComparado;
     promResolucionMin: KpiComparado;
   };
@@ -90,7 +122,7 @@ export interface TiempoCanal {
  *  Cada canal tiene su propia meta porque WhatsApp y Correo no son comparables.
  *  Cambia solo estos números cuando tengas tus metas reales; nada más.
  * ========================================================================= */
-const SLA_MINUTOS = {
+export const SLA_MINUTOS = {
   primeraRespuesta: { whatsapp: 15, correo: 1440, otro: 60 }, // 15 min / 24 h / 1 h
   resolucion: { whatsapp: 120, correo: 1440, otro: 480 }, // PROVISIONAL: aún por definir por categoría
 };
@@ -148,6 +180,7 @@ export interface RankingAsesor {
   promPrimera: number | null;
   promResolucion: number | null;
   cumpleSlaPct: number | null;
+  cumpleResolucionPct: number | null;
   score: number;
 }
 
@@ -173,19 +206,39 @@ export interface SlaResponse {
 export interface OperacionResponse {
   rango: { inicio: string; fin: string; comparadoCon: { inicio: string; fin: string } } | null;
   kpis: {
+    total: KpiComparado;
+    promedioPorDia: KpiComparado;
+    diasConDatos: number;
+    diasConDatosAnterior: number | null;
     horaPico: string | null;
     horaPicoValor: number | null;
+    horaPicoAnterior: string | null;
+    horaPicoAnteriorValor: number | null;
     diaCargado: string | null;
     diaCargadoValor: number | null;
-    promedioPorDia: KpiComparado;
-    total: KpiComparado;
+    diaCargadoAnterior: string | null;
+    diaCargadoAnteriorValor: number | null;
   };
   heatmap: { hora: number; dia: number; total: number }[];
-  curvaHora: { hora: number; total: number }[];
-  cargaDiaSemana: { dia: number; etiqueta: string; total: number }[];
-  tendenciaDiaria: { fecha: string; total: number }[];
+  diasPorDia: { dia: number; dias: number }[];
+  porSubcanal: Desglose[];
+  duplicadosEntreCanales: number;
   topAsesores: Desglose[];
   topCategorias: Desglose[];
+  evolucion: {
+    diaria: { actual: OperacionPeriodo[]; anterior: OperacionPeriodo[] };
+    semanal: { actual: OperacionPeriodo[]; anterior: OperacionPeriodo[] };
+    mensual: { actual: OperacionPeriodo[]; anterior: OperacionPeriodo[] };
+    trimestral: { actual: OperacionPeriodo[]; anterior: OperacionPeriodo[] };
+  };
+}
+
+export type GranularidadOperacion = "diaria" | "semanal" | "mensual" | "trimestral";
+
+export interface OperacionPeriodo {
+  periodo: string;
+  total: number;
+  porSubcanal: { subcanal: string; total: number }[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -569,36 +622,92 @@ export interface ClientesResponse {
 /* ------------------------------------------------------------------ */
 export interface WhatsAppKpis {
   totalConversaciones: number;
-  totalWhaticket: number; totalWhatmeta: number;
-  pctWhaticket: number; pctWhatmeta: number;
-  tiempoPrimeraRespuesta: number | null;
-  tiempoResolucion: number | null;
-  tiempoEspera: number | null;
-  conversacionesAbiertas: number;
-  conversacionesCerradas: number;
-  cumplimientoSla: number | null;
-  fcr: number | null;
-  tiempoPromedioAsesor: number | null;
+  totalWhaticket: number;
+  totalWameta: number;
+  pctWhaticket: number;
+  pctWameta: number;
+  primeraN: number;
+  primeraCobertura: number;
+  primeraPromedio: number | null;
+  primeraMediana: number | null;
+  primeraP90: number | null;
+  resolucionN: number;
+  resolucionCobertura: number;
+  resolucionPromedio: number | null;
+  resolucionMediana: number | null;
+  resolucionP90: number | null;
+  slaPrimeraCumple: number;
+  slaPrimeraEvaluables: number;
+  slaPrimeraPct: number | null;
+  slaPrimeraUmbral: number;
+  cerradas: number;
+  abiertas: number;
+  sinEstado: number;
+  otros: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
 }
-export interface ConversacionLarga {
-  cliente: string; asesor: string; subcanal: string;
-  tiempoResolucion: number | null; fecha: string;
+
+export interface WhatsAppPlataforma {
+  subcanal: string;
+  nombre: string;
+  total: number;
+  porcentaje: number;
+  primeraN: number;
+  primeraCobertura: number;
+  primeraPromedio: number | null;
+  primeraMediana: number | null;
+  primeraP90: number | null;
+  resolucionN: number;
+  resolucionCobertura: number;
+  resolucionPromedio: number | null;
+  resolucionMediana: number | null;
+  resolucionP90: number | null;
+  slaCumple: number;
+  slaEvaluables: number;
+  slaPct: number | null;
+  cerradas: number;
+  abiertas: number;
+  sinEstado: number;
+  otros: number;
 }
+
+export interface WhatsAppEstado {
+  estado: "cerrado" | "abierto" | "sin_mapear" | "otro";
+  etiqueta: string;
+  total: number;
+  pct: number;
+}
+
+export interface WhatsAppEvolucion {
+  actual: { periodo: string; total: number }[];
+  anterior: { periodo: string; total: number }[];
+  totalActual: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
+}
+
+export interface WhatsAppExcepcion {
+  contacto: string;
+  asesor: string;
+  plataforma: string;
+  tiempo: number;
+  tipoTiempo: "resolucion" | "transcurrido";
+  fecha: string;
+  estado: string;
+  umbral: number;
+}
+
 export interface WhatsAppResponse {
   kpis: WhatsAppKpis;
-  distSubcanal: { subcanal: string; total: number; porcentaje: number; primeraRespuesta: number | null; resolucion: number | null; espera: number | null; sla: number | null; fcr: number | null }[];
-  evolucion: { periodo: string; subcanal: string; total: number }[];
-  heatmapHora: { hora: number; dia: number; total: number; subcanal: string }[];
-  paises: { pais: string; total: number }[];
-  treemap: { categoria: string; total: number; tiempoResolucion: number | null }[];
-  topSubcategorias: { subcategoria: string; total: number; porcentaje: number }[];
-  tiempos: { subcanal: string; primeraRespuesta: number | null; resolucion: number | null; espera: number | null }[];
-  asesores: { asesor: string; subcanal: string; total: number; tiempoPromedio: number | null; sla: number | null; fcr: number | null; abiertos: number; pendientes: number }[];
-  topClientes: { cliente: string; total: number }[];
-  dominios: { dominio: string; total: number }[];
-  conversacionesLargas: ConversacionLarga[];
-  paisCat: { pais: string; categoria: string; total: number }[];
-  catAsesor: { categoria: string; asesor: string; total: number; tiempo: number | null; sla: number | null }[];
+  estados: WhatsAppEstado[];
+  plataformas: WhatsAppPlataforma[];
+  evolucion: WhatsAppEvolucion;
+  horas: { hora: number; total: number }[];
+  dias: { dia: number; total: number }[];
+  excepciones: WhatsAppExcepcion[];
   insights: string[];
 }
 
@@ -606,69 +715,60 @@ export interface WhatsAppResponse {
 /*  ZENDESK                                                           */
 /* ------------------------------------------------------------------ */
 export interface ZendeskKpis {
-  totalTickets: number; ticketsAbiertos: number; ticketsCerrados: number;
-  ticketsPendientes: number; tiempoPrimeraRespuesta: number | null;
-  tiempoResolucion: number | null; slaPrimeraRespuesta: number | null;
-  slaResolucion: number | null; fcr: number | null;
-  tiempoPromedioTicket: number | null;
+  totalTickets: number;
+  cerrados: number;
+  resueltos: number;
+  abiertos: number;
+  pendientes: number;
+  enEspera: number;
+  otros: number;
+  primeraN: number;
+  primeraCobertura: number;
+  primeraMediana: number | null;
+  primeraP90: number | null;
+  primeraPromedio: number | null;
+  primeraSinDato: number;
+  resolucionN: number;
+  resolucionCobertura: number;
+  resolucionMediana: number | null;
+  resolucionP90: number | null;
+  resolucionPromedio: number | null;
+  resolucionExcluidas: number;
+  slaPrimeraCumple: number;
+  slaPrimeraEvaluables: number;
+  slaPrimeraPct: number | null;
+  slaPrimeraUmbral: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
 }
-export interface TicketAntiguo {
-  ticket: string | null; cliente: string; categoria: string; asesor: string;
-  fecha: string; horasTranscurridas: number;
+export interface ZendeskEstado {
+  estado: string;
+  etiqueta: string;
+  total: number;
+  pct: number;
+}
+export interface ZendeskEvolucion {
+  actual: { periodo: string; total: number }[];
+  anterior: { periodo: string; total: number }[];
+  totalActual: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
+}
+export interface ZendeskBacklog {
+  abiertos: number;
+  pendientes: number;
+  enEspera: number;
+  total: number;
+  fechaCorte: string;
 }
 export interface ZendeskResponse {
   kpis: ZendeskKpis;
-  evolucion: { periodo: string; total: number; abiertos: number; cerrados: number }[];
-  backlog: { periodo: string; abiertos: number }[];
-  estados: { estado: string; total: number; porcentaje: number }[];
-  treemap: { categoria: string; total: number; tiempoResolucion: number | null }[];
-  topSubcategorias: { subcategoria: string; total: number; porcentaje: number }[];
-  asesores: { asesor: string; total: number; tiempoPromedio: number | null; sla: number | null; fcr: number | null }[];
-  paises: { pais: string; total: number }[];
-  dominios: { dominio: string; total: number }[];
-  clientes: { cliente: string; total: number }[];
-  slaCategoria: { categoria: string; cumple: number; noCumple: number; total: number; pctCumple: number }[];
-  tiemposCategoria: { categoria: string; primeraRespuesta: number | null; resolucion: number | null }[];
-  tiemposSubcategoria: { subcategoria: string; primeraRespuesta: number | null; resolucion: number | null }[];
-  tiemposAsesor: { asesor: string; primeraRespuesta: number | null; resolucion: number | null }[];
-  ticketsAntiguos: { grupo: string; tickets: TicketAntiguo[] };
-  incumplimientos: { categoria: string; total: number; pctIncumplimiento: number }[];
-  categoriasCriticas: { categoria: string; total: number; tiempoResolucion: number | null; incumplimientoSla: number | null }[];
-  tendencia: { periodo: string; actual: number; anterior: number }[];
+  estados: ZendeskEstado[];
+  evolucion: ZendeskEvolucion;
+  backlog: ZendeskBacklog;
   insights: string[];
-}
-
-/* ------------------------------------------------------------------ */
-/*  TENDENCIAS                                                        */
-/* ------------------------------------------------------------------ */
-export interface TendenciasKpi {
-  variacionVolumen: number | null;
-  variacionTiempoPrimera: number | null;
-  variacionTiempoResolucion: number | null;
-  variacionSla: number | null;
-  variacionFcr: number | null;
-  variacionClientesUnicos: number | null;
-}
-export interface Alerta {
-  tipo: string; mensaje: string; severidad: "alto" | "medio" | "bajo";
-}
-export interface TendenciasResponse {
-  kpis: TendenciasKpi;
-  evolucionVolumen: { periodo: string; total: number }[];
-  evolucionCanal: { periodo: string; canal: string; total: number }[];
-  evolucionSubcanal: { periodo: string; subcanal: string; total: number }[];
-  evolucionCategoria: { periodo: string; categoria: string; total: number }[];
-  evolucionSubcategoria: { periodo: string; subcategoria: string; total: number }[];
-  evolucionAsesor: { periodo: string; asesor: string; total: number }[];
-  evolucionPais: { periodo: string; pais: string; total: number }[];
-  evolucionDominio: { dominio: string; periodo: string; total: number }[];
-  evolucionCliente: { periodo: string; cliente: string; total: number }[];
-  tendenciaSla: { periodo: string; pctCumple: number | null }[];
-  tendenciaTiempos: { periodo: string; primeraRespuesta: number | null; resolucion: number | null; espera: number | null }[];
-  tendenciaQuintiles: { periodo: string; quintil: number; promedio: number | null }[];
-  estacionalidad: { hora: number; dia: number; total: number }[];
-  estacionalidadMes: { mes: number; dia: number; total: number }[];
-  alertas: Alerta[];
 }
 
 async function totales(where: Prisma.Sql): Promise<FilaTotales> {
@@ -784,15 +884,25 @@ interface FilaAsesor {
   prom_resolucion: number | null;
   pr_con_dato: number;
   pr_dentro: number;
+  res_con_dato: number;
+  res_dentro: number;
 }
 
 /**
  * Ranking de asesores con puntaje de performance.
  * Trae conteo, tiempos promedio y cumplimiento SLA por asesor; luego
  * normaliza cada métrica contra el resto del equipo y arma un score 0-100.
+ *
+ * Fórmula vigente (no se modifica):
+ *   score = 100 * (0.40 * cumplimiento_1ra + 0.30 * velocidad + 0.30 * volumen)
+ * - cumplimiento_1ra = pr_dentro / pr_con_dato
+ * - velocidad = (maxT - promPrimera) / (maxT - minT)
+ * - volumen = total / maxTotal
+ * - mínimo 5 atenciones finalizadas para entrar al podio.
  */
 async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
   const uPr = umbral(SLA_MINUTOS.primeraRespuesta);
+  const uRes = umbral(SLA_MINUTOS.resolucion);
   const raw = (await prisma.$queryRaw(Prisma.sql`
     SELECT
       COALESCE(${N_ASESOR}, 'Sin asesor')                                  AS asesor,
@@ -801,7 +911,10 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
       ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8                  AS prom_resolucion,
       COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int  AS pr_con_dato,
       COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL
-                        AND primera_respuesta_min_norm <= ${uPr})::int     AS pr_dentro
+                        AND primera_respuesta_min_norm <= ${uPr})::int     AS pr_dentro,
+      COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL)::int         AS res_con_dato,
+      COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL
+                        AND resolucion_min_norm <= ${uRes})::int           AS res_dentro
     FROM public.v_unificado_norm
     ${where}
     GROUP BY ${N_ASESOR}
@@ -817,6 +930,8 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
     let promRes = raw[i].prom_resolucion;
     let prCon = raw[i].pr_con_dato;
     let prDentro = raw[i].pr_dentro;
+    let resCon = raw[i].res_con_dato;
+    let resDentro = raw[i].res_dentro;
     consumido.add(i);
     for (let j = 0; j < raw.length; j++) {
       if (i === j || consumido.has(j)) continue;
@@ -832,10 +947,21 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
         }
         prCon += raw[j].pr_con_dato;
         prDentro += raw[j].pr_dentro;
+        resCon += raw[j].res_con_dato;
+        resDentro += raw[j].res_dentro;
         consumido.add(j);
       }
     }
-    filas.push({ asesor: raw[i].asesor, total, prom_primera: promPri, prom_resolucion: promRes, pr_con_dato: prCon, pr_dentro: prDentro });
+    filas.push({
+      asesor: raw[i].asesor,
+      total,
+      prom_primera: promPri,
+      prom_resolucion: promRes,
+      pr_con_dato: prCon,
+      pr_dentro: prDentro,
+      res_con_dato: resCon,
+      res_dentro: resDentro,
+    });
   }
 
   // Solo asesores con un mínimo de casos (evita podios por casualidad).
@@ -853,6 +979,7 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
 
   const ranking = elegibles.map((f) => {
     const cumpleSlaPct = pct(f.pr_dentro, f.pr_con_dato);
+    const cumpleResolucionPct = pct(f.res_dentro, f.res_con_dato);
     const volNorm = maxTotal > 0 ? f.total / maxTotal : 0;
     let velNorm = 0;
     if (f.prom_primera !== null && maxT > minT) {
@@ -872,6 +999,7 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
       promPrimera: f.prom_primera,
       promResolucion: f.prom_resolucion,
       cumpleSlaPct,
+      cumpleResolucionPct,
       score,
     };
   });
@@ -880,22 +1008,139 @@ async function rankingAsesores(where: Prisma.Sql): Promise<RankingAsesor[]> {
   return ranking.slice(0, 3); // oro, plata, bronce
 }
 
-/** Promedios de 1ª respuesta y resolución, separados por canal. */
+/** Promedios de 1ª respuesta y resolución, separados por subcanal operativo. */
 async function tiemposPorCanal(where: Prisma.Sql): Promise<TiempoCanal[]> {
   return (await prisma.$queryRaw(Prisma.sql`
     SELECT
-      COALESCE(canal, 'Sin canal')                                AS etiqueta,
-      COUNT(*)::int                                               AS total,
-      ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8  AS "promPrimera",
-      ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8         AS "promResolucion"
+      COALESCE(subcanal, 'Sin canal')                                AS etiqueta,
+      COUNT(*)::int                                                  AS total,
+      ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8      AS "promPrimera",
+      ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8             AS "promResolucion"
     FROM public.v_unificado_norm
     ${where}
-    GROUP BY canal
+    GROUP BY subcanal
     ORDER BY total DESC
   `)) as TiempoCanal[];
 }
 
-const arr = (x: unknown): string[] => (Array.isArray(x) ? (x as string[]) : []);
+/** Expresión de creación real para Operación. */
+const CREACION_OP = Prisma.sql`CASE
+  WHEN v.tickets_created_at IS NOT NULL
+    THEN (v.tickets_created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Lima')
+  ELSE (v.fecha::date + v.hora::time)
+END`;
+
+const ATENCION_KEY_OP = Prisma.sql`CASE
+  WHEN UPPER(BTRIM(v.subcanal)) = 'ZENDESK'
+    THEN 'ZENDESK:' || v.ticket_id::text
+  ELSE 'WA:' || v.ticket_id::text
+END`;
+
+const SUB_ORDER_OP = ["WHATMETA", "WHATICKET", "ZENDESK"] as const;
+const DIAS_LARGOS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+/**
+ * Deduplicación condicional:
+ * - Sin filtro de canal: deduplica los tickets que aparecen en WHATMETA/WHATICKET.
+ * - Un solo canal: conserva sus filas reales para no ocultar demanda al filtrar.
+ * - Varios canales que incluyen ambos WhatsApp: deduplica esos duplicados.
+ */
+function dedupeOperacion(filters: DashboardFilters): boolean {
+  const sel = (filters.subcanal ?? []).map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (!sel.length) return true;
+  return sel.includes("WHATMETA") && sel.includes("WHATICKET");
+}
+
+function whereOperacion(filters: DashboardFilters): Prisma.Sql {
+  return construirWhere(filters, {
+    endExclusive: true,
+    fechaExpr: Prisma.sql`creacion`,
+  });
+}
+
+/** Prefijo SQL con normalización, filtros y selección deduplicada cuando aplica. */
+function baseOperacion(where: Prisma.Sql, dedupe: boolean): Prisma.Sql {
+  const seleccion = dedupe
+    ? Prisma.sql`SELECT DISTINCT ON (atencion_key) * FROM filtrado ORDER BY atencion_key, creacion ASC, subcanal`
+    : Prisma.sql`SELECT * FROM filtrado`;
+  return Prisma.sql`
+    WITH normalizado AS (
+      SELECT v.*,
+             ${CREACION_OP} AS creacion,
+             ${ATENCION_KEY_OP} AS atencion_key
+      FROM public.v_unificado_norm v
+    ),
+    filtrado AS (
+      SELECT * FROM normalizado ${where}
+    ),
+    seleccion AS (
+      ${seleccion}
+    )
+  `;
+}
+
+function parseFechaOp(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+/** Días calendario inclusivos del rango; si no hay rango, usa las fechas con datos. */
+function diasCalendarioOp(
+  inicio: string | null,
+  fin: string | null,
+  fechas: string[],
+): number {
+  if (inicio && fin) {
+    return Math.floor((parseFechaOp(fin) - parseFechaOp(inicio)) / 86400000) + 1;
+  }
+  const unicas = [...new Set(fechas)].sort();
+  if (!unicas.length) return 0;
+  return Math.floor((parseFechaOp(unicas[unicas.length - 1]) - parseFechaOp(unicas[0])) / 86400000) + 1;
+}
+
+interface DailyRow {
+  fecha: string;
+  total: number;
+}
+interface DailyChannelRow extends DailyRow {
+  subcanal: string;
+}
+type GranularidadEvo = "diaria" | "semanal" | "mensual" | "trimestral";
+
+function buildPeriodosOp(
+  totales: DailyRow[],
+  canales: DailyChannelRow[],
+  inicio: string | null,
+  fin: string | null,
+  granularidad: GranularidadEvo,
+): OperacionPeriodo[] {
+  const fechas = totales.map((r) => r.fecha);
+  const desde = inicio ?? (fechas.length ? [...fechas].sort()[0] : null);
+  const hasta = fin ?? (fechas.length ? [...fechas].sort()[fechas.length - 1] : null);
+  if (!desde || !hasta) return [];
+
+  const totalMap = new Map<string, number>();
+  for (const r of totales) {
+    const k = inicioPeriodo(r.fecha, granularidad);
+    totalMap.set(k, (totalMap.get(k) ?? 0) + r.total);
+  }
+  const canalMap = new Map<string, number>();
+  for (const r of canales) {
+    const k = `${inicioPeriodo(r.fecha, granularidad)}|${r.subcanal}`;
+    canalMap.set(k, (canalMap.get(k) ?? 0) + r.total);
+  }
+
+  return generarPeriodosOp(desde, hasta, granularidad).map((bucket) => ({
+    periodo: etiquetaPeriodoOp(bucket, granularidad),
+    total: totalMap.get(bucket) ?? 0,
+    porSubcanal: SUB_ORDER_OP.map((subcanal) => ({
+      subcanal,
+      total: canalMap.get(`${bucket}|${subcanal}`) ?? 0,
+    })),
+  }));
+}
+
+
 
 /** Consolida nombres de asesores: si un nombre simple está contenido
  *  dentro de uno compuesto, suma sus totals al compuesto.
@@ -926,6 +1171,181 @@ function whereConCanal(where: Prisma.Sql, condicion: Prisma.Sql): Prisma.Sql {
     : Prisma.sql`${where} AND ${condicion}`;
 }
 
+/* ════════════════════════════════════════════════════════════════
+ *  REPORTE CLIENTES — universo, identificación y agregaciones
+ * ════════════════════════════════════════════════════════════════ */
+
+/** Fecha real de creación: Zendesk UTC → America/Lima; WhatsApp local. */
+const CREACION_CLIENTE = Prisma.sql`CASE
+  WHEN tickets_created_at IS NOT NULL
+    THEN (tickets_created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Lima')
+  ELSE (fecha::date + hora::time)
+END`;
+
+/** WHERE del reporte Clientes: filtros globales + atenciones finalizadas. */
+function whereClientes(filters: DashboardFilters): Prisma.Sql {
+  return whereConCanal(
+    construirWhere(filters, { fechaExpr: CREACION_CLIENTE, endExclusive: true }),
+    FINALIZADAS,
+  );
+}
+
+interface ClienteBaseRow {
+  clave: string;
+  total: number;
+  con_dato: number;
+  cumple: number;
+  tiempo: number | null;
+  ultima: string | null;
+  wpp: boolean;
+  correo: boolean;
+  por_correo: boolean;
+  numeros_no_ident: number;
+  dominios_invalidos: number;
+  prev_total: number;
+  max_rec: number;
+  subcategoria_recurrente: string | null;
+}
+
+/**
+ * Agregación por cliente con:
+ * - métricas del periodo actual,
+ * - total del periodo anterior,
+ * - subcategoría con mayor reincidencia.
+ * Es la misma base para resumen, ranking, seguimiento y lista del explorador.
+ */
+function clientesContexto(whereActual: Prisma.Sql, wherePrev: Prisma.Sql | null): Prisma.Sql {
+  const uRes = umbral(SLA_MINUTOS.resolucion);
+  const prevCte = wherePrev
+    ? Prisma.sql`SELECT clave, COUNT(*)::int AS total
+        FROM (
+          SELECT ${CLIENTE_KEY} AS clave
+          FROM public.v_unificado_norm
+          ${wherePrev}
+        ) p
+        GROUP BY clave`
+    : Prisma.sql`SELECT NULL::text AS clave, 0::int AS total WHERE false`;
+
+  return Prisma.sql`
+    WITH src AS (
+      SELECT
+        ${CLIENTE_KEY} AS clave,
+        ${DOMINIO_NORMALIZADO} AS dom,
+        canal,
+        resolucion_min_norm,
+        numero,
+        ${IDENTIFICADO_POR_CORREO} AS por_correo,
+        ${CREACION_CLIENTE} AS creacion,
+        ${SCAT_LABEL} AS subcategoria
+      FROM public.v_unificado_norm
+      ${whereActual}
+    ),
+    base AS (
+      SELECT
+        clave,
+        COUNT(*)::int AS total,
+        COUNT(resolucion_min_norm)::int AS con_dato,
+        COUNT(*) FILTER (
+          WHERE resolucion_min_norm IS NOT NULL
+            AND resolucion_min_norm <= ${uRes}
+        )::int AS cumple,
+        ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempo,
+        TO_CHAR(MAX(creacion), 'YYYY-MM-DD') AS ultima,
+        BOOL_OR(canal ILIKE '%what%') AS wpp,
+        BOOL_OR(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%') AS correo,
+        BOOL_OR(por_correo) AS por_correo,
+        COUNT(DISTINCT CASE
+          WHEN clave = ${SIN_IDENTIFICAR_KEY}
+          THEN NULLIF(TRIM(numero), '')
+        END)::int AS numeros_no_ident,
+        COUNT(DISTINCT CASE
+          WHEN clave = ${SIN_IDENTIFICAR_KEY} AND dom <> '—'
+          THEN dom
+        END)::int AS dominios_invalidos
+      FROM src
+      GROUP BY clave
+    ),
+    prev AS (${prevCte}),
+    rec AS (
+      SELECT clave, subcategoria, n
+      FROM (
+        SELECT clave, subcategoria, COUNT(*)::int AS n,
+               ROW_NUMBER() OVER (
+                 PARTITION BY clave
+                 ORDER BY COUNT(*) DESC, subcategoria
+               ) AS rn
+        FROM src
+        WHERE clave <> ${SIN_IDENTIFICAR_KEY}
+        GROUP BY clave, subcategoria
+      ) x
+      WHERE rn = 1
+    )
+    SELECT b.*,
+           COALESCE(p.total, 0)::int AS prev_total,
+           COALESCE(r.n, 0)::int AS max_rec,
+           r.subcategoria AS subcategoria_recurrente
+    FROM base b
+    LEFT JOIN prev p ON p.clave = b.clave
+    LEFT JOIN rec r ON r.clave = b.clave
+  `;
+}
+
+function mapClienteResumen(
+  r: ClienteBaseRow,
+  totalIdentificadas: number,
+  esNoIdentificado = false,
+): ClienteResumen {
+  const noCumple = Math.max(0, r.con_dato - r.cumple);
+  const pctIncumple =
+    r.con_dato > 0 ? Math.round((noCumple / r.con_dato) * 1000) / 10 : null;
+  return {
+    cliente: esNoIdentificado ? SIN_IDENTIFICAR_LABEL : r.clave,
+    clave: r.clave,
+    total: r.total,
+    pct:
+      !esNoIdentificado && totalIdentificadas > 0
+        ? Math.round((r.total / totalIdentificadas) * 1000) / 10
+        : 0,
+    variacionPct:
+      r.prev_total > 0
+        ? Math.round(((r.total - r.prev_total) / r.prev_total) * 1000) / 10
+        : null,
+    tiempoPromedio: r.tiempo,
+    conDato: r.con_dato,
+    noCumple,
+    pctIncumple,
+    reincidenciaMax: r.max_rec,
+    canales: [
+      r.wpp ? "whatsapp" : null,
+      r.correo ? "correo" : null,
+    ].filter(Boolean) as string[],
+    esNoIdentificado,
+    ultimaAtencion: r.ultima,
+  };
+}
+
+function peakPorHora(rows: { hora: number; total: number }[]): { hora: number; total: number } | null {
+  const map = new Map<number, number>();
+  for (const r of rows) map.set(r.hora, (map.get(r.hora) ?? 0) + r.total);
+  let best: { hora: number; total: number } | null = null;
+  for (const [hora, total] of map) {
+    if (!best || total > best.total) best = { hora, total };
+  }
+  return best;
+}
+
+function peakPorDia(rows: { dia: number; total: number }[]): { dia: number; total: number } | null {
+  const map = new Map<number, number>();
+  for (const r of rows) map.set(r.dia, (map.get(r.dia) ?? 0) + r.total);
+  let best: { dia: number; total: number } | null = null;
+  for (const [dia, total] of map) {
+    if (!best || total > best.total) best = { dia, total };
+  }
+  return best;
+}
+
+const arr = (x: unknown): string[] => (Array.isArray(x) ? (x as string[]) : []);
+
 export const unificadoRepository = {
   async ping(): Promise<boolean> {
     await prisma.$queryRaw`SELECT 1`;
@@ -940,33 +1360,54 @@ export const unificadoRepository = {
   },
 
   async resumen(filters: DashboardFilters): Promise<ResumenResponse> {
-    const whereActual = construirWhere(filters);
-    const actual = await totales(whereActual);
-    const slaActual = await slaTotales(whereActual);
+    // Universo único del reporte: atenciones finalizadas (cerradas + resueltas).
+    const whereResumen = whereConCanal(construirWhere(filters), FINALIZADAS);
+    const actual = await totales(whereResumen);
+    const slaActual = await slaTotales(whereResumen);
 
     const pct = (dentro: number, con: number) =>
       con > 0 ? Math.round((dentro / con) * 1000) / 10 : null;
+
+    const pctPrimeraActual = pct(slaActual.pr_dentro, slaActual.pr_con_dato);
+    const pctResolucionActual = pct(slaActual.res_dentro, slaActual.res_con_dato);
 
     let anterior: FilaTotales | null = null;
     let slaAnterior: SlaTotales | null = null;
     let rango: ResumenResponse["rango"] = null;
     if (filters.fechaHoraInicio && filters.fechaHoraFin) {
       const prev = rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin);
-      const wherePrev = construirWhere({ ...filters, fechaHoraInicio: prev.inicio, fechaHoraFin: prev.fin });
-      anterior = await totales(wherePrev);
-      slaAnterior = await slaTotales(wherePrev);
+      const wherePrevResumen = whereConCanal(
+        construirWhere(
+          {
+            ...filters,
+            fechaHoraInicio: `${prev.inicio} 00:00`,
+            fechaHoraFin: `${prev.fin} 23:59`,
+          },
+          { endExclusive: true },
+        ),
+        FINALIZADAS,
+      );
+      anterior = await totales(wherePrevResumen);
+      slaAnterior = await slaTotales(wherePrevResumen);
       rango = { inicio: filters.fechaHoraInicio, fin: filters.fechaHoraFin, comparadoCon: prev };
     }
 
-    const porCanal = await desglose(whereActual, Prisma.sql`canal`);
-    const porSubcanal = await desglose(whereActual, Prisma.sql`subcanal`);
-    const porEstado = await desglose(whereActual, Prisma.sql`estado_homologado`);
-    const porPais = await desglose(whereActual, N_PAIS);
-    const porAsesor = await desglose(whereActual, N_ASESOR);
-    const topAsesores = await rankingAsesores(whereActual);
-    const topCategorias = await desgloseTop(whereActual, Prisma.sql`categoria`, 10);
-    const topSubcategorias = await desgloseTop(whereActual, SCAT_LABEL);
-    const tiempos = await tiemposPorCanal(whereActual);
+    const pctPrimeraAnterior = slaAnterior
+      ? pct(slaAnterior.pr_dentro, slaAnterior.pr_con_dato)
+      : null;
+    const pctResolucionAnterior = slaAnterior
+      ? pct(slaAnterior.res_dentro, slaAnterior.res_con_dato)
+      : null;
+
+    const porCanal = await desglose(whereResumen, Prisma.sql`canal`);
+    const porSubcanal = await desglose(whereResumen, Prisma.sql`subcanal`);
+    const porEstado = await desglose(whereResumen, Prisma.sql`estado_homologado`);
+    const porPais = await desglose(whereResumen, N_PAIS);
+    const porAsesor = await desglose(whereResumen, N_ASESOR);
+    const topAsesores = await rankingAsesores(whereResumen);
+    const topCategorias = await desgloseTop(whereResumen, Prisma.sql`categoria`, 10);
+    const topSubcategorias = await desgloseTop(whereResumen, SCAT_LABEL);
+    const tiempos = await tiemposPorCanal(whereResumen);
 
     return {
       rango,
@@ -975,10 +1416,22 @@ export const unificadoRepository = {
         cerrados: comparar(actual.cerrados, anterior?.cerrados ?? null),
         resueltos: comparar(actual.resueltos, anterior?.resueltos ?? null),
         cumplimientos: comparar(slaActual.pr_dentro, slaAnterior?.pr_dentro ?? null),
-        cumplimientoSlaPct: comparar(
-          pct(slaActual.pr_dentro, slaActual.pr_con_dato),
-          slaAnterior ? pct(slaAnterior.pr_dentro, slaAnterior.pr_con_dato) : null,
+        // Se conserva por compatibilidad; es el mismo valor que primera respuesta.
+        cumplimientoSlaPct: comparar(pctPrimeraActual, pctPrimeraAnterior),
+        cumplimientoPrimeraPct: comparar(pctPrimeraActual, pctPrimeraAnterior),
+        primeraDentro: comparar(slaActual.pr_dentro, slaAnterior?.pr_dentro ?? null),
+        primeraFuera: comparar(
+          slaActual.pr_con_dato - slaActual.pr_dentro,
+          slaAnterior ? slaAnterior.pr_con_dato - slaAnterior.pr_dentro : null,
         ),
+        primeraConDato: comparar(slaActual.pr_con_dato, slaAnterior?.pr_con_dato ?? null),
+        cumplimientoResolucionPct: comparar(pctResolucionActual, pctResolucionAnterior),
+        resolucionDentro: comparar(slaActual.res_dentro, slaAnterior?.res_dentro ?? null),
+        resolucionFuera: comparar(
+          slaActual.res_con_dato - slaActual.res_dentro,
+          slaAnterior ? slaAnterior.res_con_dato - slaAnterior.res_dentro : null,
+        ),
+        resolucionConDato: comparar(slaActual.res_con_dato, slaAnterior?.res_con_dato ?? null),
         promPrimeraRespMin: comparar(actual.prom_primera, anterior?.prom_primera ?? null),
         promResolucionMin: comparar(actual.prom_resolucion, anterior?.prom_resolucion ?? null),
       },
@@ -1053,119 +1506,231 @@ export const unificadoRepository = {
   },
 
   async operacion(filters: DashboardFilters): Promise<OperacionResponse> {
-    const whereActual = construirWhere(filters);
-    const totalActual = await totales(whereActual);
+    const inicio = filters.fechaHoraInicio?.slice(0, 10) ?? null;
+    const fin = filters.fechaHoraFin?.slice(0, 10) ?? null;
+    const prev = inicio && fin ? rangoAnterior(inicio, fin) : null;
+    const dedupe = dedupeOperacion(filters);
 
-    const HORA = Prisma.sql`SPLIT_PART(hora::text, ':', 1)::int`;
+    const whereActual = whereOperacion(filters);
+    const baseActual = baseOperacion(whereActual, dedupe);
 
-    const filaHoraPico = await prisma.$queryRaw`
-      SELECT ${HORA} AS hora_num, COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY ${HORA}
-      ORDER BY total DESC
-      LIMIT 1
-    ` as { hora_num: number; total: number }[];
+    const wherePrev = prev
+      ? whereOperacion({
+          ...filters,
+          fechaHoraInicio: `${prev.inicio} 00:00`,
+          fechaHoraFin: `${prev.fin} 23:59`,
+        })
+      : null;
+    const basePrev = wherePrev ? baseOperacion(wherePrev, dedupe) : null;
 
-    const filaDiaCargado = await prisma.$queryRaw`
-      SELECT TO_CHAR(fecha::date, 'Day') AS dia_nombre,
-             COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY TO_CHAR(fecha::date, 'Day')
-      ORDER BY total DESC
-      LIMIT 1
-    ` as { dia_nombre: string; total: number }[];
+    type Heat = { dia: number; hora: number; total: number };
+    type Daily = { fecha: string; total: number };
+    type DailyCanal = { fecha: string; subcanal: string; total: number };
+    type Top = { etiqueta: string; total: number };
 
-    const filaPromDia = await prisma.$queryRaw`
-      SELECT ROUND(COUNT(*)::numeric / GREATEST(COUNT(DISTINCT fecha::date), 1), 1)::float8 AS promedio
-      FROM public.v_unificado_norm
-      ${whereActual}
-    ` as { promedio: number }[];
+    const [
+      heatmapActual,
+      dailyTotalActual,
+      dailyChannelActual,
+      topAsesoresRaw,
+      topCategorias,
+      heatmapPrev,
+      dailyTotalPrev,
+      dailyChannelPrev,
+    ] = await Promise.all([
+      prisma.$queryRaw(Prisma.sql`
+        ${baseActual}
+        SELECT EXTRACT(DOW FROM creacion)::int AS dia,
+               EXTRACT(HOUR FROM creacion)::int AS hora,
+               COUNT(*)::int AS total
+        FROM seleccion
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+      `) as Promise<Heat[]>,
 
-    const heatmap = await prisma.$queryRaw`
-      SELECT ${HORA} AS hora,
-             EXTRACT(DOW FROM fecha::date)::int AS dia,
-             COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY ${HORA}, EXTRACT(DOW FROM fecha::date)
-      ORDER BY dia, hora
-    ` as { hora: number; dia: number; total: number }[];
+      prisma.$queryRaw(Prisma.sql`
+        ${baseActual}
+        SELECT TO_CHAR(creacion::date, 'YYYY-MM-DD') AS fecha,
+               COUNT(*)::int AS total
+        FROM seleccion
+        GROUP BY 1
+        ORDER BY 1
+      `) as Promise<Daily[]>,
 
-    const curvaHora = await prisma.$queryRaw`
-      SELECT ${HORA} AS hora, COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY ${HORA}
-      ORDER BY hora
-    ` as { hora: number; total: number }[];
+      prisma.$queryRaw(Prisma.sql`
+        ${baseActual}
+        SELECT TO_CHAR(creacion::date, 'YYYY-MM-DD') AS fecha,
+               subcanal,
+               COUNT(*)::int AS total
+        FROM filtrado
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+      `) as Promise<DailyCanal[]>,
 
-    const cargaDiaSemana = await prisma.$queryRaw`
-      SELECT EXTRACT(DOW FROM fecha::date)::int AS dia,
-             TO_CHAR(fecha::date, 'Day') AS etiqueta,
-             COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY EXTRACT(DOW FROM fecha::date), TO_CHAR(fecha::date, 'Day')
-      ORDER BY dia
-    ` as { dia: number; etiqueta: string; total: number }[];
+      prisma.$queryRaw(Prisma.sql`
+        ${baseActual}
+        SELECT ${N_ASESOR} AS etiqueta, COUNT(*)::int AS total
+        FROM seleccion
+        GROUP BY ${N_ASESOR}
+        ORDER BY total DESC
+        LIMIT 20
+      `) as Promise<Top[]>,
 
-    const tendenciaDiaria = await prisma.$queryRaw`
-      SELECT fecha::date AS fecha, COUNT(*)::int AS total
-      FROM public.v_unificado_norm
-      ${whereActual}
-      GROUP BY fecha::date
-      ORDER BY fecha
-    ` as { fecha: Date; total: number }[];
+      prisma.$queryRaw(Prisma.sql`
+        ${baseActual}
+        SELECT COALESCE(NULLIF(TRIM(REPLACE(categoria, '_', ' ')), ''), 'Sin categoría') AS etiqueta,
+               COUNT(*)::int AS total
+        FROM seleccion
+        GROUP BY 1
+        ORDER BY total DESC
+        LIMIT 10
+      `) as Promise<Top[]>,
 
-    let topAsesores = await desgloseTop(whereActual, N_ASESOR, 20);
-    topAsesores = consolidarNombres(topAsesores).slice(0, 10);
-    const topCategorias = await desgloseTop(whereActual, Prisma.sql`categoria`, 10);
+      basePrev
+        ? (prisma.$queryRaw(Prisma.sql`
+            ${basePrev}
+            SELECT EXTRACT(DOW FROM creacion)::int AS dia,
+                   EXTRACT(HOUR FROM creacion)::int AS hora,
+                   COUNT(*)::int AS total
+            FROM seleccion
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+          `) as Promise<Heat[]>)
+        : Promise.resolve([] as Heat[]),
 
-    let rango: OperacionResponse["rango"] = null;
-    let anteriorTotal: number | null = null;
-    let anteriorPromedio: number | null = null;
+      basePrev
+        ? (prisma.$queryRaw(Prisma.sql`
+            ${basePrev}
+            SELECT TO_CHAR(creacion::date, 'YYYY-MM-DD') AS fecha,
+                   COUNT(*)::int AS total
+            FROM seleccion
+            GROUP BY 1
+            ORDER BY 1
+          `) as Promise<Daily[]>)
+        : Promise.resolve([] as Daily[]),
 
-    if (filters.fechaHoraInicio && filters.fechaHoraFin) {
-      const prev = rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin);
-      const wherePrev = construirWhere({ ...filters, fechaHoraInicio: prev.inicio, fechaHoraFin: prev.fin });
-      const totalPrev = await totales(wherePrev);
-      anteriorTotal = totalPrev.total;
+      basePrev
+        ? (prisma.$queryRaw(Prisma.sql`
+            ${basePrev}
+            SELECT TO_CHAR(creacion::date, 'YYYY-MM-DD') AS fecha,
+                   subcanal,
+                   COUNT(*)::int AS total
+            FROM filtrado
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+          `) as Promise<DailyCanal[]>)
+        : Promise.resolve([] as DailyCanal[]),
+    ]);
 
-      const promPrev = await prisma.$queryRaw`
-        SELECT ROUND(COUNT(*)::numeric / GREATEST(COUNT(DISTINCT fecha::date), 1), 1)::float8 AS promedio
-        FROM public.v_unificado_norm
-        ${wherePrev}
-      ` as { promedio: number }[];
-      anteriorPromedio = promPrev[0]?.promedio ?? null;
+    const sum = (rows: { total: number }[]) => rows.reduce((s, r) => s + r.total, 0);
+    const totalActual = sum(dailyTotalActual);
+    const totalPrevio = prev ? sum(dailyTotalPrev) : null;
+    const diasActual = diasCalendarioOp(
+      inicio,
+      fin,
+      dailyTotalActual.map((r) => r.fecha),
+    );
+    const diasPrevio = prev
+      ? diasCalendarioOp(
+          prev.inicio,
+          prev.fin,
+          dailyTotalPrev.map((r) => r.fecha),
+        )
+      : null;
+    const promActual = diasActual > 0 ? Math.round((totalActual / diasActual) * 10) / 10 : null;
+    const promPrevio =
+      diasPrevio && diasPrevio > 0 && totalPrevio !== null
+        ? Math.round((totalPrevio / diasPrevio) * 10) / 10
+        : null;
 
-      rango = { inicio: filters.fechaHoraInicio, fin: filters.fechaHoraFin, comparadoCon: prev };
+    const heatmap = heatmapActual.map((h) => ({ hora: h.hora, dia: h.dia, total: h.total }));
+
+    const diasMap = new Map<number, number>();
+    for (const r of dailyTotalActual) {
+      const dia = new Date(`${r.fecha}T00:00:00Z`).getUTCDay();
+      diasMap.set(dia, (diasMap.get(dia) ?? 0) + 1);
     }
+    const diasPorDia = [...diasMap.entries()]
+      .map(([dia, dias]) => ({ dia, dias }))
+      .sort((a, b) => a.dia - b.dia);
+
+    const canalTotals = new Map<string, number>();
+    for (const r of dailyChannelActual) {
+      canalTotals.set(r.subcanal, (canalTotals.get(r.subcanal) ?? 0) + r.total);
+    }
+    const porSubcanal: Desglose[] = SUB_ORDER_OP.map((subcanal) => ({
+      etiqueta: subcanal,
+      total: canalTotals.get(subcanal) ?? 0,
+    }));
+    const rawTotal = porSubcanal.reduce((s, r) => s + r.total, 0);
+    const duplicadosEntreCanales = Math.max(0, rawTotal - totalActual);
+
+    const peakH = peakPorHora(heatmapActual);
+    const peakD = peakPorDia(heatmapActual);
+    const peakHPrev = peakPorHora(heatmapPrev);
+    const peakDPrev = peakPorDia(heatmapPrev);
+
+    const topAsesores = consolidarNombres(topAsesoresRaw).slice(0, 10);
+
+    const evo = {
+      diaria: {
+        actual: buildPeriodosOp(dailyTotalActual, dailyChannelActual, inicio, fin, "diaria"),
+        anterior: prev
+          ? buildPeriodosOp(dailyTotalPrev, dailyChannelPrev, prev.inicio, prev.fin, "diaria")
+          : [],
+      },
+      semanal: {
+        actual: buildPeriodosOp(dailyTotalActual, dailyChannelActual, inicio, fin, "semanal"),
+        anterior: prev
+          ? buildPeriodosOp(dailyTotalPrev, dailyChannelPrev, prev.inicio, prev.fin, "semanal")
+          : [],
+      },
+      mensual: {
+        actual: buildPeriodosOp(dailyTotalActual, dailyChannelActual, inicio, fin, "mensual"),
+        anterior: prev
+          ? buildPeriodosOp(dailyTotalPrev, dailyChannelPrev, prev.inicio, prev.fin, "mensual")
+          : [],
+      },
+      trimestral: {
+        actual: buildPeriodosOp(dailyTotalActual, dailyChannelActual, inicio, fin, "trimestral"),
+        anterior: prev
+          ? buildPeriodosOp(dailyTotalPrev, dailyChannelPrev, prev.inicio, prev.fin, "trimestral")
+          : [],
+      },
+    };
+
+    const rango: OperacionResponse["rango"] =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? {
+            inicio: filters.fechaHoraInicio,
+            fin: filters.fechaHoraFin,
+            comparadoCon: prev ?? { inicio: "", fin: "" },
+          }
+        : null;
 
     return {
-      rango,
+      rango: prev ? rango : null,
       kpis: {
-        horaPico: filaHoraPico[0] ? `${String(filaHoraPico[0].hora_num).padStart(2, "0")}:00` : null,
-        horaPicoValor: filaHoraPico[0]?.total ?? null,
-        diaCargado: filaDiaCargado[0]?.dia_nombre?.trim() ?? null,
-        diaCargadoValor: filaDiaCargado[0]?.total ?? null,
-        promedioPorDia: comparar(filaPromDia[0]?.promedio ?? null, anteriorPromedio),
-        total: comparar(totalActual.total, anteriorTotal),
+        total: comparar(totalActual, totalPrevio),
+        promedioPorDia: comparar(promActual, promPrevio),
+        diasConDatos: dailyTotalActual.length,
+        diasConDatosAnterior: prev ? dailyTotalPrev.length : null,
+        horaPico: peakH ? `${String(peakH.hora).padStart(2, "0")}:00` : null,
+        horaPicoValor: peakH?.total ?? null,
+        horaPicoAnterior: peakHPrev ? `${String(peakHPrev.hora).padStart(2, "0")}:00` : null,
+        horaPicoAnteriorValor: peakHPrev?.total ?? null,
+        diaCargado: peakD ? DIAS_LARGOS[peakD.dia] : null,
+        diaCargadoValor: peakD?.total ?? null,
+        diaCargadoAnterior: peakDPrev ? DIAS_LARGOS[peakDPrev.dia] : null,
+        diaCargadoAnteriorValor: peakDPrev?.total ?? null,
       },
-      heatmap: heatmap.map((h) => ({ hora: h.hora, dia: h.dia, total: h.total })),
-      curvaHora: curvaHora.map((h) => ({ hora: h.hora, total: h.total })),
-      cargaDiaSemana: cargaDiaSemana.map((d) => ({
-        dia: d.dia,
-        etiqueta: d.etiqueta?.trim() ?? '',
-        total: d.total,
-      })),
-      tendenciaDiaria: tendenciaDiaria.map((d) => ({
-        fecha: d.fecha instanceof Date ? d.fecha.toISOString().slice(0, 10) : String(d.fecha),
-        total: d.total,
-      })),
+      heatmap,
+      diasPorDia,
+      porSubcanal,
+      duplicadosEntreCanales,
       topAsesores,
       topCategorias,
+      evolucion: evo,
     };
   },
 
@@ -1962,270 +2527,686 @@ export const unificadoRepository = {
   },
 
   async categoriasV2(filters: DashboardFilters): Promise<CategoriasV2Response> {
-    const whereActual = construirWhere(filters);
+    // Universo único del reporte: atenciones finalizadas (cerradas o resueltas).
+    const whereBase = construirWhere(filters, { fechaRangoSargable: true });
+    const whereActual = whereConCanal(whereBase, FINALIZADAS);
+
     const CAT = N_CATEGORIA;
-    const SCAT = SCAT_LABEL;   // canónico mostrado (homologado central)
+    const SCAT = SCAT_LABEL; // canónico mostrado (homologado central)
     const SCAT_GROUP = SCAT_KEY; // clave de agrupación (homologada central)
     const DOM = N_DOMINIO_COALESCE;
-    const ASESOR = N_ASESOR_COALESCE;
-    const SLA_CASE = Prisma.sql`CASE WHEN resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= 20 THEN 1 ELSE 0 END`;
+    const uRes = umbral(SLA_MINUTOS.resolucion);
+    const TECNICAS = ["SIN HOMOLOGAR", "SIN CATEGORIA EN ORIGEN", "SIN CATEGORÍA EN ORIGEN"];
 
-    const [
-      totalCat,
-      totalSub,
-      catLiderRaw,
-      subLiderRaw,
-      paretoCatRaw,
-      paretoSubRaw,
-      jerarquiaRaw,
-      catsTiempoRaw,
-      subsTiempoRaw,
-      catsSLARaw,
-      subsSLARaw,
-      matrizAsesorRaw,
-      matrizSubAsesorRaw,
-      impactoRaw,
-    ] = await Promise.all([
+    const [universoRaw, catsMetricasRaw, jerarquiaRaw, asesorDetalleRaw] =
+      await Promise.all([
+        prisma.$queryRaw`
+          SELECT COUNT(*)::int AS total_rango,
+                 COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS total,
+                 COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertas,
+                 COUNT(*) FILTER (WHERE estado_homologado = 'sin_mapear')::int AS sin_estado
+          FROM public.v_unificado_norm ${whereBase}
+        ` as Promise<{ total_rango: number; total: number; abiertas: number; sin_estado: number }[]>,
 
-      prisma.$queryRaw`SELECT COUNT(DISTINCT ${CAT})::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>,
+        prisma.$queryRaw`
+          SELECT ${CAT} AS categoria,
+                 COUNT(*)::int AS volumen,
+                 COUNT(resolucion_min_norm)::int AS con_dato,
+                 COUNT(*) FILTER (
+                   WHERE resolucion_min_norm IS NOT NULL
+                     AND resolucion_min_norm <= ${uRes}
+                 )::int AS cumple,
+                 ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempo_atencion
+          FROM public.v_unificado_norm ${whereActual}
+          GROUP BY ${CAT}
+          ORDER BY volumen DESC
+        ` as Promise<{
+          categoria: string;
+          volumen: number;
+          con_dato: number;
+          cumple: number;
+          tiempo_atencion: number | null;
+        }[]>,
 
-      prisma.$queryRaw`SELECT COUNT(DISTINCT ${SCAT_GROUP})::int AS total FROM public.v_unificado_norm ${whereActual}` as Promise<{ total: number }[]>,
+        prisma.$queryRaw`
+          SELECT ${CAT} AS categoria, ${SCAT} AS subcategoria, ${DOM} AS dominio, COUNT(*)::int AS volumen
+          FROM public.v_unificado_norm ${whereActual}
+          GROUP BY ${CAT}, ${SCAT_GROUP}, ${DOM}
+          ORDER BY categoria, volumen DESC
+        ` as Promise<{ categoria: string; subcategoria: string; dominio: string; volumen: number }[]>,
 
-      prisma.$queryRaw`SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT} ORDER BY volumen DESC LIMIT 1` as Promise<{ categoria: string; volumen: number }[]>,
+        prisma.$queryRaw`
+          SELECT COALESCE(NULLIF(TRIM(asesor), ''), ${ASESOR_SIN_ASIGNAR}) AS asesor,
+                 ${CAT} AS categoria,
+                 ${SCAT} AS subcategoria,
+                 COUNT(*)::int AS volumen
+          FROM public.v_unificado_norm ${whereActual}
+          GROUP BY 1, 2, 3
+          ORDER BY volumen DESC
+        ` as Promise<{ asesor: string; categoria: string; subcategoria: string; volumen: number }[]>,
+      ]);
 
-      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT_GROUP} ORDER BY volumen DESC LIMIT 1` as Promise<{ subcategoria: string; volumen: number }[]>,
+    const universo = universoRaw[0] ?? {
+      total_rango: 0,
+      total: 0,
+      abiertas: 0,
+      sin_estado: 0,
+    };
 
-      prisma.$queryRaw`SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT} ORDER BY volumen DESC` as Promise<{ categoria: string; volumen: number }[]>,
-
-      prisma.$queryRaw`SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${SCAT_GROUP} ORDER BY volumen DESC` as Promise<{ subcategoria: string; volumen: number }[]>,
-
-      prisma.$queryRaw`SELECT ${CAT} AS categoria, ${SCAT} AS subcategoria, ${DOM} AS dominio, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${CAT}, ${SCAT_GROUP}, ${DOM} ORDER BY categoria, volumen DESC` as Promise<{ categoria: string; subcategoria: string; dominio: string; volumen: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric,1)::float8 AS tiempo_espera,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS tiempo_atencion,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CAT} ORDER BY tiempo_resolucion DESC
-      ` as Promise<{ categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SCAT} AS subcategoria, ${CAT} AS categoria, COUNT(*)::int AS volumen,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY volumen DESC LIMIT 15
-      ` as Promise<{ subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CAT} ORDER BY sla ASC
-      ` as Promise<{ categoria: string; volumen: number; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SCAT} AS subcategoria, ${CAT} AS categoria, COUNT(*)::int AS volumen,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT_GROUP}, ${CAT} ORDER BY volumen DESC LIMIT 15
-      ` as Promise<{ subcategoria: string; categoria: string; volumen: number; sla: number | null }[]>,
-
-      prisma.$queryRaw`SELECT ${ASESOR} AS asesor, ${CAT} AS categoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${ASESOR}, ${CAT}` as Promise<{ asesor: string; categoria: string; volumen: number }[]>,
-
-      prisma.$queryRaw`SELECT ${ASESOR} AS asesor, ${SCAT} AS subcategoria, COUNT(*)::int AS volumen FROM public.v_unificado_norm ${whereActual} GROUP BY ${ASESOR}, ${SCAT_GROUP} ORDER BY volumen DESC` as Promise<{ asesor: string; subcategoria: string; volumen: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${CAT} AS categoria, COUNT(*)::int AS volumen,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CAT}
-      ` as Promise<{ categoria: string; volumen: number; tiempo: number | null; sla: number | null }[]>,
-    ]);
-
-    /* ── Calcular % y acumulado para Pareto categorías ── */
-    const totalParetoCat = paretoCatRaw.reduce((s, r) => s + r.volumen, 0);
+    /* ── Pareto de categorías ── */
+    const totalParetoCat = catsMetricasRaw.reduce((s, r) => s + r.volumen, 0);
     let acum = 0;
-    const paretoCategorias = paretoCatRaw.map((r) => {
+    const paretoCategorias = catsMetricasRaw.map((r) => {
       acum += r.volumen;
       return {
         categoria: r.categoria,
         volumen: r.volumen,
         pct: totalParetoCat > 0 ? Math.round((r.volumen / totalParetoCat) * 1000) / 10 : 0,
         acumulado: totalParetoCat > 0 ? Math.round((acum / totalParetoCat) * 1000) / 10 : 0,
+        tecnica: TECNICAS.includes(r.categoria.toUpperCase()),
       };
     });
 
-    /* ── Calcular % y acumulado para Pareto subcategorías ── */
-    const totalParetoSub = paretoSubRaw.reduce((s, r) => s + r.volumen, 0);
-    let acumSub = 0;
-    const paretoSubcategorias = paretoSubRaw.map((r) => {
-      acumSub += r.volumen;
+    /* ── Subcategorías: se agregan desde la jerarquía (misma fuente) ── */
+    const subMap = new Map<
+      string,
+      { categoria: string; subcategoria: string; volumen: number }
+    >();
+    for (const r of jerarquiaRaw) {
+      const key = `${r.categoria}|${r.subcategoria}`;
+      const actual = subMap.get(key);
+      if (actual) {
+        actual.volumen += r.volumen;
+      } else {
+        subMap.set(key, {
+          categoria: r.categoria,
+          subcategoria: r.subcategoria,
+          volumen: r.volumen,
+        });
+      }
+    }
+    const paretoSubcategorias = [...subMap.values()].sort((a, b) => b.volumen - a.volumen);
+    const subLider = paretoSubcategorias[0];
+
+    /* ── Tiempo y SLA por categoría ── */
+    const categoriasTiempo = catsMetricasRaw.map((r) => ({
+      categoria: r.categoria,
+      volumen: r.volumen,
+      conDato: r.con_dato,
+      tiempo_atencion: r.tiempo_atencion,
+      tecnica: TECNICAS.includes(r.categoria.toUpperCase()),
+    }));
+
+    const categoriasSLA = catsMetricasRaw.map((r) => {
+      const noCumple = Math.max(0, r.con_dato - r.cumple);
       return {
-        subcategoria: r.subcategoria,
+        categoria: r.categoria,
         volumen: r.volumen,
-        pct: totalParetoSub > 0 ? Math.round((r.volumen / totalParetoSub) * 1000) / 10 : 0,
-        acumulado: totalParetoSub > 0 ? Math.round((acumSub / totalParetoSub) * 1000) / 10 : 0,
+        conDato: r.con_dato,
+        cumple: r.cumple,
+        noCumple,
+        pctCumple:
+          r.con_dato > 0 ? Math.round((r.cumple / r.con_dato) * 1000) / 10 : null,
+        pctIncumple:
+          r.con_dato > 0 ? Math.round((noCumple / r.con_dato) * 1000) / 10 : null,
+        tecnica: TECNICAS.includes(r.categoria.toUpperCase()),
       };
     });
+
+    /* ── Asesores: tabla explícita de equivalencias ── */
+    const asesorDetalle = asesorDetalleRaw.map((r) => ({
+      asesor: consolidarAsesor(r.asesor),
+      categoria: r.categoria,
+      subcategoria: r.subcategoria,
+      volumen: r.volumen,
+    }));
+
+    const trazabilidadMap = new Map<string, number>();
+    for (const r of asesorDetalleRaw) {
+      const original = r.asesor.trim() || ASESOR_SIN_ASIGNAR;
+      trazabilidadMap.set(original, (trazabilidadMap.get(original) ?? 0) + r.volumen);
+    }
+    const asesorTrazabilidad = [...trazabilidadMap.entries()]
+      .map(([original, volumen]) => ({
+        original,
+        consolidado: consolidarAsesor(original),
+        volumen,
+      }))
+      .sort((a, b) => b.volumen - a.volumen);
+
+    const totalSinAsesor = asesorDetalleRaw
+      .filter((r) => r.asesor.trim() === ASESOR_SIN_ASIGNAR)
+      .reduce((s, r) => s + r.volumen, 0);
 
     return {
-      totalCategorias: totalCat[0]?.total ?? 0,
-      totalSubcategorias: totalSub[0]?.total ?? 0,
-      categoriaLider: catLiderRaw[0] ? { nombre: catLiderRaw[0].categoria, volumen: catLiderRaw[0].volumen } : null,
-      subcategoriaLider: subLiderRaw[0] ? { nombre: subLiderRaw[0].subcategoria, volumen: subLiderRaw[0].volumen } : null,
+      universo: {
+        total: universo.total,
+        totalRango: universo.total_rango,
+        excluidas: universo.total_rango - universo.total,
+        abiertas: universo.abiertas,
+        sinEstado: universo.sin_estado,
+      },
+      totalCategorias: paretoCategorias.length,
+      totalSubcategorias: new Set(paretoSubcategorias.map((r) => r.subcategoria)).size,
+      categoriaLider: catsMetricasRaw[0]
+        ? { nombre: catsMetricasRaw[0].categoria, volumen: catsMetricasRaw[0].volumen }
+        : null,
+      subcategoriaLider: subLider
+        ? { nombre: subLider.subcategoria, volumen: subLider.volumen }
+        : null,
       paretoCategorias,
       paretoSubcategorias,
-      jerarquia: jerarquiaRaw.map((r) => ({ categoria: r.categoria, subcategoria: r.subcategoria, dominio: r.dominio, volumen: r.volumen })),
-      categoriasTiempo: catsTiempoRaw.map((r) => ({ categoria: r.categoria, volumen: r.volumen, tiempo_resolucion: r.tiempo_resolucion, tiempo_espera: r.tiempo_espera, tiempo_atencion: r.tiempo_atencion, sla: r.sla })),
-      subcategoriasTiempo: subsTiempoRaw.map((r) => ({ subcategoria: r.subcategoria, categoria: r.categoria, volumen: r.volumen, tiempo_resolucion: r.tiempo_resolucion, sla: r.sla })),
-      categoriasSLA: catsSLARaw.map((r) => ({ categoria: r.categoria, volumen: r.volumen, sla: r.sla })),
-      subcategoriasSLA: subsSLARaw.map((r) => ({ subcategoria: r.subcategoria, categoria: r.categoria, volumen: r.volumen, sla: r.sla })),
-      matrizAsesor: matrizAsesorRaw.map((r) => ({ asesor: r.asesor, categoria: r.categoria, volumen: r.volumen })),
-      matrizSubAsesor: matrizSubAsesorRaw.map((r) => ({ asesor: r.asesor, subcategoria: r.subcategoria, volumen: r.volumen })),
-      impacto: impactoRaw.map((r) => ({ categoria: r.categoria, volumen: r.volumen, tiempo: r.tiempo, sla: r.sla })),
+      jerarquia: jerarquiaRaw.map((r) => ({
+        categoria: r.categoria,
+        subcategoria: r.subcategoria,
+        dominio: r.dominio,
+        volumen: r.volumen,
+      })),
+      categoriasTiempo,
+      categoriasSLA,
+      slaMetas: SLA_MINUTOS.resolucion,
+      asesorDetalle,
+      asesorTrazabilidad,
+      totalSinAsesor,
     };
   },
 
   async clientesV2(filters: DashboardFilters): Promise<ClientesV2Response> {
-    const whereActual = construirWhere(filters);
-    const DOM = N_DOMINIO_COALESCE;
-    const N_CAT = N_CATEGORIA;
-    const N_SCAT = SCAT_LABEL;
-    const GRUPO = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'whatsapp' WHEN canal ILIKE '%ticket%' THEN 'whaticket' ELSE 'zendesk' END`;
-    const WPP = Prisma.sql`canal ILIKE '%what%'`;
-    const CORREO = Prisma.sql`(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%')`;
-    const SLA_CASE = Prisma.sql`CASE WHEN resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= 20 THEN 1 ELSE 0 END`;
+    const whereActual = whereClientes(filters);
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereClientes({
+          ...filters,
+          fechaHoraInicio: `${prev.inicio} 00:00`,
+          fechaHoraFin: `${prev.fin} 23:59`,
+        })
+      : null;
 
-    const [
-      kpiRaw,
-      jerarquiaRaw,
-      rankingRaw,
-      riesgoRaw,
-      rankingTiempoRaw,
-      rankingSLARaw,
-      evolRaw,
-    ] = await Promise.all([
-
-      prisma.$queryRaw`
-        SELECT COUNT(DISTINCT ${DOM})::int AS unicos,
-               COUNT(*)::int AS total_atenciones,
-               COUNT(DISTINCT CASE WHEN ${DOM} <> '-' THEN ${DOM} END)::int AS con_dominio,
-               COUNT(DISTINCT CASE WHEN ${DOM} = '-' THEN ${DOM} END)::int AS sin_dominio,
-               COUNT(DISTINCT CASE WHEN ${WPP} THEN ${DOM} END)::int AS wpp,
-               COUNT(DISTINCT CASE WHEN ${CORREO} THEN ${DOM} END)::int AS correo
-        FROM public.v_unificado_norm ${whereActual}
-      ` as Promise<{ unicos: number; total_atenciones: number; con_dominio: number; sin_dominio: number; wpp: number; correo: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente, ${GRUPO} AS canal, ${N_CAT} AS categoria, ${N_SCAT} AS subcategoria,
-               COUNT(*)::int AS total,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric,1)::float8 AS tiempo_espera,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM}, ${GRUPO}, ${N_CAT}, ${SCAT_KEY}
-        ORDER BY cliente, canal, categoria, subcategoria
-      ` as Promise<{ cliente: string; canal: string; categoria: string; subcategoria: string; total: number; tiempo_espera: number | null; tiempo_resolucion: number | null; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente, COUNT(*)::int AS total,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric,1)::float8 AS tiempo_espera,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ cliente: string; total: number; tiempo_espera: number | null; tiempo_resolucion: number | null; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente, COUNT(*)::int AS total,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM} ORDER BY total DESC
-      ` as Promise<{ cliente: string; total: number; tiempo_resolucion: number | null; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion,
-               COUNT(*)::int AS total,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM} ORDER BY tiempo_resolucion DESC LIMIT 20
-      ` as Promise<{ cliente: string; tiempo_resolucion: number | null; total: number; sla: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla,
-               COUNT(*)::int AS total,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0)+COALESCE(resolucion_min_norm,0))::numeric,1)::float8 AS tiempo_resolucion
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM} ORDER BY sla ASC LIMIT 20
-      ` as Promise<{ cliente: string; sla: number | null; total: number; tiempo_resolucion: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${DOM} AS cliente, fecha::text AS periodo, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${DOM}, fecha ORDER BY cliente, periodo
-      ` as Promise<{ cliente: string; periodo: string; total: number }[]>,
+    const [rows, prevTotalRaw] = await Promise.all([
+      prisma.$queryRaw(
+        Prisma.sql`${clientesContexto(whereActual, wherePrev)} ORDER BY total DESC, clave`,
+      ) as Promise<ClienteBaseRow[]>,
+      wherePrev
+        ? (prisma.$queryRaw(
+            Prisma.sql`SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev}`,
+          ) as Promise<{ total: number }[]>)
+        : Promise.resolve([] as { total: number }[]),
     ]);
 
-    const k = kpiRaw[0];
-    const totalDom = (k?.con_dominio ?? 0) + (k?.sin_dominio ?? 0);
-    const promAtenciones = (k?.unicos ?? 0) > 0 ? Math.round(((k?.total_atenciones ?? 0) / (k?.unicos ?? 1)) * 10) / 10 : 0;
-
-    /* ── KPI ── */
-    const kpis = {
-      unicos: k?.unicos ?? 0,
-      totalAtenciones: k?.total_atenciones ?? 0,
-      conDominio: k?.con_dominio ?? 0,
-      pctConDominio: totalDom > 0 ? Math.round((k!.con_dominio / totalDom) * 1000) / 10 : 0,
-      sinDominio: k?.sin_dominio ?? 0,
-      pctSinDominio: totalDom > 0 ? Math.round((k!.sin_dominio / totalDom) * 1000) / 10 : 0,
-      wpp: k?.wpp ?? 0,
-      pctWpp: (k?.unicos ?? 0) > 0 ? Math.round((k!.wpp / k!.unicos) * 1000) / 10 : 0,
-      correo: k?.correo ?? 0,
-      pctCorreo: (k?.unicos ?? 0) > 0 ? Math.round((k!.correo / k!.unicos) * 1000) / 10 : 0,
-      promedioAtenciones: promAtenciones,
+    const sinIdent = rows.find((r) => r.clave === SIN_IDENTIFICAR_KEY) ?? null;
+    const identificados = rows.filter((r) => r.clave !== SIN_IDENTIFICAR_KEY);
+    const atenciones = rows.reduce((s, r) => s + r.total, 0);
+    const atencionesIdentificadas = identificados.reduce((s, r) => s + r.total, 0);
+    const atencionesNoIdentificadas = sinIdent?.total ?? 0;
+    const clientesIdentificados = identificados.length;
+    const clientesMulticanal = identificados.filter((r) => r.wpp && r.correo).length;
+    const canales = {
+      ambos: clientesMulticanal,
+      soloWhatsapp: identificados.filter((r) => r.wpp && !r.correo).length,
+      soloCorreo: identificados.filter((r) => !r.wpp && r.correo).length,
+      total: clientesIdentificados,
     };
+    const totalAnterior = prev ? (prevTotalRaw[0]?.total ?? 0) : null;
+    const variacionTotal =
+      totalAnterior !== null && totalAnterior > 0
+        ? Math.round(((atenciones - totalAnterior) / totalAnterior) * 1000) / 10
+        : null;
 
-    /* ── Ranking con % ── */
-    const totalRanking = rankingRaw.reduce((s, r) => s + r.total, 0);
-    const ranking = rankingRaw.map((r) => ({
-      cliente: r.cliente,
-      total: r.total,
-      pct: totalRanking > 0 ? Math.round((r.total / totalRanking) * 1000) / 10 : 0,
-      tiempo_espera: r.tiempo_espera,
-      tiempo_resolucion: r.tiempo_resolucion,
-      sla: r.sla,
-    }));
+    const ranking = identificados
+      .slice(0, 20)
+      .map((r) => mapClienteResumen(r, atencionesIdentificadas));
 
-    /* ── Riesgo ── */
-    const maxVol = Math.max(...riesgoRaw.map((r) => r.total), 1);
-    const maxRes = Math.max(...riesgoRaw.map((r) => r.tiempo_resolucion ?? 0), 1);
-    const riesgo = riesgoRaw.map((r) => {
-      const volScore = (r.total / maxVol) * 40;
-      const resScore = (1 - ((r.tiempo_resolucion ?? 0) / maxRes)) * 30;
-      const slaScore = (r.sla ?? 0) / 100 * 30;
-      const score = Math.round(volScore + resScore + slaScore);
-      let nivel = "Bajo";
-      if (score >= 80) nivel = "Crítico";
-      else if (score >= 60) nivel = "Alto";
-      else if (score >= 40) nivel = "Medio";
-      return { cliente: r.cliente, score, total: r.total, tiempo_resolucion: r.tiempo_resolucion, sla: r.sla, nivel };
-    }).sort((a, b) => b.score - a.score);
+    const seguimiento: ClienteSeguimiento[] = [];
+    for (const r of identificados) {
+      if (r.total < 3) continue;
+
+      const noCumple = Math.max(0, r.con_dato - r.cumple);
+      const pctIncumple =
+        r.con_dato > 0 ? Math.round((noCumple / r.con_dato) * 1000) / 10 : null;
+      const motivos: string[] = [];
+
+      if (r.con_dato >= 3 && pctIncumple !== null && pctIncumple > 30) {
+        motivos.push("Incumplimiento SLA > 30%");
+      }
+      if (r.con_dato >= 3 && r.tiempo !== null && r.tiempo > 1440) {
+        motivos.push("Tiempo promedio > 24 h");
+      }
+      if (r.total >= 10 && r.prev_total > 0 && r.total >= 2 * r.prev_total) {
+        motivos.push("Aumento de demanda ≥ 2×");
+      }
+      if (r.max_rec >= 4) {
+        motivos.push("Reincidencia ≥ 4 tickets en una subcategoría");
+      }
+      if (motivos.length < 2) continue;
+
+      seguimiento.push({
+        cliente: r.clave,
+        clave: r.clave,
+        total: r.total,
+        totalAnterior: r.prev_total,
+        variacionPct:
+          r.prev_total > 0
+            ? Math.round(((r.total - r.prev_total) / r.prev_total) * 1000) / 10
+            : null,
+        reincidenciaMax: r.max_rec,
+        subcategoriaRecurrente: r.subcategoria_recurrente,
+        tiempoPromedio: r.tiempo,
+        conDato: r.con_dato,
+        noCumple,
+        pctIncumple,
+        motivos,
+        senales: motivos.length,
+      });
+    }
+
+    seguimiento.sort(
+      (a, b) =>
+        b.senales - a.senales ||
+        (b.pctIncumple ?? 0) - (a.pctIncumple ?? 0) ||
+        b.total - a.total,
+    );
+
+    const pctNoIdentificadas =
+      atenciones > 0
+        ? Math.round((atencionesNoIdentificadas / atenciones) * 1000) / 10
+        : 0;
 
     return {
-      kpis,
-      jerarquia: jerarquiaRaw.map((r) => ({ cliente: r.cliente, canal: r.canal, categoria: r.categoria, subcategoria: r.subcategoria, total: r.total, tiempo_espera: r.tiempo_espera, tiempo_resolucion: r.tiempo_resolucion, sla: r.sla })),
+      universo: {
+        total: atenciones,
+        totalAnterior,
+        variacionPct: variacionTotal,
+        rango:
+          prev && filters.fechaHoraInicio && filters.fechaHoraFin
+            ? {
+                inicio: filters.fechaHoraInicio,
+                fin: filters.fechaHoraFin,
+                comparadoCon: prev,
+              }
+            : null,
+      },
+      kpis: {
+        clientesIdentificados,
+        atenciones,
+        atencionesIdentificadas,
+        atencionesNoIdentificadas,
+        pctNoIdentificadas,
+        promedioAtenciones:
+          clientesIdentificados > 0
+            ? Math.round((atencionesIdentificadas / clientesIdentificados) * 100) / 100
+            : 0,
+        clientesConSeguimiento: seguimiento.length,
+        clientesMulticanal,
+      },
+      calidad: {
+        atencionesNoIdentificadas,
+        pctNoIdentificadas,
+        dominiosInvalidos: sinIdent?.dominios_invalidos ?? 0,
+        numerosDistintos: sinIdent?.numeros_no_ident ?? 0,
+        identificadosPorCorreo: identificados.filter((r) => r.por_correo).length,
+      },
+      canales,
       ranking,
-      rankingTiempo: rankingTiempoRaw.map((r) => ({ cliente: r.cliente, tiempo_resolucion: r.tiempo_resolucion, total: r.total, sla: r.sla })),
-      rankingSLA: rankingSLARaw.map((r) => ({ cliente: r.cliente, sla: r.sla, total: r.total, tiempo_resolucion: r.tiempo_resolucion })),
-      riesgo,
-      evolucion: evolRaw.map((r) => ({ cliente: r.cliente, periodo: r.periodo, total: r.total })),
+      rankingTotal: clientesIdentificados,
+      seguimiento,
+      seguimientoTotal: seguimiento.length,
+    };
+  },
+
+  async clientesLista(
+    filters: DashboardFilters,
+    opts: { page?: number; pageSize?: number; search?: string; all?: boolean } = {},
+  ): Promise<ClientesListaResponse> {
+    const whereActual = whereClientes(filters);
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereClientes({
+          ...filters,
+          fechaHoraInicio: `${prev.inicio} 00:00`,
+          fechaHoraFin: `${prev.fin} 23:59`,
+        })
+      : null;
+
+    const page = opts.all ? 1 : Math.max(1, Math.trunc(opts.page ?? 1));
+    const pageSize = opts.all
+      ? 5000
+      : Math.min(100, Math.max(1, Math.trunc(opts.pageSize ?? 25)));
+    const offset = opts.all ? 0 : (page - 1) * pageSize;
+    const search = (opts.search ?? "").trim().toLowerCase();
+
+    const [totalesRaw, filasRaw] = await Promise.all([
+      prisma.$queryRaw(
+        Prisma.sql`
+          WITH claves AS (
+            SELECT ${CLIENTE_KEY} AS clave
+            FROM public.v_unificado_norm
+            ${whereActual}
+          ), base AS (
+            SELECT clave, COUNT(*)::int AS total
+            FROM claves
+            GROUP BY clave
+          )
+          SELECT COALESCE(SUM(total) FILTER (WHERE clave <> ${SIN_IDENTIFICAR_KEY}), 0)::int AS atenciones_ident,
+                 COUNT(*) FILTER (WHERE clave <> ${SIN_IDENTIFICAR_KEY})::int AS clientes
+          FROM base
+        `,
+      ) as Promise<{ atenciones_ident: number; clientes: number }[]>,
+      prisma.$queryRaw(
+        Prisma.sql`
+          WITH contexto AS (${clientesContexto(whereActual, wherePrev)})
+          SELECT *, COUNT(*) OVER()::int AS total_filas
+          FROM contexto
+          WHERE clave <> ${SIN_IDENTIFICAR_KEY}
+            ${search ? Prisma.sql`AND clave ILIKE ${"%" + search + "%"}` : Prisma.empty}
+          ORDER BY total DESC, clave
+          LIMIT ${pageSize} OFFSET ${offset}
+        `,
+      ) as Promise<(ClienteBaseRow & { total_filas: number })[]>,
+    ]);
+
+    const totalIdent = totalesRaw[0]?.atenciones_ident ?? 0;
+    return {
+      total: filasRaw[0]?.total_filas ?? 0,
+      page,
+      pageSize,
+      rows: filasRaw.map((r) => mapClienteResumen(r, totalIdent)),
+    };
+  },
+
+  async clienteCategorias(
+    filters: DashboardFilters,
+    clave: string,
+  ): Promise<ClienteCategoriasResponse> {
+    const whereActual = whereClientes(filters);
+    const uRes = umbral(SLA_MINUTOS.resolucion);
+    const rows = (await prisma.$queryRaw(
+      Prisma.sql`
+        SELECT ${N_CATEGORIA} AS categoria,
+               COUNT(*)::int AS total,
+               COUNT(resolucion_min_norm)::int AS con_dato,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND resolucion_min_norm <= ${uRes}
+               )::int AS cumple,
+               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempo
+        FROM public.v_unificado_norm
+        ${whereActual}
+        AND ${CLIENTE_KEY} = ${clave}
+        GROUP BY ${N_CATEGORIA}
+        ORDER BY total DESC
+      `,
+    )) as {
+      categoria: string;
+      total: number;
+      con_dato: number;
+      cumple: number;
+      tiempo: number | null;
+    }[];
+
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    return {
+      cliente: nombreCliente(clave),
+      clave,
+      esNoIdentificado: clave === SIN_IDENTIFICAR_KEY,
+      total,
+      categorias: rows.map((r) => {
+        const noCumple = Math.max(0, r.con_dato - r.cumple);
+        return {
+          categoria: r.categoria,
+          total: r.total,
+          pct: total > 0 ? Math.round((r.total / total) * 1000) / 10 : 0,
+          tiempoPromedio: r.tiempo,
+          conDato: r.con_dato,
+          noCumple,
+          pctIncumple:
+            r.con_dato > 0 ? Math.round((noCumple / r.con_dato) * 1000) / 10 : null,
+        };
+      }),
+    };
+  },
+
+  async clienteSubcategorias(
+    filters: DashboardFilters,
+    clave: string,
+    categoria: string,
+  ): Promise<ClienteSubcategoriasResponse> {
+    const whereActual = whereClientes(filters);
+    const uRes = umbral(SLA_MINUTOS.resolucion);
+    const rows = (await prisma.$queryRaw(
+      Prisma.sql`
+        SELECT ${N_CATEGORIA} AS categoria,
+               ${SCAT_LABEL} AS subcategoria,
+               COUNT(*)::int AS total,
+               COUNT(resolucion_min_norm)::int AS con_dato,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND resolucion_min_norm <= ${uRes}
+               )::int AS cumple,
+               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempo
+        FROM public.v_unificado_norm
+        ${whereActual}
+        AND ${CLIENTE_KEY} = ${clave}
+        AND ${N_CATEGORIA} = ${categoria}
+        GROUP BY ${N_CATEGORIA}, ${SCAT_KEY}
+        ORDER BY total DESC
+      `,
+    )) as {
+      categoria: string;
+      subcategoria: string;
+      total: number;
+      con_dato: number;
+      cumple: number;
+      tiempo: number | null;
+    }[];
+
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    return {
+      cliente: nombreCliente(clave),
+      clave,
+      categoria,
+      esNoIdentificado: clave === SIN_IDENTIFICAR_KEY,
+      total,
+      subcategorias: rows.map((r) => {
+        const noCumple = Math.max(0, r.con_dato - r.cumple);
+        return {
+          categoria: r.categoria,
+          subcategoria: r.subcategoria,
+          total: r.total,
+          pct: total > 0 ? Math.round((r.total / total) * 1000) / 10 : 0,
+          tiempoPromedio: r.tiempo,
+          conDato: r.con_dato,
+          noCumple,
+          pctIncumple:
+            r.con_dato > 0 ? Math.round((noCumple / r.con_dato) * 1000) / 10 : null,
+        };
+      }),
+    };
+  },
+
+  async clienteTickets(
+    filters: DashboardFilters,
+    params: {
+      clave: string;
+      categoria: string;
+      subcategoria: string;
+      page?: number;
+      pageSize?: number;
+      all?: boolean;
+    },
+  ): Promise<ClienteTicketsResponse> {
+    const whereActual = whereClientes(filters);
+    const uRes = umbral(SLA_MINUTOS.resolucion);
+    const page = params.all ? 1 : Math.max(1, Math.trunc(params.page ?? 1));
+    const pageSize = params.all
+      ? 50000
+      : Math.min(100, Math.max(1, Math.trunc(params.pageSize ?? 25)));
+    const offset = params.all ? 0 : (page - 1) * pageSize;
+    const subdomain = (process.env.ZENDESK_SUBDOMAIN ?? "").trim();
+    const zendeskValido = /^[a-z0-9-]+$/i.test(subdomain);
+
+    const [totalRaw, rows] = await Promise.all([
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS total
+          FROM public.v_unificado_norm
+          ${whereActual}
+          AND ${CLIENTE_KEY} = ${params.clave}
+          AND ${N_CATEGORIA} = ${params.categoria}
+          AND ${SCAT_LABEL} = ${params.subcategoria}
+        `,
+      ) as Promise<{ total: number }[]>,
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT ticket_id::text AS ticket,
+                 subcanal AS canal,
+                 TO_CHAR(${CREACION_CLIENTE}, 'YYYY-MM-DD HH24:MI') AS fecha,
+                 ${N_CATEGORIA} AS categoria,
+                 ${SCAT_LABEL} AS subcategoria,
+                 ${DOMINIO_NORMALIZADO} AS dominio,
+                 NULLIF(TRIM(contacto), '') AS contacto,
+                 NULLIF(TRIM(numero), '') AS numero,
+                 COALESCE(NULLIF(TRIM(asesor), ''), 'Sin asignar') AS asesor,
+                 estado_homologado AS estado,
+                 resolucion_min_norm::float8 AS tiempo,
+                 CASE
+                   WHEN resolucion_min_norm IS NULL THEN NULL
+                   WHEN resolucion_min_norm <= ${uRes} THEN true
+                   ELSE false
+                 END AS cumple_sla,
+                 ${uRes}::int AS umbral
+          FROM public.v_unificado_norm
+          ${whereActual}
+          AND ${CLIENTE_KEY} = ${params.clave}
+          AND ${N_CATEGORIA} = ${params.categoria}
+          AND ${SCAT_LABEL} = ${params.subcategoria}
+          ORDER BY ${CREACION_CLIENTE} DESC
+          LIMIT ${pageSize} OFFSET ${offset}
+        `,
+      ) as Promise<{
+        ticket: string;
+        canal: string;
+        fecha: string;
+        categoria: string;
+        subcategoria: string;
+        dominio: string;
+        contacto: string | null;
+        numero: string | null;
+        asesor: string;
+        estado: string;
+        tiempo: number | null;
+        cumple_sla: boolean | null;
+        umbral: number;
+      }[]>,
+    ]);
+
+    return {
+      total: totalRaw[0]?.total ?? 0,
+      page,
+      pageSize,
+      rows: rows.map((r) => ({
+        ticket: r.ticket,
+        canal: r.canal,
+        fecha: r.fecha,
+        categoria: r.categoria,
+        subcategoria: r.subcategoria,
+        dominio: r.dominio,
+        contacto: r.contacto,
+        numero: r.numero,
+        asesor: r.asesor,
+        estado: r.estado,
+        tiempoResolucion: r.tiempo,
+        cumpleSla: r.cumple_sla,
+        umbralMinutos: r.umbral,
+        urlTicket:
+          r.canal === "ZENDESK" && zendeskValido && /^\d+$/.test(r.ticket)
+            ? `https://${subdomain}.zendesk.com/agent/tickets/${r.ticket}`
+            : null,
+      })),
+    };
+  },
+
+  async clienteEvolucion(
+    filters: DashboardFilters,
+    params: { clave: string; granularidad: "diaria" | "semanal" | "mensual" },
+  ): Promise<ClienteEvolucionResponse> {
+    const whereActual = whereClientes(filters);
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereClientes({
+          ...filters,
+          fechaHoraInicio: `${prev.inicio} 00:00`,
+          fechaHoraFin: `${prev.fin} 23:59`,
+        })
+      : null;
+
+    if (!wherePrev) {
+      return {
+        cliente: nombreCliente(params.clave),
+        clave: params.clave,
+        esNoIdentificado: params.clave === SIN_IDENTIFICAR_KEY,
+        granularidad: params.granularidad,
+        actual: [],
+        anterior: [],
+        totalActual: 0,
+        totalAnterior: 0,
+        variacionPct: null,
+      };
+    }
+
+    const periodo =
+      params.granularidad === "diaria"
+        ? Prisma.sql`TO_CHAR(${CREACION_CLIENTE}::date, 'YYYY-MM-DD')`
+        : params.granularidad === "semanal"
+          ? Prisma.sql`TO_CHAR(DATE_TRUNC('week', ${CREACION_CLIENTE}), 'YYYY-MM-DD')`
+          : Prisma.sql`TO_CHAR(DATE_TRUNC('month', ${CREACION_CLIENTE}), 'YYYY-MM')`;
+
+    const [actualRaw, anteriorRaw] = await Promise.all([
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT ${periodo} AS periodo, COUNT(*)::int AS total
+          FROM public.v_unificado_norm
+          ${whereActual}
+          AND ${CLIENTE_KEY} = ${params.clave}
+          GROUP BY ${periodo}
+          ORDER BY periodo
+        `,
+      ) as Promise<{ periodo: string; total: number }[]>,
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT ${periodo} AS periodo, COUNT(*)::int AS total
+          FROM public.v_unificado_norm
+          ${wherePrev}
+          AND ${CLIENTE_KEY} = ${params.clave}
+          GROUP BY ${periodo}
+          ORDER BY periodo
+        `,
+      ) as Promise<{ periodo: string; total: number }[]>,
+    ]);
+
+    const totalActual = actualRaw.reduce((s, r) => s + r.total, 0);
+    const totalAnterior = anteriorRaw.reduce((s, r) => s + r.total, 0);
+    return {
+      cliente: nombreCliente(params.clave),
+      clave: params.clave,
+      esNoIdentificado: params.clave === SIN_IDENTIFICAR_KEY,
+      granularidad: params.granularidad,
+      actual: actualRaw,
+      anterior: anteriorRaw,
+      totalActual,
+      totalAnterior,
+      variacionPct:
+        totalAnterior > 0
+          ? Math.round(((totalActual - totalAnterior) / totalAnterior) * 1000) / 10
+          : null,
     };
   },
 
@@ -2586,771 +3567,661 @@ export const unificadoRepository = {
   },
 
   async whatsapp(filters: DashboardFilters): Promise<WhatsAppResponse> {
-    const whereActual = construirWhere(filters);
-    const whereWhatsapp = whereConCanal(whereActual, Prisma.sql`(subcanal IN ('whaticket', 'whatmeta') OR canal ILIKE '%what%')`);
-
-    const SUBC = Prisma.sql`REPLACE(subcanal, '_', ' ')`;
+    const WHATSAPP = Prisma.sql`(subcanal IN ('whaticket', 'whatmeta') OR canal ILIKE '%what%')`;
+    const whereActual = whereConCanal(construirWhere(filters), WHATSAPP);
     const uPr = umbral(SLA_MINUTOS.primeraRespuesta);
-    const SLA_CASE = Prisma.sql`CASE WHEN resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= 20 THEN 1 ELSE 0 END`;
+    const SUBC = Prisma.sql`REPLACE(subcanal, '_', ' ')`;
+
+    // Faltante = raw NULL y min 0. Un cero real (raw 0) se conserva.
+    const PRIMERA_VALIDA = Prisma.sql`NOT (primera_respuesta IS NULL AND primera_respuesta_min = 0)`;
+    const RESOLUCION_VALIDA = Prisma.sql`NOT (resolucion IS NULL AND resolucion_min = 0)`;
+
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereConCanal(
+          construirWhere({
+            ...filters,
+            fechaHoraInicio: `${prev.inicio} 00:00`,
+            fechaHoraFin: `${prev.fin} 23:59`,
+          }),
+          WHATSAPP,
+        )
+      : null;
 
     const [
       kpiRaw,
-      distSubRaw,
-      evolRaw,
-      heatmapHourRaw,
-      paisRaw,
-      treemapRaw,
-      topSubRaw,
-      tiemposRaw,
-      asesorRaw,
-      paisCatRaw,
-      catAsesorRaw,
+      plataformasRaw,
+      evolActualRaw,
+      evolAnteriorRaw,
+      horasRaw,
+      diasRaw,
+      excepcionesRaw,
     ] = await Promise.all([
-
       prisma.$queryRaw`
         SELECT COUNT(*)::int AS total,
                COUNT(*) FILTER (WHERE subcanal ILIKE '%ticket%')::int AS whaticket,
-               COUNT(*) FILTER (WHERE subcanal ILIKE '%meta%')::int AS whatmeta,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS promPrimera,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS promResolucion,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm, 0))::numeric, 1)::float8 AS promEspera,
-               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertas,
+               COUNT(*) FILTER (WHERE subcanal ILIKE '%meta%')::int AS wameta,
+               COUNT(*) FILTER (WHERE ${PRIMERA_VALIDA})::int AS primera_n,
+               COUNT(*) FILTER (
+                 WHERE ${PRIMERA_VALIDA}
+                   AND primera_respuesta_min_norm <= ${uPr}
+               )::int AS sla_cumple,
+               ROUND((AVG(primera_respuesta_min_norm) FILTER (WHERE ${PRIMERA_VALIDA}))::numeric, 1)::float8 AS primera_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_p90,
+               COUNT(*) FILTER (WHERE ${RESOLUCION_VALIDA})::int AS resolucion_n,
+               ROUND((AVG(resolucion_min_norm) FILTER (WHERE ${RESOLUCION_VALIDA}))::numeric, 1)::float8 AS resolucion_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_p90,
                COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS cerradas,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumpleSla,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDatoSla,
-               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS resueltas
-        FROM public.v_unificado_norm ${whereWhatsapp}
-      ` as Promise<{ total: number; whaticket: number; whatmeta: number; promPrimera: number | null; promResolucion: number | null; promEspera: number | null; abiertas: number; cerradas: number; cumpleSla: number; conDatoSla: number; resueltas: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SUBC} AS subcanal, COUNT(*)::int AS total,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric,1)::float8 AS primera,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS resolucion,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0))::numeric,1)::float8 AS espera,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumple,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDato,
-               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS resueltas
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${SUBC} ORDER BY total DESC
-      ` as Promise<{ subcanal: string; total: number; primera: number | null; resolucion: number | null; espera: number | null; cumple: number; conDato: number; resueltas: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS periodo,
-               ${SUBC} AS subcanal,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY fecha::date, ${SUBC} ORDER BY periodo, subcanal
-      ` as Promise<{ periodo: string; subcanal: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT EXTRACT(HOUR FROM hora::time)::int AS hora,
-               EXTRACT(DOW FROM fecha::date)::int AS dia,
-               COUNT(*)::int AS total,
-               ${SUBC} AS subcanal
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY EXTRACT(HOUR FROM hora::time), EXTRACT(DOW FROM fecha::date), ${SUBC}
-        ORDER BY dia, hora, subcanal
-      ` as Promise<{ hora: number; dia: number; total: number; subcanal: string }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_PAIS} AS pais, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_PAIS} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ pais: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS resolucion
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_CATEGORIA} ORDER BY total DESC
-      ` as Promise<{ categoria: string; total: number; resolucion: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SCAT_LABEL} AS subcategoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${SCAT_KEY} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ subcategoria: string; total: number }[]>,
+               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertas,
+               COUNT(*) FILTER (WHERE estado_homologado = 'sin_mapear')::int AS sin_estado,
+               COUNT(*) FILTER (
+                 WHERE estado_homologado NOT IN ('cerrado', 'resuelto', 'abierto', 'sin_mapear')
+               )::int AS otros
+        FROM public.v_unificado_norm ${whereActual}
+      ` as Promise<{
+        total: number;
+        whaticket: number;
+        wameta: number;
+        primera_n: number;
+        sla_cumple: number;
+        primera_prom: number | null;
+        primera_med: number | null;
+        primera_p90: number | null;
+        resolucion_n: number;
+        resolucion_prom: number | null;
+        resolucion_med: number | null;
+        resolucion_p90: number | null;
+        cerradas: number;
+        abiertas: number;
+        sin_estado: number;
+        otros: number;
+      }[]>,
 
       prisma.$queryRaw`
         SELECT ${SUBC} AS subcanal,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric,1)::float8 AS primera,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS resolucion,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm,0))::numeric,1)::float8 AS espera
-        FROM public.v_unificado_norm ${whereWhatsapp}
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE ${PRIMERA_VALIDA})::int AS primera_n,
+               COUNT(*) FILTER (
+                 WHERE ${PRIMERA_VALIDA} AND primera_respuesta_min_norm <= ${uPr}
+               )::int AS sla_cumple,
+               ROUND((AVG(primera_respuesta_min_norm) FILTER (WHERE ${PRIMERA_VALIDA}))::numeric, 1)::float8 AS primera_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_p90,
+               COUNT(*) FILTER (WHERE ${RESOLUCION_VALIDA})::int AS resolucion_n,
+               ROUND((AVG(resolucion_min_norm) FILTER (WHERE ${RESOLUCION_VALIDA}))::numeric, 1)::float8 AS resolucion_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_p90,
+               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS cerradas,
+               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertas,
+               COUNT(*) FILTER (WHERE estado_homologado = 'sin_mapear')::int AS sin_estado,
+               COUNT(*) FILTER (
+                 WHERE estado_homologado NOT IN ('cerrado', 'resuelto', 'abierto', 'sin_mapear')
+               )::int AS otros
+        FROM public.v_unificado_norm ${whereActual}
         GROUP BY ${SUBC}
-      ` as Promise<{ subcanal: string; primera: number | null; resolucion: number | null; espera: number | null }[]>,
+        ORDER BY total DESC
+      ` as Promise<{
+        subcanal: string;
+        total: number;
+        primera_n: number;
+        sla_cumple: number;
+        primera_prom: number | null;
+        primera_med: number | null;
+        primera_p90: number | null;
+        resolucion_n: number;
+        resolucion_prom: number | null;
+        resolucion_med: number | null;
+        resolucion_p90: number | null;
+        cerradas: number;
+        abiertas: number;
+        sin_estado: number;
+        otros: number;
+      }[]>,
 
       prisma.$queryRaw`
-        SELECT ${N_ASESOR_COALESCE} AS asesor, ${SUBC} AS subcanal,
-               COUNT(*)::int AS total,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS tiempoPromedio,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumple,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDato,
-               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS resueltas,
-               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertos,
-               COUNT(*) FILTER (WHERE estado_homologado = 'pendiente')::int AS pendientes
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_ASESOR_COALESCE}, ${SUBC}
-      ` as Promise<{ asesor: string; subcanal: string; total: number; tiempoPromedio: number | null; cumple: number; conDato: number; resueltas: number; abiertos: number; pendientes: number }[]>,
+        SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS periodo, COUNT(*)::int AS total
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY fecha::date
+        ORDER BY periodo
+      ` as Promise<{ periodo: string; total: number }[]>,
+
+      wherePrev
+        ? (prisma.$queryRaw`
+            SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS periodo, COUNT(*)::int AS total
+            FROM public.v_unificado_norm ${wherePrev}
+            GROUP BY fecha::date
+            ORDER BY periodo
+          ` as Promise<{ periodo: string; total: number }[]>)
+        : Promise.resolve([] as { periodo: string; total: number }[]),
 
       prisma.$queryRaw`
-        SELECT ${N_PAIS} AS pais, ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_PAIS}, ${N_CATEGORIA} ORDER BY pais, total DESC
-      ` as Promise<{ pais: string; categoria: string; total: number }[]>,
+        SELECT EXTRACT(HOUR FROM hora::time)::int AS hora, COUNT(*)::int AS total
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY 1
+        ORDER BY 1
+      ` as Promise<{ hora: number; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria, ${N_ASESOR_COALESCE} AS asesor,
-               COUNT(*)::int AS total,
-               ROUND(AVG(resolucion_min_norm)::numeric,1)::float8 AS tiempo,
-               ROUND(SUM(${SLA_CASE})::numeric*100.0/NULLIF(COUNT(*),0),1)::float8 AS sla
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_CATEGORIA}, ${N_ASESOR_COALESCE} ORDER BY categoria, total DESC
-      ` as Promise<{ categoria: string; asesor: string; total: number; tiempo: number | null; sla: number | null }[]>,
-
-    ]);
-
-    const whereLargas = whereConCanal(whereWhatsapp, Prisma.sql`resolucion_min_norm IS NOT NULL`);
-
-    const [clientesRaw, dominiosRaw, largasRaw] = await Promise.all([
-      prisma.$queryRaw`
-        SELECT COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto') AS cliente, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY contacto ORDER BY total DESC LIMIT 20
-      ` as Promise<{ cliente: string; total: number }[]>,
+        SELECT EXTRACT(DOW FROM fecha::date)::int AS dia, COUNT(*)::int AS total
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY 1
+        ORDER BY 1
+      ` as Promise<{ dia: number; total: number }[]>,
 
       prisma.$queryRaw`
-        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereWhatsapp}
-        GROUP BY ${N_DOMINIO} ORDER BY total DESC LIMIT 15
-      ` as Promise<{ dominio: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto') AS cliente,
-               ${N_ASESOR_COALESCE} AS asesor,
-               COALESCE(NULLIF(TRIM(subcanal), ''), '—') AS subcanal,
-               resolucion_min_norm AS "tiempoResolucion",
-               TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha
-        FROM public.v_unificado_norm ${whereLargas}
-        ORDER BY resolucion_min_norm DESC LIMIT 20
-      ` as Promise<{ cliente: string; asesor: string; subcanal: string; tiempoResolucion: number | null; fecha: string }[]>,
+        (
+          SELECT COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto') AS contacto,
+                 COALESCE(NULLIF(TRIM(asesor), ''), 'Sin asignar') AS asesor,
+                 subcanal,
+                 (EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'America/Lima') - (fecha::date + hora::time))) / 60.0)::float8 AS tiempo,
+                 TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
+                 'abierto' AS estado,
+                 1440 AS umbral,
+                 'transcurrido' AS tipo_tiempo
+          FROM public.v_unificado_norm
+          ${whereActual}
+          AND estado_homologado = 'abierto'
+          AND (fecha::date + hora::time) < (NOW() AT TIME ZONE 'America/Lima') - interval '24 hours'
+        )
+        UNION ALL
+        (
+          SELECT COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto') AS contacto,
+                 COALESCE(NULLIF(TRIM(asesor), ''), 'Sin asignar') AS asesor,
+                 subcanal,
+                 resolucion_min_norm::float8 AS tiempo,
+                 TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
+                 CASE WHEN estado_homologado = 'sin_mapear' THEN 'sin_mapear' ELSE 'cerrado' END AS estado,
+                 480 AS umbral,
+                 'resolucion' AS tipo_tiempo
+          FROM public.v_unificado_norm
+          ${whereActual}
+          AND estado_homologado IN ('cerrado', 'resuelto', 'sin_mapear')
+          AND ${RESOLUCION_VALIDA}
+          AND resolucion_min_norm > 480
+        )
+        ORDER BY tiempo DESC
+        LIMIT 50
+      ` as Promise<{
+        contacto: string;
+        asesor: string;
+        subcanal: string;
+        tiempo: number;
+        fecha: string;
+        estado: string;
+        umbral: number;
+        tipo_tiempo: string;
+      }[]>,
     ]);
 
     const k = kpiRaw[0]!;
-    const kpis: WhatsAppKpis = {
-      totalConversaciones: k.total,
-      totalWhaticket: k.whaticket,
-      totalWhatmeta: k.whatmeta,
-      pctWhaticket: k.total > 0 ? Math.round((k.whaticket / k.total) * 1000) / 10 : 0,
-      pctWhatmeta: k.total > 0 ? Math.round((k.whatmeta / k.total) * 1000) / 10 : 0,
-      tiempoPrimeraRespuesta: k.promPrimera,
-      tiempoResolucion: k.promResolucion,
-      tiempoEspera: k.promEspera,
-      conversacionesAbiertas: k.abiertas,
-      conversacionesCerradas: k.cerradas,
-      cumplimientoSla: k.conDatoSla > 0 ? Math.round((k.cumpleSla / k.conDatoSla) * 1000) / 10 : null,
-      fcr: k.total > 0 ? Math.round((k.resueltas / k.total) * 1000) / 10 : null,
-      tiempoPromedioAsesor: null,
+    const total = k.total;
+
+    const completarDiario = (
+      rows: { periodo: string; total: number }[],
+      desde: string | null,
+      hasta: string | null,
+    ): { periodo: string; total: number }[] => {
+      if (!desde || !hasta) return rows;
+      const mapa = new Map(rows.map((r) => [r.periodo, r.total]));
+      return generarPeriodosOp(desde, hasta, "diaria").map((periodo) => ({
+        periodo,
+        total: mapa.get(periodo) ?? 0,
+      }));
     };
 
-    const grandDist = distSubRaw.reduce((s, r) => s + r.total, 0);
-    const distSubcanal = distSubRaw.map((r) => {
-      const slaVal = r.conDato > 0 ? Math.round((r.cumple / r.conDato) * 1000) / 10 : null;
-      const fcrVal = r.total > 0 ? Math.round((r.resueltas / r.total) * 1000) / 10 : null;
-      return {
-        subcanal: r.subcanal,
-        total: r.total,
-        porcentaje: grandDist > 0 ? Math.round((r.total / grandDist) * 1000) / 10 : 0,
-        primeraRespuesta: r.primera,
-        resolucion: r.resolucion,
-        espera: r.espera,
-        sla: slaVal,
-        fcr: fcrVal,
-      };
-    });
+    const evolActual = completarDiario(
+      evolActualRaw,
+      filters.fechaHoraInicio?.slice(0, 10) ?? null,
+      filters.fechaHoraFin?.slice(0, 10) ?? null,
+    );
+    const evolAnterior = prev
+      ? completarDiario(evolAnteriorRaw, prev.inicio, prev.fin)
+      : [];
 
-    const evolucion = evolRaw.map((r) => ({ periodo: r.periodo, subcanal: r.subcanal, total: r.total }));
-    const heatmapHora = heatmapHourRaw.map((r) => ({ hora: r.hora, dia: r.dia, total: r.total, subcanal: r.subcanal }));
-    const paises = paisRaw.map((r) => ({ pais: r.pais, total: r.total }));
+    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const prevTotal = wherePrev ? evolAnterior.reduce((s, r) => s + r.total, 0) : null;
+    const variacionAbs = prevTotal !== null ? total - prevTotal : null;
+    const variacionPct =
+      prevTotal !== null && prevTotal > 0
+        ? Math.round(((total - prevTotal) / prevTotal) * 1000) / 10
+        : null;
 
-    const treemap = treemapRaw.map((r) => ({
-      categoria: r.categoria, total: r.total, tiempoResolucion: r.resolucion,
+    const kpis: WhatsAppKpis = {
+      totalConversaciones: total,
+      totalWhaticket: k.whaticket,
+      totalWameta: k.wameta,
+      pctWhaticket: pct(k.whaticket),
+      pctWameta: pct(k.wameta),
+      primeraN: k.primera_n,
+      primeraCobertura: pct(k.primera_n),
+      primeraPromedio: k.primera_prom,
+      primeraMediana: k.primera_med,
+      primeraP90: k.primera_p90,
+      resolucionN: k.resolucion_n,
+      resolucionCobertura: pct(k.resolucion_n),
+      resolucionPromedio: k.resolucion_prom,
+      resolucionMediana: k.resolucion_med,
+      resolucionP90: k.resolucion_p90,
+      slaPrimeraCumple: k.sla_cumple,
+      slaPrimeraEvaluables: k.primera_n,
+      slaPrimeraPct:
+        k.primera_n > 0 ? Math.round((k.sla_cumple / k.primera_n) * 1000) / 10 : null,
+      slaPrimeraUmbral: SLA_MINUTOS.primeraRespuesta.whatsapp,
+      cerradas: k.cerradas,
+      abiertas: k.abiertas,
+      sinEstado: k.sin_estado,
+      otros: k.otros,
+      totalAnterior: prevTotal,
+      variacionAbs,
+      variacionPct,
+    };
+
+    const plataformaNombre = (subcanal: string) =>
+      subcanal.toUpperCase().includes("META") ? "Wameta" : "Whaticket";
+
+    const grand = plataformasRaw.reduce((s, r) => s + r.total, 0);
+    const plataformas: WhatsAppPlataforma[] = plataformasRaw.map((r) => ({
+      subcanal: r.subcanal,
+      nombre: plataformaNombre(r.subcanal),
+      total: r.total,
+      porcentaje: grand > 0 ? Math.round((r.total / grand) * 1000) / 10 : 0,
+      primeraN: r.primera_n,
+      primeraCobertura:
+        r.total > 0 ? Math.round((r.primera_n / r.total) * 1000) / 10 : 0,
+      primeraPromedio: r.primera_prom,
+      primeraMediana: r.primera_med,
+      primeraP90: r.primera_p90,
+      resolucionN: r.resolucion_n,
+      resolucionCobertura:
+        r.total > 0 ? Math.round((r.resolucion_n / r.total) * 1000) / 10 : 0,
+      resolucionPromedio: r.resolucion_prom,
+      resolucionMediana: r.resolucion_med,
+      resolucionP90: r.resolucion_p90,
+      slaCumple: r.sla_cumple,
+      slaEvaluables: r.primera_n,
+      slaPct:
+        r.primera_n > 0 ? Math.round((r.sla_cumple / r.primera_n) * 1000) / 10 : null,
+      cerradas: r.cerradas,
+      abiertas: r.abiertas,
+      sinEstado: r.sin_estado,
+      otros: r.otros,
     }));
 
-    const grandSub = topSubRaw.reduce((s, r) => s + r.total, 0);
-    const topSubcategorias = topSubRaw.map((r) => ({
-      subcategoria: r.subcategoria, total: r.total,
-      porcentaje: grandSub > 0 ? Math.round((r.total / grandSub) * 1000) / 10 : 0,
+    const estados: WhatsAppEstado[] = [
+      { estado: "cerrado", etiqueta: "Cerradas", total: k.cerradas, pct: pct(k.cerradas) },
+      { estado: "abierto", etiqueta: "Abiertas", total: k.abiertas, pct: pct(k.abiertas) },
+      {
+        estado: "sin_mapear",
+        etiqueta: "Sin estado homologado",
+        total: k.sin_estado,
+        pct: pct(k.sin_estado),
+      },
+    ];
+    if (k.otros > 0) {
+      estados.push({
+        estado: "otro",
+        etiqueta: "Otros estados",
+        total: k.otros,
+        pct: pct(k.otros),
+      });
+    }
+
+    const horas = Array.from({ length: 24 }, (_, hora) => ({
+      hora,
+      total: horasRaw.find((r) => r.hora === hora)?.total ?? 0,
+    }));
+    const dias = Array.from({ length: 7 }, (_, dia) => ({
+      dia,
+      total: diasRaw.find((r) => r.dia === dia)?.total ?? 0,
     }));
 
-    const tiempos = tiemposRaw.map((r) => ({
-      subcanal: r.subcanal, primeraRespuesta: r.primera, resolucion: r.resolucion, espera: r.espera,
+    const excepciones: WhatsAppExcepcion[] = excepcionesRaw.map((r) => ({
+      contacto: r.contacto,
+      asesor: r.asesor,
+      plataforma: plataformaNombre(r.subcanal),
+      tiempo: round1(r.tiempo),
+      tipoTiempo: r.tipo_tiempo === "transcurrido" ? "transcurrido" : "resolucion",
+      fecha: r.fecha,
+      estado:
+        r.estado === "abierto"
+          ? "Abierta"
+          : r.estado === "sin_mapear"
+            ? "Sin estado"
+            : "Cerrada",
+      umbral: r.umbral,
     }));
-
-    const asesores = asesorRaw.map((r) => ({
-      asesor: r.asesor, subcanal: r.subcanal, total: r.total, tiempoPromedio: r.tiempoPromedio,
-      sla: r.conDato > 0 ? Math.round((r.cumple / r.conDato) * 1000) / 10 : null,
-      fcr: r.total > 0 ? Math.round((r.resueltas / r.total) * 1000) / 10 : null,
-      abiertos: r.abiertos,
-      pendientes: r.pendientes,
-    }));
-
-    const topClientes = clientesRaw.map((r) => ({ cliente: r.cliente, total: r.total }));
-    const dominios = dominiosRaw.map((r) => ({ dominio: r.dominio, total: r.total }));
-
-    const conversacionesLargas = largasRaw.map((r) => ({
-      cliente: r.cliente, asesor: r.asesor, subcanal: r.subcanal,
-      tiempoResolucion: r.tiempoResolucion, fecha: r.fecha,
-    }));
-
-    const paisCat = paisCatRaw.map((r) => ({ pais: r.pais, categoria: r.categoria, total: r.total }));
-    const catAsesor = catAsesorRaw.map((r) => ({ categoria: r.categoria, asesor: r.asesor, total: r.total, tiempo: r.tiempo, sla: r.sla }));
 
     const insights: string[] = [];
-    if (k.total > 0) {
-      insights.push(`WhatsApp procesó ${k.total} conversaciones en el período (${kpis.pctWhaticket}% whaticket, ${kpis.pctWhatmeta}% whatmeta).`);
-      const topCat = treemap.sort((a, b) => b.total - a.total)[0];
-      if (topCat) {
-        const pct = Math.round((topCat.total / k.total) * 1000) / 10;
-        insights.push(`"${topCat.categoria}" concentra el ${pct}% de las conversaciones.`);
+    if (total > 0) {
+      insights.push(
+        `WhatsApp registró ${total.toLocaleString("es-PE")} conversaciones: ${kpis.pctWameta}% Wameta y ${kpis.pctWhaticket}% Whaticket.`,
+      );
+      if (variacionPct !== null && variacionAbs !== null) {
+        const dir = variacionPct >= 0 ? "aumentó" : "disminuyó";
+        insights.push(
+          `La demanda ${dir} ${Math.abs(variacionPct)}% (${variacionAbs > 0 ? "+" : ""}${variacionAbs.toLocaleString("es-PE")}) frente al periodo anterior.`,
+        );
       }
-    }
-    if (k.promPrimera !== null) insights.push(`Tiempo promedio de primera respuesta: ${Math.round(k.promPrimera)} min.`);
-    if (k.promResolucion !== null) insights.push(`Tiempo promedio de resolución: ${Math.round(k.promResolucion)} min.`);
-    const slaInsight = k.conDatoSla > 0 ? Math.round((k.cumpleSla / k.conDatoSla) * 1000) / 10 : null;
-    if (slaInsight !== null) insights.push(`Cumplimiento de SLA en primera respuesta: ${slaInsight}%.`);
-    if (k.abiertas > 0) insights.push(`Hay ${k.abiertas} conversaciones abiertas pendientes de resolución.`);
-    if (conversacionesLargas.length > 0) {
-      insights.push(`La conversación más larga duró ${Math.round(conversacionesLargas[0].tiempoResolucion ?? 0)} min.`);
+      const peakH = [...horas].sort((a, b) => b.total - a.total)[0];
+      if (peakH && peakH.total > 0) {
+        insights.push(
+          `La hora de mayor demanda fue ${String(peakH.hora).padStart(2, "0")}:00, con ${peakH.total.toLocaleString("es-PE")} conversaciones (${pct(peakH.total)}%).`,
+        );
+      }
+      const peakD = [...dias].sort((a, b) => b.total - a.total)[0];
+      if (peakD && peakD.total > 0) {
+        insights.push(
+          `El día de mayor demanda fue ${DIAS_LARGOS[peakD.dia]}, con ${peakD.total.toLocaleString("es-PE")} conversaciones (${pct(peakD.total)}%).`,
+        );
+      }
+      if (k.primera_n > 0 && k.primera_med !== null) {
+        insights.push(
+          `Primera respuesta: mediana ${round1(k.primera_med)} min y p90 ${
+            k.primera_p90 !== null ? round1(k.primera_p90) : "—"
+          } min; ${k.primera_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} conversaciones con dato (${kpis.primeraCobertura}%).`,
+        );
+      }
+      if (k.resolucion_n > 0 && k.resolucion_med !== null) {
+        insights.push(
+          `Resolución: mediana ${round1(k.resolucion_med)} min y p90 ${
+            k.resolucion_p90 !== null ? round1(k.resolucion_p90) : "—"
+          } min; ${k.resolucion_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} con tiempo válido (${kpis.resolucionCobertura}%).`,
+        );
+      }
+      if (kpis.slaPrimeraPct !== null) {
+        insights.push(
+          `SLA de primera respuesta ≤15 min: ${kpis.slaPrimeraPct}% (${k.sla_cumple.toLocaleString("es-PE")} de ${k.primera_n.toLocaleString("es-PE")} evaluables).`,
+        );
+      }
+      if (k.abiertas > 0 || k.sin_estado > 0) {
+        const partes: string[] = [];
+        if (k.abiertas > 0) partes.push(`${k.abiertas} abiertas`);
+        if (k.sin_estado > 0) partes.push(`${k.sin_estado} sin estado homologado`);
+        insights.push(`Estado: ${partes.join(" y ")}.`);
+      }
+      if (excepciones.length > 0) {
+        insights.push(
+          `${excepciones.length} conversaciones superan los umbrales de revisión (abiertas >24 h o cerradas/sin estado >8 h).`,
+        );
+      }
     }
 
     return {
-      kpis, distSubcanal, evolucion, heatmapHora, paises, treemap,
-      topSubcategorias, tiempos, asesores, topClientes, dominios,
-      conversacionesLargas, paisCat, catAsesor, insights,
+      kpis,
+      estados,
+      plataformas,
+      evolucion: {
+        actual: evolActual,
+        anterior: evolAnterior,
+        totalActual: total,
+        totalAnterior: prevTotal,
+        variacionAbs,
+        variacionPct,
+      },
+      horas,
+      dias,
+      excepciones,
+      insights,
     };
   },
 
   async zendesk(filters: DashboardFilters): Promise<ZendeskResponse> {
-    const whereBase = construirWhere(filters);
-    const where = whereConCanal(whereBase, Prisma.sql`(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%')`);
-    const SUBC = Prisma.sql`REPLACE(subcanal, '_', ' ')`;
-    const CONTACTO = Prisma.sql`COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto')`;
-    const uPr = umbral(SLA_MINUTOS.primeraRespuesta);
-    const uRes = umbral(SLA_MINUTOS.resolucion);
+    const ZENDESK = Prisma.sql`(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%')`;
+    const where = whereConCanal(
+      construirWhere(filters, { fechaExpr: CREACION_CLIENTE, endExclusive: true }),
+      ZENDESK,
+    );
+    const uPr = SLA_MINUTOS.primeraRespuesta.correo;
 
-    const totalActual = await totales(where);
-    const whereBacklog = whereConCanal(where, Prisma.sql`estado_homologado = 'abierto'`);
+    const PRIMERA_VALIDA = Prisma.sql`primera_respuesta_min_norm IS NOT NULL`;
+    const RESOLUCION_VALIDA = Prisma.sql`(
+      resolucion_min_norm IS NOT NULL
+      AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+    )`;
+
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereConCanal(
+          construirWhere(
+            {
+              ...filters,
+              fechaHoraInicio: `${prev.inicio} 00:00`,
+              fechaHoraFin: `${prev.fin} 23:59`,
+            },
+            { fechaExpr: CREACION_CLIENTE, endExclusive: true },
+          ),
+          ZENDESK,
+        )
+      : null;
 
     const [
-      kpiRaw, evolRaw, backlogRaw, estadosRaw, treemapRaw, topSubRaw,
-      asesorRaw, paisRaw, dominiosRaw, clientesRaw, slaCatRaw,
-      tiemposCatRaw, tiemposSubRaw, tiemposAsesorRaw,
+      kpiRaw,
+      evolActualRaw,
+      evolAnteriorRaw,
+      backlogRaw,
+      corteRaw,
     ] = await Promise.all([
       prisma.$queryRaw`
         SELECT COUNT(*)::int AS total,
-               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertos,
                COUNT(*) FILTER (WHERE estado_homologado = 'cerrado')::int AS cerrados,
+               COUNT(*) FILTER (WHERE estado_homologado = 'resuelto')::int AS resueltos,
+               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertos,
                COUNT(*) FILTER (WHERE estado_homologado = 'pendiente')::int AS pendientes,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS promPrimera,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS promResolucion,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumplePr,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDatoPr,
-               COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= ${uRes})::int AS cumpleRes,
-               COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL)::int AS conDatoRes,
-               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS resueltos
+               COUNT(*) FILTER (WHERE estado_homologado = 'en_espera')::int AS en_espera,
+               COUNT(*) FILTER (
+                 WHERE estado_homologado NOT IN (
+                   'cerrado', 'resuelto', 'abierto', 'pendiente', 'en_espera'
+                 )
+               )::int AS otros,
+               COUNT(*) FILTER (WHERE ${PRIMERA_VALIDA})::int AS primera_n,
+               COUNT(*) FILTER (
+                 WHERE ${PRIMERA_VALIDA} AND primera_respuesta_min_norm <= ${uPr}
+               )::int AS sla_cumple,
+               ROUND((AVG(primera_respuesta_min_norm) FILTER (WHERE ${PRIMERA_VALIDA}))::numeric, 1)::float8 AS primera_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE ${PRIMERA_VALIDA}))::float8 AS primera_p90,
+               COUNT(*) FILTER (WHERE ${RESOLUCION_VALIDA})::int AS resolucion_n,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL
+               )::int AS resolucion_excluidas,
+               ROUND((AVG(resolucion_min_norm) FILTER (WHERE ${RESOLUCION_VALIDA}))::numeric, 1)::float8 AS resolucion_prom,
+               (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_med,
+               (PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolucion_min_norm)
+                 FILTER (WHERE ${RESOLUCION_VALIDA}))::float8 AS resolucion_p90
         FROM public.v_unificado_norm ${where}
       ` as Promise<{
-        total: number; abiertos: number; cerrados: number; pendientes: number;
-        promPrimera: number | null; promResolucion: number | null;
-        cumplePr: number; conDatoPr: number; cumpleRes: number; conDatoRes: number; resueltos: number;
+        total: number;
+        cerrados: number;
+        resueltos: number;
+        abiertos: number;
+        pendientes: number;
+        en_espera: number;
+        otros: number;
+        primera_n: number;
+        sla_cumple: number;
+        primera_prom: number | null;
+        primera_med: number | null;
+        primera_p90: number | null;
+        resolucion_n: number;
+        resolucion_excluidas: number;
+        resolucion_prom: number | null;
+        resolucion_med: number | null;
+        resolucion_p90: number | null;
       }[]>,
 
       prisma.$queryRaw`
-        SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS periodo,
-               COUNT(*)::int AS total,
-               COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertos,
-               COUNT(*) FILTER (WHERE estado_homologado = 'cerrado')::int AS cerrados
+        SELECT TO_CHAR(${CREACION_CLIENTE}::date, 'YYYY-MM-DD') AS periodo,
+               COUNT(*)::int AS total
         FROM public.v_unificado_norm ${where}
-        GROUP BY fecha::date ORDER BY periodo
-      ` as Promise<{ periodo: string; total: number; abiertos: number; cerrados: number }[]>,
+        GROUP BY ${CREACION_CLIENTE}::date
+        ORDER BY periodo
+      ` as Promise<{ periodo: string; total: number }[]>,
+
+      wherePrev
+        ? (prisma.$queryRaw`
+            SELECT TO_CHAR(${CREACION_CLIENTE}::date, 'YYYY-MM-DD') AS periodo,
+                   COUNT(*)::int AS total
+            FROM public.v_unificado_norm ${wherePrev}
+            GROUP BY ${CREACION_CLIENTE}::date
+            ORDER BY periodo
+          ` as Promise<{ periodo: string; total: number }[]>)
+        : Promise.resolve([] as { periodo: string; total: number }[]),
 
       prisma.$queryRaw`
-        SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS periodo, COUNT(*)::int AS abiertos
-        FROM public.v_unificado_norm ${whereBacklog}
-        GROUP BY fecha::date ORDER BY periodo
-      ` as Promise<{ periodo: string; abiertos: number }[]>,
+        SELECT COUNT(*) FILTER (WHERE estado_homologado = 'abierto')::int AS abiertos,
+               COUNT(*) FILTER (WHERE estado_homologado = 'pendiente')::int AS pendientes,
+               COUNT(*) FILTER (WHERE estado_homologado = 'en_espera')::int AS en_espera
+        FROM public.v_unificado_norm
+        WHERE ${ZENDESK}
+      ` as Promise<{ abiertos: number; pendientes: number; en_espera: number }[]>,
 
       prisma.$queryRaw`
-        SELECT estado_homologado AS estado, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY estado_homologado ORDER BY total DESC
-      ` as Promise<{ estado: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempoResolucion
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_CATEGORIA} ORDER BY total DESC
-      ` as Promise<{ categoria: string; total: number; tiempoResolucion: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SUBC} AS subcategoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${SUBC} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ subcategoria: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_ASESOR_COALESCE} AS asesor, COUNT(*)::int AS total,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS tiempoPromedio,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumple,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDato,
-               COUNT(*) FILTER (WHERE estado_homologado IN ('cerrado', 'resuelto'))::int AS resueltas
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_ASESOR_COALESCE} ORDER BY total DESC
-      ` as Promise<{ asesor: string; total: number; tiempoPromedio: number | null; cumple: number; conDato: number; resueltas: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_PAIS} AS pais, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_PAIS} ORDER BY total DESC
-      ` as Promise<{ pais: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_DOMINIO} ORDER BY total DESC
-      ` as Promise<{ dominio: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${CONTACTO} AS cliente, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${CONTACTO} ORDER BY total DESC
-      ` as Promise<{ cliente: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria,
-               COUNT(*)::int AS total,
-               COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm <= ${uRes})::int AS cumple,
-               COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm > ${uRes})::int AS noCumple
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_CATEGORIA} ORDER BY total DESC
-      ` as Promise<{ categoria: string; total: number; cumple: number; noCumple: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS primeraRespuesta,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS resolucion
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_CATEGORIA} ORDER BY categoria
-      ` as Promise<{ categoria: string; primeraRespuesta: number | null; resolucion: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SUBC} AS subcategoria,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS primeraRespuesta,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS resolucion
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${SUBC} ORDER BY subcategoria
-      ` as Promise<{ subcategoria: string; primeraRespuesta: number | null; resolucion: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_ASESOR_COALESCE} AS asesor,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS primeraRespuesta,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS resolucion
-        FROM public.v_unificado_norm ${where}
-        GROUP BY ${N_ASESOR_COALESCE} ORDER BY asesor
-      ` as Promise<{ asesor: string; primeraRespuesta: number | null; resolucion: number | null }[]>,
+        SELECT TO_CHAR(NOW() AT TIME ZONE 'America/Lima', 'YYYY-MM-DD HH24:MI') AS fecha_corte
+      ` as Promise<{ fecha_corte: string }[]>,
     ]);
-
-    const whereAbiertos = whereConCanal(where, Prisma.sql`estado_homologado = 'abierto'`);
-    const whereResNotNull = whereConCanal(where, Prisma.sql`resolucion_min_norm IS NOT NULL`);
-
-    const ticketsAntiguosRaw = await prisma.$queryRaw`
-      SELECT ${CONTACTO} AS cliente, ${N_CATEGORIA} AS categoria,
-             ${N_ASESOR_COALESCE} AS asesor,
-             TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
-             EXTRACT(EPOCH FROM (NOW() - fecha)) / 3600 AS horas
-      FROM public.v_unificado_norm ${whereAbiertos}
-      ORDER BY fecha ASC LIMIT 200
-    ` as { cliente: string; categoria: string; asesor: string; fecha: string; horas: number }[];
-
-    const incumplimientosRaw = await prisma.$queryRaw`
-      SELECT ${N_CATEGORIA} AS categoria,
-             COUNT(*)::int AS total,
-             COUNT(*) FILTER (WHERE resolucion_min_norm IS NOT NULL AND resolucion_min_norm > ${uRes})::int AS noCumple
-      FROM public.v_unificado_norm ${whereResNotNull}
-      GROUP BY ${N_CATEGORIA}
-      ORDER BY noCumple DESC LIMIT 10
-    ` as { categoria: string; total: number; noCumple: number }[];
-
-    let tendencia: { periodo: string; actual: number; anterior: number }[] = [];
-    if (filters.fechaHoraInicio && filters.fechaHoraFin) {
-      const prev = rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin);
-      const wherePrev = whereConCanal(
-        construirWhere({ ...filters, fechaHoraInicio: prev.inicio, fechaHoraFin: prev.fin }),
-        Prisma.sql`(canal ILIKE '%zendesk%' OR canal ILIKE '%correo%')`,
-      );
-      const actMes = await prisma.$queryRaw`
-        SELECT TO_CHAR(fecha::date, 'YYYY-MM') AS periodo, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${where}
-        GROUP BY TO_CHAR(fecha::date, 'YYYY-MM') ORDER BY periodo
-      ` as { periodo: string; total: number }[];
-      const antMes = await prisma.$queryRaw`
-        SELECT TO_CHAR(fecha::date, 'YYYY-MM') AS periodo, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${wherePrev}
-        GROUP BY TO_CHAR(fecha::date, 'YYYY-MM') ORDER BY periodo
-      ` as { periodo: string; total: number }[];
-      const antMap = new Map(antMes.map((r) => [r.periodo, r.total]));
-      tendencia = actMes.map((r) => ({ periodo: r.periodo, actual: r.total, anterior: antMap.get(r.periodo) ?? 0 }));
-    }
 
     const k = kpiRaw[0]!;
+    const total = k.total;
+
+    const completarDiario = (
+      rows: { periodo: string; total: number }[],
+      desde: string | null,
+      hasta: string | null,
+    ): { periodo: string; total: number }[] => {
+      if (!desde || !hasta) return rows;
+      const mapa = new Map(rows.map((r) => [r.periodo, r.total]));
+      return generarPeriodosOp(desde, hasta, "diaria").map((periodo) => ({
+        periodo,
+        total: mapa.get(periodo) ?? 0,
+      }));
+    };
+
+    const actual = completarDiario(
+      evolActualRaw,
+      filters.fechaHoraInicio?.slice(0, 10) ?? null,
+      filters.fechaHoraFin?.slice(0, 10) ?? null,
+    );
+    const anterior = prev ? completarDiario(evolAnteriorRaw, prev.inicio, prev.fin) : [];
+    const prevTotal = prev ? anterior.reduce((s, r) => s + r.total, 0) : null;
+    const variacionAbs = prevTotal !== null ? total - prevTotal : null;
+    const variacionPct =
+      prevTotal !== null && prevTotal > 0
+        ? Math.round(((total - prevTotal) / prevTotal) * 1000) / 10
+        : null;
+
+    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
     const kpis: ZendeskKpis = {
-      totalTickets: k.total, ticketsAbiertos: k.abiertos, ticketsCerrados: k.cerrados,
-      ticketsPendientes: k.pendientes, tiempoPrimeraRespuesta: k.promPrimera,
-      tiempoResolucion: k.promResolucion,
-      slaPrimeraRespuesta: k.conDatoPr > 0 ? Math.round((k.cumplePr / k.conDatoPr) * 1000) / 10 : null,
-      slaResolucion: k.conDatoRes > 0 ? Math.round((k.cumpleRes / k.conDatoRes) * 1000) / 10 : null,
-      fcr: k.total > 0 ? Math.round((k.resueltos / k.total) * 1000) / 10 : null,
-      tiempoPromedioTicket: k.promResolucion,
+      totalTickets: total,
+      cerrados: k.cerrados,
+      resueltos: k.resueltos,
+      abiertos: k.abiertos,
+      pendientes: k.pendientes,
+      enEspera: k.en_espera,
+      otros: k.otros,
+      primeraN: k.primera_n,
+      primeraCobertura: pct(k.primera_n),
+      primeraMediana: k.primera_med,
+      primeraP90: k.primera_p90,
+      primeraPromedio: k.primera_prom,
+      primeraSinDato: total - k.primera_n,
+      resolucionN: k.resolucion_n,
+      resolucionCobertura: pct(k.resolucion_n),
+      resolucionMediana: k.resolucion_med,
+      resolucionP90: k.resolucion_p90,
+      resolucionPromedio: k.resolucion_prom,
+      resolucionExcluidas: k.resolucion_excluidas,
+      slaPrimeraCumple: k.sla_cumple,
+      slaPrimeraEvaluables: k.primera_n,
+      slaPrimeraPct:
+        k.primera_n > 0 ? Math.round((k.sla_cumple / k.primera_n) * 1000) / 10 : null,
+      slaPrimeraUmbral: uPr,
+      totalAnterior: prevTotal,
+      variacionAbs,
+      variacionPct,
     };
 
-    const grandEst = estadosRaw.reduce((s, r) => s + r.total, 0);
-    const estados = estadosRaw.map((r) => ({ estado: r.estado, total: r.total, porcentaje: grandEst > 0 ? Math.round((r.total / grandEst) * 1000) / 10 : 0 }));
-    const treemap = treemapRaw.map((r) => ({ categoria: r.categoria, total: r.total, tiempoResolucion: r.tiempoResolucion }));
-    const grandSub = topSubRaw.reduce((s, r) => s + r.total, 0);
-    const topSubcategorias = topSubRaw.map((r) => ({ subcategoria: r.subcategoria, total: r.total, porcentaje: grandSub > 0 ? Math.round((r.total / grandSub) * 1000) / 10 : 0 }));
-    const asesores = asesorRaw.map((r) => ({ asesor: r.asesor, total: r.total, tiempoPromedio: r.tiempoPromedio, sla: r.conDato > 0 ? Math.round((r.cumple / r.conDato) * 1000) / 10 : null, fcr: r.total > 0 ? Math.round((r.resueltas / r.total) * 1000) / 10 : null }));
-    const paises = paisRaw.map((r) => ({ pais: r.pais, total: r.total }));
-    const dominios = dominiosRaw.map((r) => ({ dominio: r.dominio, total: r.total }));
-    const clientes = clientesRaw.map((r) => ({ cliente: r.cliente, total: r.total }));
+    const estados: ZendeskEstado[] = [
+      { estado: "cerrado", etiqueta: "Cerrados", total: k.cerrados, pct: pct(k.cerrados) },
+      { estado: "resuelto", etiqueta: "Resueltos", total: k.resueltos, pct: pct(k.resueltos) },
+      { estado: "abierto", etiqueta: "Abiertos", total: k.abiertos, pct: pct(k.abiertos) },
+      { estado: "pendiente", etiqueta: "Pendientes", total: k.pendientes, pct: pct(k.pendientes) },
+      { estado: "en_espera", etiqueta: "En espera", total: k.en_espera, pct: pct(k.en_espera) },
+      { estado: "otro", etiqueta: "Otros", total: k.otros, pct: pct(k.otros) },
+    ];
 
-    const slaCategoria = slaCatRaw.map((r) => ({ categoria: r.categoria, cumple: r.cumple, noCumple: r.noCumple, total: r.total, pctCumple: (r.cumple + r.noCumple) > 0 ? Math.round((r.cumple / (r.cumple + r.noCumple)) * 1000) / 10 : 0 }));
-    const tiemposCategoria = tiemposCatRaw.map((r) => ({ categoria: r.categoria, primeraRespuesta: r.primeraRespuesta, resolucion: r.resolucion }));
-    const tiemposSubcategoria = tiemposSubRaw.map((r) => ({ subcategoria: r.subcategoria, primeraRespuesta: r.primeraRespuesta, resolucion: r.resolucion }));
-    const tiemposAsesor = tiemposAsesorRaw.map((r) => ({ asesor: r.asesor, primeraRespuesta: r.primeraRespuesta, resolucion: r.resolucion }));
-
-    const ticketsAntiguosObj = {
-      grupo: `abiertos (${ticketsAntiguosRaw.length})`,
-      tickets: ticketsAntiguosRaw.map((r) => ({ ticket: null as string | null, cliente: r.cliente, categoria: r.categoria, asesor: r.asesor, fecha: r.fecha, horasTranscurridas: Math.round(r.horas * 10) / 10 })),
+    const b = backlogRaw[0] ?? { abiertos: 0, pendientes: 0, en_espera: 0 };
+    const backlog: ZendeskBacklog = {
+      abiertos: b.abiertos,
+      pendientes: b.pendientes,
+      enEspera: b.en_espera,
+      total: b.abiertos + b.pendientes + b.en_espera,
+      fechaCorte: corteRaw[0]?.fecha_corte ?? "",
     };
-
-    const incumplimientos = incumplimientosRaw.map((r) => ({ categoria: r.categoria, total: r.total, pctIncumplimiento: r.total > 0 ? Math.round((r.noCumple / r.total) * 1000) / 10 : 0 }));
-
-    const categoriasCriticas = treemapRaw.map((r) => {
-      const sla = slaCatRaw.find((s) => s.categoria === r.categoria);
-      return { categoria: r.categoria, total: r.total, tiempoResolucion: r.tiempoResolucion, incumplimientoSla: sla ? sla.noCumple : null };
-    }).sort((a, b) => (b.incumplimientoSla ?? 0) - (a.incumplimientoSla ?? 0));
 
     const insights: string[] = [];
-    if (k.total > 0) insights.push(`Zendesk/Correo procesó ${k.total} tickets en el período.`);
-    if (k.promPrimera !== null) insights.push(`Tiempo promedio de primera respuesta: ${Math.round(k.promPrimera)} min.`);
-    if (k.promResolucion !== null) insights.push(`Tiempo promedio de resolución: ${Math.round(k.promResolucion)} min.`);
-    if (k.conDatoPr > 0) insights.push(`Cumplimiento SLA primera respuesta: ${Math.round((k.cumplePr / k.conDatoPr) * 1000) / 10}%.`);
-    if (k.conDatoRes > 0) insights.push(`Cumplimiento SLA resolución: ${Math.round((k.cumpleRes / k.conDatoRes) * 1000) / 10}%.`);
-    if (k.abiertos > 0) insights.push(`${k.abiertos} tickets permanecen abiertos.`);
-    const topTree = [...treemap].sort((a, b) => b.total - a.total)[0];
-    if (topTree) insights.push(`"${topTree.categoria}" concentra el ${k.total > 0 ? Math.round((topTree.total / k.total) * 1000) / 10 : 0}% de los tickets.`);
+    if (total > 0) {
+      insights.push(
+        `Zendesk/Correo recibió ${total.toLocaleString("es-PE")} tickets: ${k.cerrados.toLocaleString("es-PE")} cerrados y ${k.resueltos.toLocaleString("es-PE")} resueltos.`,
+      );
+      if (variacionPct !== null && variacionAbs !== null) {
+        const dir = variacionPct >= 0 ? "aumentó" : "disminuyó";
+        insights.push(
+          `La demanda ${dir} ${Math.abs(variacionPct)}% (${variacionAbs > 0 ? "+" : ""}${variacionAbs.toLocaleString("es-PE")}) frente al periodo anterior.`,
+        );
+      }
+      if (k.primera_n > 0 && k.primera_med !== null) {
+        insights.push(
+          `Primera respuesta: mediana ${(Math.round(k.primera_med * 10) / 10).toLocaleString("es-PE")} min y p90 ${k.primera_p90 !== null ? (Math.round(k.primera_p90 * 10) / 10).toLocaleString("es-PE") : "—"} min; ${k.primera_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} con dato (${kpis.primeraCobertura}%).`,
+        );
+      }
+      if (k.resolucion_n > 0 && k.resolucion_med !== null) {
+        insights.push(
+          `Resolución: mediana ${(Math.round(k.resolucion_med * 10) / 10).toLocaleString("es-PE")} min y p90 ${k.resolucion_p90 !== null ? (Math.round(k.resolucion_p90 * 10) / 10).toLocaleString("es-PE") : "—"} min; ${k.resolucion_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} con tiempo válido (${kpis.resolucionCobertura}%); ${k.resolucion_excluidas} sin tiempo válido.`,
+        );
+      }
+      if (kpis.slaPrimeraPct !== null) {
+        insights.push(
+          `SLA de primera respuesta ≤${uPr.toLocaleString("es-PE")} min: ${kpis.slaPrimeraPct}% (${k.sla_cumple.toLocaleString("es-PE")} de ${k.primera_n.toLocaleString("es-PE")} evaluables).`,
+        );
+      }
+      insights.push(
+        `Backlog al corte ${backlog.fechaCorte}: ${backlog.abiertos} abiertos y ${backlog.pendientes} pendientes.`,
+      );
+    }
 
     return {
-      kpis, evolucion: evolRaw, backlog: backlogRaw, estados, treemap,
-      topSubcategorias, asesores, paises, dominios, clientes, slaCategoria,
-      tiemposCategoria, tiemposSubcategoria, tiemposAsesor,
-      ticketsAntiguos: ticketsAntiguosObj, incumplimientos, categoriasCriticas,
-      tendencia, insights,
-    };
-  },
-
-  async tendencias(filters: DashboardFilters): Promise<TendenciasResponse> {
-    const whereActual = construirWhere(filters);
-    const CL_COL = Prisma.sql`COALESCE(NULLIF(TRIM(contacto), ''), 'Sin contacto')`;
-    const SCAT = SCAT_LABEL;
-    const GRUPO = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'whatsapp' WHEN canal ILIKE '%zendesk%' OR canal ILIKE '%correo%' THEN 'correo' ELSE 'otro' END`;
-    const uPr = umbral(SLA_MINUTOS.primeraRespuesta);
-
-    const totalActual = await totales(whereActual);
-    const slaActual = await slaTotales(whereActual);
-
-    const [
-      evolRaw, evolCanalRaw, evolSubcanalRaw, evolAsesorRaw, evolPaisRaw,
-      slaTendRaw, tiemposTendRaw, quintilesTendRaw,
-      estacionalidadHourRaw, estacionalidadMonthRaw,
-      topCatsGlobal, topSubGlobal, topDomGlobal, topCliGlobal, clientesActRaw,
-    ] = await Promise.all([
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date ORDER BY periodo
-      ` as Promise<{ periodo: Date; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${GRUPO} AS canal, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date, ${GRUPO} ORDER BY periodo, canal
-      ` as Promise<{ periodo: Date; canal: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo,
-               COALESCE(NULLIF(TRIM(subcanal), ''), 'Sin subcanal') AS subcanal,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date, subcanal ORDER BY periodo, total DESC
-      ` as Promise<{ periodo: Date; subcanal: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${N_ASESOR_COALESCE} AS asesor,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date, ${N_ASESOR_COALESCE} ORDER BY periodo, total DESC
-      ` as Promise<{ periodo: Date; asesor: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${N_PAIS} AS pais,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date, ${N_PAIS} ORDER BY periodo, total DESC
-      ` as Promise<{ periodo: Date; pais: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS conDato,
-               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL AND primera_respuesta_min_norm <= ${uPr})::int AS cumple
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date ORDER BY periodo
-      ` as Promise<{ periodo: Date; conDato: number; cumple: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT fecha::date AS periodo,
-               ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS primeraRespuesta,
-               ROUND(AVG(resolucion_min_norm)::numeric, 1)::float8 AS resolucion,
-               ROUND(AVG(COALESCE(primera_respuesta_min_norm, 0))::numeric, 1)::float8 AS espera
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY fecha::date ORDER BY periodo
-      ` as Promise<{ periodo: Date; primeraRespuesta: number | null; resolucion: number | null; espera: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT periodo, quintil, ROUND(AVG(primera_respuesta_min_norm)::numeric, 1)::float8 AS promedio
-        FROM (
-          SELECT fecha::date AS periodo, primera_respuesta_min_norm,
-                 NTILE(5) OVER (PARTITION BY fecha::date ORDER BY primera_respuesta_min_norm) AS quintil
-          FROM public.v_unificado_norm
-          ${whereConCanal(whereActual, Prisma.sql`primera_respuesta_min_norm IS NOT NULL`)}
-        ) sub
-        GROUP BY periodo, quintil ORDER BY periodo, quintil
-      ` as Promise<{ periodo: Date; quintil: number; promedio: number | null }[]>,
-
-      prisma.$queryRaw`
-        SELECT EXTRACT(HOUR FROM hora::time)::int AS hora,
-               EXTRACT(DOW FROM fecha::date)::int AS dia,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY EXTRACT(HOUR FROM hora::time), EXTRACT(DOW FROM fecha::date)
-        ORDER BY dia, hora
-      ` as Promise<{ hora: number; dia: number; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT EXTRACT(MONTH FROM fecha::date)::int AS mes,
-               EXTRACT(DAY FROM fecha::date)::int AS dia,
-               COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY EXTRACT(MONTH FROM fecha::date), EXTRACT(DAY FROM fecha::date)
-        ORDER BY mes, dia
-      ` as Promise<{ mes: number; dia: number; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${N_CATEGORIA} ORDER BY total DESC LIMIT 10
-      ` as Promise<{ categoria: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${SCAT} AS subcategoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${SCAT_GROUP} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ subcategoria: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${N_DOMINIO} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ dominio: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT ${CL_COL} AS cliente, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-        GROUP BY ${CL_COL} ORDER BY total DESC LIMIT 20
-      ` as Promise<{ cliente: string; total: number }[]>,
-
-      prisma.$queryRaw`
-        SELECT COUNT(DISTINCT ${CL_COL})::int AS total
-        FROM public.v_unificado_norm ${whereActual}
-      ` as Promise<{ total: number }[]>,
-    ]);
-
-    let evolCatRaw: { periodo: Date; categoria: string; total: number }[] = [];
-    if (topCatsGlobal.length > 0) {
-      const catFilter = topCatsGlobal.map((c) => Prisma.sql`${c.categoria}` as Prisma.Sql);
-      const whereCats = whereConCanal(whereActual, Prisma.sql`${N_CATEGORIA} = ANY(ARRAY[${Prisma.join(catFilter)}]::text[])`);
-      evolCatRaw = await prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereCats}
-        GROUP BY fecha::date, ${N_CATEGORIA} ORDER BY periodo, total DESC
-      ` as { periodo: Date; categoria: string; total: number }[];
-    }
-
-    let evolSubRaw: { periodo: Date; subcategoria: string; total: number }[] = [];
-    if (topSubGlobal.length > 0) {
-      const subFilter = topSubGlobal.map((s) => Prisma.sql`${s.subcategoria}` as Prisma.Sql);
-      const whereSubs = whereConCanal(whereActual, Prisma.sql`${SCAT} = ANY(ARRAY[${Prisma.join(subFilter)}]::text[])`);
-      evolSubRaw = await prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${SCAT} AS subcategoria, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereSubs}
-        GROUP BY fecha::date, ${SCAT_GROUP} ORDER BY periodo, total DESC
-      ` as { periodo: Date; subcategoria: string; total: number }[];
-    }
-
-    let evolDomRaw: { periodo: Date; dominio: string; total: number }[] = [];
-    if (topDomGlobal.length > 0) {
-      const domFilter = topDomGlobal.map((d) => Prisma.sql`${d.dominio}` as Prisma.Sql);
-      const whereDoms = whereConCanal(whereActual, Prisma.sql`dominio = ANY(ARRAY[${Prisma.join(domFilter)}]::text[])`);
-      evolDomRaw = await prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${N_DOMINIO_COALESCE} AS dominio, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereDoms}
-        GROUP BY fecha::date, ${N_DOMINIO} ORDER BY periodo, total DESC
-      ` as { periodo: Date; dominio: string; total: number }[];
-    }
-
-    let evolClienteRaw: { periodo: Date; cliente: string; total: number }[] = [];
-    if (topCliGlobal.length > 0) {
-      const cliFilter = topCliGlobal.map((c) => Prisma.sql`${c.cliente}` as Prisma.Sql);
-      const whereClis = whereConCanal(whereActual, Prisma.sql`${CL_COL} = ANY(ARRAY[${Prisma.join(cliFilter)}]::text[])`);
-      evolClienteRaw = await prisma.$queryRaw`
-        SELECT fecha::date AS periodo, ${CL_COL} AS cliente, COUNT(*)::int AS total
-        FROM public.v_unificado_norm ${whereClis}
-        GROUP BY fecha::date, ${CL_COL} ORDER BY periodo, total DESC
-      ` as { periodo: Date; cliente: string; total: number }[];
-    }
-
-    let volumenAnterior: number | null = null;
-    let slaAnterior: number | null = null;
-    let fcrAnterior: number | null = null;
-    let tiemposPrimeraAnt: number | null = null;
-    let tiemposResolucionAnt: number | null = null;
-    let clientesAnt: number | null = null;
-    let catActTotals: { categoria: string; total: number }[] = [];
-    let catAntTotals: { categoria: string; total: number }[] = [];
-    let cliActTotals: { cliente: string; total: number }[] = [];
-    let cliAntTotals: { cliente: string; total: number }[] = [];
-    let paisActTotals: { pais: string; total: number }[] = [];
-    let paisAntTotals: { pais: string; total: number }[] = [];
-    let asesoresActTotals: { asesor: string; total: number }[] = [];
-    let asesoresAntTotals: { asesor: string; total: number }[] = [];
-
-    if (filters.fechaHoraInicio && filters.fechaHoraFin) {
-      const prev = rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin);
-      const wherePrev = construirWhere({ ...filters, fechaHoraInicio: prev.inicio, fechaHoraFin: prev.fin });
-      const [totalPrev, slaPrev, clientesPrevRaw, catAct, catAnt, cliAct, cliAnt, paisAct, paisAnt, asesAct, asesAnt] = await Promise.all([
-        totales(wherePrev),
-        slaTotales(wherePrev),
-        prisma.$queryRaw`SELECT COUNT(DISTINCT ${CL_COL})::int AS total FROM public.v_unificado_norm ${wherePrev}` as Promise<{ total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual} GROUP BY ${N_CATEGORIA} ORDER BY total DESC` as Promise<{ categoria: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_CATEGORIA} AS categoria, COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev} GROUP BY ${N_CATEGORIA} ORDER BY total DESC` as Promise<{ categoria: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${CL_COL} AS cliente, COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual} GROUP BY ${CL_COL} ORDER BY total DESC LIMIT 30` as Promise<{ cliente: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${CL_COL} AS cliente, COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev} GROUP BY ${CL_COL} ORDER BY total DESC LIMIT 30` as Promise<{ cliente: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_PAIS} AS pais, COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual} GROUP BY ${N_PAIS} ORDER BY total DESC` as Promise<{ pais: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_PAIS} AS pais, COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev} GROUP BY ${N_PAIS} ORDER BY total DESC` as Promise<{ pais: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_ASESOR_COALESCE} AS asesor, COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual} GROUP BY ${N_ASESOR_COALESCE} ORDER BY total DESC` as Promise<{ asesor: string; total: number }[]>,
-        prisma.$queryRaw`SELECT ${N_ASESOR_COALESCE} AS asesor, COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev} GROUP BY ${N_ASESOR_COALESCE} ORDER BY total DESC` as Promise<{ asesor: string; total: number }[]>,
-      ]);
-      volumenAnterior = totalPrev.total;
-      tiemposPrimeraAnt = totalPrev.prom_primera;
-      tiemposResolucionAnt = totalPrev.prom_resolucion;
-      slaAnterior = slaPrev.pr_con_dato > 0 ? Math.round((slaPrev.pr_dentro / slaPrev.pr_con_dato) * 1000) / 10 : null;
-      fcrAnterior = totalPrev.total > 0 ? Math.round(((totalPrev.cerrados + totalPrev.resueltos) / totalPrev.total) * 1000) / 10 : null;
-      clientesAnt = clientesPrevRaw[0]?.total ?? null;
-      catActTotals = catAct; catAntTotals = catAnt;
-      cliActTotals = cliAct; cliAntTotals = cliAnt;
-      paisActTotals = paisAct; paisAntTotals = paisAnt;
-      asesoresActTotals = asesAct; asesoresAntTotals = asesAnt;
-    }
-
-    const slaPctActual = slaActual.pr_con_dato > 0 ? Math.round((slaActual.pr_dentro / slaActual.pr_con_dato) * 1000) / 10 : null;
-    const fcrActual = totalActual.total > 0 ? Math.round(((totalActual.cerrados + totalActual.resueltos) / totalActual.total) * 1000) / 10 : null;
-    const clientesAct = clientesActRaw[0]?.total ?? null;
-
-    const alertas: Alerta[] = [];
-    if (catActTotals.length > 0 && catAntTotals.length > 0) {
-      const catAntMap = new Map(catAntTotals.map((r) => [r.categoria, r.total]));
-      for (const r of catActTotals) {
-        const ant = catAntMap.get(r.categoria) ?? 0;
-        if (ant > 0) {
-          const pct = Math.round(((r.total - ant) / ant) * 1000) / 10;
-          if (pct > 20) alertas.push({ tipo: "crecimiento_categoria", mensaje: `"${r.categoria}" creció ${pct}% en volumen vs período anterior`, severidad: "alto" });
-          else if (pct < -20) alertas.push({ tipo: "decrecimiento_categoria", mensaje: `"${r.categoria}" cayó ${Math.abs(pct)}% en volumen vs período anterior`, severidad: "medio" });
-        }
-      }
-    }
-    if (cliActTotals.length > 0 && cliAntTotals.length > 0) {
-      const cliAntMap = new Map(cliAntTotals.map((r) => [r.cliente, r.total]));
-      for (const r of cliActTotals) {
-        const ant = cliAntMap.get(r.cliente) ?? 0;
-        if (ant > 0) { const pct = Math.round(((r.total - ant) / ant) * 1000) / 10; if (pct > 30) alertas.push({ tipo: "crecimiento_cliente", mensaje: `"${r.cliente}" incrementó sus atenciones un ${pct}%`, severidad: "medio" }); }
-      }
-    }
-    if (paisActTotals.length > 0 && paisAntTotals.length > 0) {
-      const paisAntMap = new Map(paisAntTotals.map((r) => [r.pais, r.total]));
-      for (const r of paisActTotals) {
-        const ant = paisAntMap.get(r.pais) ?? 0;
-        if (ant > 0) { const pct = Math.round(((r.total - ant) / ant) * 1000) / 10; if (Math.abs(pct) > 30) alertas.push({ tipo: "variacion_pais", mensaje: `"${r.pais}" varió ${pct}% en incidentes vs período anterior`, severidad: pct > 0 ? "alto" : "bajo" }); }
-      }
-    }
-    if (slaAnterior !== null && slaPctActual !== null) {
-      const diff = slaPctActual - slaAnterior;
-      if (diff < -5) alertas.push({ tipo: "caida_sla", mensaje: `El cumplimiento SLA cayó ${Math.abs(diff).toFixed(1)} puntos vs período anterior`, severidad: "alto" });
-    }
-    if (totalActual.prom_primera !== null && tiemposPrimeraAnt !== null) {
-      const diff = totalActual.prom_primera - tiemposPrimeraAnt;
-      if (diff > 10) alertas.push({ tipo: "aumento_primera_respuesta", mensaje: `Tiempo de 1ª respuesta aumentó ${Math.round(diff)} min vs período anterior`, severidad: "alto" });
-    }
-    if (totalActual.prom_resolucion !== null && tiemposResolucionAnt !== null) {
-      const diff = totalActual.prom_resolucion - tiemposResolucionAnt;
-      if (diff > 30) alertas.push({ tipo: "aumento_resolucion", mensaje: `Tiempo de resolución aumentó ${Math.round(diff)} min vs período anterior`, severidad: "medio" });
-    }
-    if (asesoresActTotals.length > 0 && asesoresAntTotals.length > 0) {
-      const asesAntMap = new Map(asesoresAntTotals.map((r) => [r.asesor, r.total]));
-      for (const r of asesoresActTotals) {
-        const ant = asesAntMap.get(r.asesor);
-        if (ant !== undefined && ant > 0) { const pct = Math.round(((r.total - ant) / ant) * 1000) / 10; if (Math.abs(pct) > 40) alertas.push({ tipo: "carga_asesor", mensaje: `"${r.asesor}" cambió su carga ${pct > 0 ? "+" : ""}${pct}%`, severidad: Math.abs(pct) > 60 ? "alto" : "medio" }); }
-      }
-    }
-
-    const fmt = (d: Date | string) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d));
-    const slaPctCalc = (conDato: number, cumple: number) => (conDato > 0 ? Math.round((cumple / conDato) * 1000) / 10 : null);
-
-    return {
-      kpis: {
-        variacionVolumen: comparar(totalActual.total, volumenAnterior).deltaPct,
-        variacionTiempoPrimera: comparar(totalActual.prom_primera, tiemposPrimeraAnt).deltaPct,
-        variacionTiempoResolucion: comparar(totalActual.prom_resolucion, tiemposResolucionAnt).deltaPct,
-        variacionSla: comparar(slaPctActual, slaAnterior).deltaPct,
-        variacionFcr: comparar(fcrActual, fcrAnterior).deltaPct,
-        variacionClientesUnicos: comparar(clientesAct, clientesAnt).deltaPct,
+      kpis,
+      estados,
+      evolucion: {
+        actual,
+        anterior,
+        totalActual: total,
+        totalAnterior: prevTotal,
+        variacionAbs,
+        variacionPct,
       },
-      evolucionVolumen: evolRaw.map((r) => ({ periodo: fmt(r.periodo), total: r.total })),
-      evolucionCanal: evolCanalRaw.map((r) => ({ periodo: fmt(r.periodo), canal: r.canal, total: r.total })),
-      evolucionSubcanal: evolSubcanalRaw.map((r) => ({ periodo: fmt(r.periodo), subcanal: r.subcanal, total: r.total })),
-      evolucionCategoria: evolCatRaw.map((r) => ({ periodo: fmt(r.periodo), categoria: r.categoria, total: r.total })),
-      evolucionSubcategoria: evolSubRaw.map((r) => ({ periodo: fmt(r.periodo), subcategoria: r.subcategoria, total: r.total })),
-      evolucionAsesor: evolAsesorRaw.map((r) => ({ periodo: fmt(r.periodo), asesor: r.asesor, total: r.total })),
-      evolucionPais: evolPaisRaw.map((r) => ({ periodo: fmt(r.periodo), pais: r.pais, total: r.total })),
-      evolucionDominio: evolDomRaw.map((r) => ({ dominio: r.dominio, periodo: fmt(r.periodo), total: r.total })),
-      evolucionCliente: evolClienteRaw.map((r) => ({ periodo: fmt(r.periodo), cliente: r.cliente, total: r.total })),
-      tendenciaSla: slaTendRaw.map((r) => ({ periodo: fmt(r.periodo), pctCumple: slaPctCalc(r.conDato, r.cumple) })),
-      tendenciaTiempos: tiemposTendRaw.map((r) => ({ periodo: fmt(r.periodo), primeraRespuesta: r.primeraRespuesta, resolucion: r.resolucion, espera: r.espera })),
-      tendenciaQuintiles: quintilesTendRaw.map((r) => ({ periodo: fmt(r.periodo), quintil: r.quintil, promedio: r.promedio })),
-      estacionalidad: estacionalidadHourRaw.map((r) => ({ hora: r.hora, dia: r.dia, total: r.total })),
-      estacionalidadMes: estacionalidadMonthRaw.map((r) => ({ mes: r.mes, dia: r.dia, total: r.total })),
-      alertas,
+      backlog,
+      insights,
     };
   },
 
@@ -3491,7 +4362,28 @@ export const unificadoRepository = {
       GROUP BY 1, ${N_DOMINIO}, 3
     ` as PaisDominioFila[];
 
-    return { filas, totales: totales[0] ?? filas[0], paisCanal, paisCanalSub, dominiosPais };
+    const evolucionRaw = await prisma.$queryRaw`
+      SELECT fecha::date AS periodo, ${N_PAIS} AS pais, COUNT(*)::int AS total
+      FROM public.v_unificado_norm
+      ${where}
+      GROUP BY fecha::date, ${N_PAIS}
+      ORDER BY periodo, total DESC
+    ` as { periodo: Date; pais: string; total: number }[];
+
+    const evolucionPais = evolucionRaw.map((r) => ({
+      periodo: r.periodo instanceof Date ? r.periodo.toISOString().slice(0, 10) : String(r.periodo),
+      pais: r.pais,
+      total: r.total,
+    }));
+
+    return {
+      filas,
+      totales: totales[0] ?? filas[0],
+      paisCanal,
+      paisCanalSub,
+      dominiosPais,
+      evolucionPais,
+    };
   },
 
   async asesoresMatrix(filters: DashboardFilters): Promise<AsesoresMatrixResponse> {
@@ -3630,7 +4522,11 @@ export const unificadoRepository = {
   },
 
   async detalle(filters: DashboardFilters): Promise<DetalleResponse> {
-    const where = construirWhere(filters);
+    const whereBase = construirWhere(filters);
+    const where =
+      filters.universo === "final"
+        ? whereConCanal(whereBase, FINALIZADAS)
+        : whereBase;
     const pagina = filters.pagina ?? 1;
     const limite = Math.min(filters.limite ?? 20, 100000);
     const offset = (pagina - 1) * limite;
@@ -3679,158 +4575,364 @@ export const unificadoRepository = {
 
   /** Quejas y Devoluciones — reporte analitico completo */
   async quejasDevoluciones(filters: DashboardFilters): Promise<QuejasDevolucionesResponse> {
-    const whereActual = construirWhere(filters);
     const NORM = Prisma.sql`cope_scat_normalizada(subcategoria)`;
+    const TIPO = Prisma.sql`CASE WHEN ${NORM} = 'queja' THEN 'queja' ELSE 'devolucion' END`;
     const FILTRO = Prisma.sql`${N_CATEGORIA} = 'GESTION' AND ${NORM} IN ('queja', 'solicitud de devolucion')`;
-    const w = whereActual === Prisma.empty
-      ? Prisma.sql`WHERE ${FILTRO}`
-      : Prisma.sql`${whereActual} AND ${FILTRO}`;
+    const whereActual = whereConCanal(
+      construirWhere(filters, { fechaExpr: CREACION_CLIENTE, endExclusive: true }),
+      FILTRO,
+    );
 
-    // Periodo anterior para variacion (solo si hay fechas definidas)
-    const tieneFechas = !!(filters.fechaHoraInicio && filters.fechaHoraFin);
-    let prevTotal: number | null = null;
-    let prevQ: number | null = null;
-    let prevD: number | null = null;
-    if (tieneFechas) {
-      const prev = rangoAnterior(filters.fechaHoraInicio!, filters.fechaHoraFin!);
-      const wherePrev = construirWhere({ ...filters, fechaHoraInicio: prev.inicio, fechaHoraFin: prev.fin });
-      const wPrev = wherePrev === Prisma.empty
-        ? Prisma.sql`WHERE ${FILTRO}`
-        : Prisma.sql`${wherePrev} AND ${FILTRO}`;
-      const prevCounts = await Promise.all([
-        prisma.$queryRaw`SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev}` as Promise<{ total: number }[]>,
-        prisma.$queryRaw`
-          SELECT COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-                 COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-          FROM public.v_unificado_norm ${wPrev}
-        ` as Promise<{ quejas: number; devoluciones: number }[]>,
-      ]);
-      prevTotal = prevCounts[0][0]?.total ?? 0;
-      prevQ = prevCounts[1][0]?.quejas ?? 0;
-      prevD = prevCounts[1][0]?.devoluciones ?? 0;
-    }
+    const prev =
+      filters.fechaHoraInicio && filters.fechaHoraFin
+        ? rangoAnterior(filters.fechaHoraInicio, filters.fechaHoraFin)
+        : null;
+    const wherePrev = prev
+      ? whereConCanal(
+          construirWhere(
+            {
+              ...filters,
+              fechaHoraInicio: `${prev.inicio} 00:00`,
+              fechaHoraFin: `${prev.fin} 23:59`,
+            },
+            { fechaExpr: CREACION_CLIENTE, endExclusive: true },
+          ),
+          FILTRO,
+        )
+      : null;
 
-    const G = Prisma.sql`CASE WHEN canal ILIKE '%what%' THEN 'WhatsApp' ELSE 'Correo' END`;
-    const CL = Prisma.sql`COALESCE(NULLIF(TRIM(contacto), ''), 'Sin cliente')`;
+    const [
+      totalesRaw,
+      estadosRaw,
+      canalesRaw,
+      asesoresRaw,
+      tiemposRaw,
+      evolActualRaw,
+      evolAnteriorRaw,
+      prevTotalRaw,
+    ] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'queja')::int AS quejas,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'devolucion')::int AS devoluciones,
+               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS primera_n,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               )::int AS resolucion_n,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL
+               )::int AS resolucion_excluidas,
+               ROUND((AVG(primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_prom,
+               ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_med,
+               ROUND((PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_p90,
+               ROUND((AVG(resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_prom,
+               ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_med,
+               ROUND((PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_p90
+        FROM public.v_unificado_norm ${whereActual}
+      ` as Promise<{
+        total: number;
+        quejas: number;
+        devoluciones: number;
+        primera_n: number;
+        resolucion_n: number;
+        resolucion_excluidas: number;
+        primera_prom: number | null;
+        primera_med: number | null;
+        primera_p90: number | null;
+        resolucion_prom: number | null;
+        resolucion_med: number | null;
+        resolucion_p90: number | null;
+      }[]>,
 
-    // Ejecutar queries secuencialmente para aislar errores
-    let kpisRaw: { total: number }[] = [];
-    let evolRaw: { periodo: string; quejas: number; devoluciones: number }[] = [];
-    let canalRaw: { canal: string; quejas: number; devoluciones: number }[] = [];
-    let paisRaw: { pais: string; quejas: number; devoluciones: number }[] = [];
-    let asesorRaw: { asesor: string; quejas: number; devoluciones: number }[] = [];
-    let clienteRaw: { cliente: string; quejas: number; devoluciones: number }[] = [];
-    let diaRaw: { fecha: string; quejas: number; devoluciones: number }[] = [];
-    let diaSemanaRaw: { dia: string; orden: number; quejas: number; devoluciones: number }[] = [];
-    let horaRaw: { hora: number; quejas: number; devoluciones: number }[] = [];
-    let tiemposRaw: { tipo: string; respuesta_prom: number | null; resolucion_prom: number | null }[] = [];
-    let totalClientesRaw: { total: number }[] = [];
+      prisma.$queryRaw`
+        SELECT COALESCE(estado_homologado, 'otros') AS estado, COUNT(*)::int AS total
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY 1
+      ` as Promise<{ estado: string; total: number }[]>,
 
-    kpisRaw = await prisma.$queryRaw`SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${whereActual}`;
-    evolRaw = await prisma.$queryRaw`
-      SELECT TO_CHAR(fecha, 'YYYY-MM') AS periodo,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY TO_CHAR(fecha, 'YYYY-MM') ORDER BY periodo
-    `;
-    canalRaw = await prisma.$queryRaw`
-      SELECT ${G} AS canal,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY canal ORDER BY canal
-    `;
-    paisRaw = await prisma.$queryRaw`
-      SELECT ${N_PAIS} AS pais,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY ${N_PAIS} ORDER BY COUNT(*) DESC
-    `;
-    asesorRaw = await prisma.$queryRaw`
-      SELECT ${N_ASESOR_COALESCE} AS asesor,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY ${N_ASESOR_COALESCE} ORDER BY COUNT(*) DESC
-    `;
-    clienteRaw = await prisma.$queryRaw`
-      SELECT ${CL} AS cliente,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY ${CL} ORDER BY COUNT(*) DESC
-    `;
-    diaRaw = await prisma.$queryRaw`
-      SELECT TO_CHAR(fecha::date, 'YYYY-MM-DD') AS fecha,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY fecha::date ORDER BY fecha
-    `;
-    diaSemanaRaw = await prisma.$queryRaw`
-      SELECT TRIM(TO_CHAR(fecha, 'Day')) AS dia,
-             EXTRACT(DOW FROM fecha)::int AS orden,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY TRIM(TO_CHAR(fecha, 'Day')), EXTRACT(DOW FROM fecha)
-      ORDER BY orden
-    `;
-    horaRaw = await prisma.$queryRaw`
-      SELECT SPLIT_PART(hora::text, ':', 1)::int AS hora,
-             COUNT(*) FILTER (WHERE ${NORM} = 'queja')::int AS quejas,
-             COUNT(*) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::int AS devoluciones
-      FROM public.v_unificado_norm ${w}
-      GROUP BY SPLIT_PART(hora::text, ':', 1)::int
-      ORDER BY hora
-    `;
-    tiemposRaw = await prisma.$queryRaw`
-      SELECT 'QUEJA' AS tipo,
-             ROUND(AVG(primera_respuesta_min_norm) FILTER (WHERE ${NORM} = 'queja')::numeric, 1)::float8 AS respuesta_prom,
-             ROUND(AVG(resolucion_min_norm) FILTER (WHERE ${NORM} = 'queja')::numeric, 1)::float8 AS resolucion_prom
-      FROM public.v_unificado_norm ${w}
-      UNION ALL
-      SELECT 'DEVOLUCION' AS tipo,
-             ROUND(AVG(primera_respuesta_min_norm) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::numeric, 1)::float8 AS respuesta_prom,
-             ROUND(AVG(resolucion_min_norm) FILTER (WHERE ${NORM} = 'solicitud de devolucion')::numeric, 1)::float8 AS resolucion_prom
-      FROM public.v_unificado_norm ${w}
-    `;
-    totalClientesRaw = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT contacto)::int AS total
-      FROM public.v_unificado_norm ${w}
-        AND contacto IS NOT NULL AND TRIM(contacto) <> ''
-    `;
+      prisma.$queryRaw`
+        SELECT CASE WHEN canal ILIKE '%what%' THEN 'WhatsApp' ELSE 'Correo' END AS canal,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'queja')::int AS quejas,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'devolucion')::int AS devoluciones
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY 1
+      ` as Promise<{ canal: string; total: number; quejas: number; devoluciones: number }[]>,
 
-    const totalGeneral = kpisRaw[0]?.total ?? 0;
-    const totalQuejas = evolRaw.reduce((s, r) => s + r.quejas, 0);
-    const totalDevoluciones = evolRaw.reduce((s, r) => s + r.devoluciones, 0);
+      prisma.$queryRaw`
+        SELECT ${N_ASESOR_COALESCE} AS asesor,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'queja')::int AS quejas,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'devolucion')::int AS devoluciones
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY ${N_ASESOR_COALESCE}
+        ORDER BY total DESC
+      ` as Promise<{ asesor: string; total: number; quejas: number; devoluciones: number }[]>,
 
-    const computeVariation = (curr: number, prev: number | null) => ({
-      actual: curr,
-      anterior: prev,
-      delta: prev != null ? curr - prev : null,
-      pct: prev != null && prev > 0 ? Math.round(((curr - prev) / prev) * 1000) / 10 : null,
+      prisma.$queryRaw`
+        SELECT ${TIPO} AS tipo,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE primera_respuesta_min_norm IS NOT NULL)::int AS primera_n,
+               ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_med,
+               ROUND((PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_p90,
+               ROUND((AVG(primera_respuesta_min_norm)
+                 FILTER (WHERE primera_respuesta_min_norm IS NOT NULL))::numeric, 1)::float8 AS primera_prom,
+               COUNT(*) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               )::int AS resolucion_n,
+               ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_med,
+               ROUND((PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_p90,
+               ROUND((AVG(resolucion_min_norm) FILTER (
+                 WHERE resolucion_min_norm IS NOT NULL
+                   AND NOT (resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL)
+               ))::numeric, 1)::float8 AS resolucion_prom
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY ${TIPO}
+      ` as Promise<{
+        tipo: string;
+        total: number;
+        primera_n: number;
+        primera_med: number | null;
+        primera_p90: number | null;
+        primera_prom: number | null;
+        resolucion_n: number;
+        resolucion_med: number | null;
+        resolucion_p90: number | null;
+        resolucion_prom: number | null;
+      }[]>,
+
+      prisma.$queryRaw`
+        SELECT TO_CHAR(${CREACION_CLIENTE}::date, 'YYYY-MM-DD') AS periodo,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'queja')::int AS quejas,
+               COUNT(*) FILTER (WHERE ${TIPO} = 'devolucion')::int AS devoluciones
+        FROM public.v_unificado_norm ${whereActual}
+        GROUP BY ${CREACION_CLIENTE}::date
+        ORDER BY periodo
+      ` as Promise<{ periodo: string; total: number; quejas: number; devoluciones: number }[]>,
+
+      wherePrev
+        ? (prisma.$queryRaw`
+            SELECT TO_CHAR(${CREACION_CLIENTE}::date, 'YYYY-MM-DD') AS periodo,
+                   COUNT(*)::int AS total,
+                   COUNT(*) FILTER (WHERE ${TIPO} = 'queja')::int AS quejas,
+                   COUNT(*) FILTER (WHERE ${TIPO} = 'devolucion')::int AS devoluciones
+            FROM public.v_unificado_norm ${wherePrev}
+            GROUP BY ${CREACION_CLIENTE}::date
+            ORDER BY periodo
+          ` as Promise<{ periodo: string; total: number; quejas: number; devoluciones: number }[]>)
+        : Promise.resolve([] as { periodo: string; total: number; quejas: number; devoluciones: number }[]),
+
+      wherePrev
+        ? (prisma.$queryRaw`
+            SELECT COUNT(*)::int AS total FROM public.v_unificado_norm ${wherePrev}
+          ` as Promise<{ total: number }[]>)
+        : Promise.resolve([] as { total: number }[]),
+    ]);
+
+    const t = totalesRaw[0]!;
+    const total = t.total;
+    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
+
+    const completar = (
+      rows: { periodo: string; total: number; quejas: number; devoluciones: number }[],
+      desde: string | null,
+      hasta: string | null,
+    ): { periodo: string; total: number; quejas: number; devoluciones: number }[] => {
+      if (!desde || !hasta) return rows;
+      const mapa = new Map(rows.map((r) => [r.periodo, r]));
+      return generarPeriodosOp(desde, hasta, "diaria").map(
+        (periodo) => mapa.get(periodo) ?? { periodo, total: 0, quejas: 0, devoluciones: 0 },
+      );
+    };
+
+    const actual = completar(
+      evolActualRaw,
+      filters.fechaHoraInicio?.slice(0, 10) ?? null,
+      filters.fechaHoraFin?.slice(0, 10) ?? null,
+    );
+    const anterior = prev ? completar(evolAnteriorRaw, prev.inicio, prev.fin) : [];
+    const prevTotal = prev ? (prevTotalRaw[0]?.total ?? 0) : null;
+    const variacionAbs = prevTotal !== null ? total - prevTotal : null;
+    const variacionPct =
+      prevTotal !== null && prevTotal > 0
+        ? Math.round(((total - prevTotal) / prevTotal) * 1000) / 10
+        : null;
+
+    const kpis: QuejasDevolucionesResponse["kpis"] = {
+      totalCasos: total,
+      quejas: t.quejas,
+      devoluciones: t.devoluciones,
+      pctQuejas: pct(t.quejas),
+      totalAnterior: prevTotal,
+      variacionAbs,
+      variacionPct,
+      primeraN: t.primera_n,
+      primeraCobertura: pct(t.primera_n),
+      primeraMediana: t.primera_med,
+      primeraP90: t.primera_p90,
+      primeraPromedio: t.primera_prom,
+      primeraSinDato: total - t.primera_n,
+      resolucionN: t.resolucion_n,
+      resolucionCobertura: pct(t.resolucion_n),
+      resolucionMediana: t.resolucion_med,
+      resolucionP90: t.resolucion_p90,
+      resolucionPromedio: t.resolucion_prom,
+      resolucionExcluidas: t.resolucion_excluidas,
+    };
+
+    const estadosBase: { estado: string; etiqueta: string }[] = [
+      { estado: "cerrado", etiqueta: "Cerrados" },
+      { estado: "resuelto", etiqueta: "Resueltos" },
+      { estado: "abierto", etiqueta: "Abiertos" },
+      { estado: "pendiente", etiqueta: "Pendientes" },
+      { estado: "en_espera", etiqueta: "En espera" },
+      { estado: "sin_mapear", etiqueta: "Sin mapear" },
+    ];
+    const estadoMap = new Map(estadosRaw.map((r) => [r.estado, r.total]));
+    const conocidos = new Set(estadosBase.map((e) => e.estado));
+    const otros = estadosRaw
+      .filter((r) => !conocidos.has(r.estado))
+      .reduce((s, r) => s + r.total, 0);
+    const estados = [
+      ...estadosBase.map((e) => ({
+        ...e,
+        total: estadoMap.get(e.estado) ?? 0,
+        pct: pct(estadoMap.get(e.estado) ?? 0),
+      })),
+      { estado: "otros", etiqueta: "Otros", total: otros, pct: pct(otros) },
+    ];
+
+    const tipoMap = new Map(
+      [
+        ["queja", { etiqueta: "Quejas", total: t.quejas }],
+        ["devolucion", { etiqueta: "Devoluciones", total: t.devoluciones }],
+      ] as const,
+    );
+    const tipos: QuejasDevolucionesResponse["tipos"] = (
+      ["queja", "devolucion"] as const
+    ).map((tipo) => {
+      const row = tipoMap.get(tipo)!;
+      return { tipo, etiqueta: row.etiqueta, total: row.total, pct: pct(row.total) };
     });
 
-    return {
-      totalQuejas, totalDevoluciones, totalGeneral,
-      totalClientesConNombre: totalClientesRaw[0]?.total ?? 0,
-      evolucion: evolRaw,
-      porCanal: canalRaw,
-      porPais: paisRaw,
-      porAsesor: asesorRaw,
-      porCliente: clienteRaw,
-      porDia: diaRaw,
-      porDiaSemana: diaSemanaRaw,
-      porHora: horaRaw,
-      tiempos: tiemposRaw.map((r) => ({ tipo: r.tipo, primeraRespuestaPromedio: r.respuesta_prom, resolucionPromedio: r.resolucion_prom })),
-      variacion: {
-        total: computeVariation(totalGeneral, prevTotal),
-        quejas: computeVariation(totalQuejas, prevQ),
-        devoluciones: computeVariation(totalDevoluciones, prevD),
+    const canalMap = new Map(canalesRaw.map((r) => [r.canal, r]));
+    const canales: QuejasDevolucionesResponse["canales"] = ["WhatsApp", "Correo"].map(
+      (canal) => {
+        const r = canalMap.get(canal);
+        return {
+          canal,
+          quejas: r?.quejas ?? 0,
+          devoluciones: r?.devoluciones ?? 0,
+          total: r?.total ?? 0,
+          pct: pct(r?.total ?? 0),
+        };
       },
+    );
+
+    const tiempoMap = new Map(tiemposRaw.map((r) => [r.tipo, r]));
+    const tiemposPorTipo: QuejasDevolucionesResponse["tiemposPorTipo"] = (
+      ["queja", "devolucion"] as const
+    ).map((tipo) => {
+      const r = tiempoMap.get(tipo);
+      return {
+        tipo,
+        etiqueta: tipo === "queja" ? "Quejas" : "Devoluciones",
+        total: r?.total ?? 0,
+        primeraN: r?.primera_n ?? 0,
+        primeraMediana: r?.primera_med ?? null,
+        primeraP90: r?.primera_p90 ?? null,
+        primeraPromedio: r?.primera_prom ?? null,
+        resolucionN: r?.resolucion_n ?? 0,
+        resolucionMediana: r?.resolucion_med ?? null,
+        resolucionP90: r?.resolucion_p90 ?? null,
+        resolucionPromedio: r?.resolucion_prom ?? null,
+      };
+    });
+
+    const asesores: QuejasDevolucionesResponse["asesores"] = asesoresRaw.map((r) => ({
+      asesor: r.asesor,
+      quejas: r.quejas,
+      devoluciones: r.devoluciones,
+      total: r.total,
+      pct: pct(r.total),
+    }));
+
+    const insights: string[] = [];
+    if (total > 0) {
+      insights.push(
+        `Quejas y Devoluciones registró ${total.toLocaleString("es-PE")} casos: ${t.quejas.toLocaleString("es-PE")} quejas (${kpis.pctQuejas}%) y ${t.devoluciones.toLocaleString("es-PE")} devoluciones.`,
+      );
+      if (variacionPct !== null && variacionAbs !== null) {
+        const dir = variacionPct >= 0 ? "aumentó" : "disminuyó";
+        insights.push(
+          `El volumen ${dir} ${Math.abs(variacionPct)}% (${variacionAbs > 0 ? "+" : ""}${variacionAbs.toLocaleString("es-PE")}) frente al periodo anterior.`,
+        );
+      }
+      const topCanal = [...canales].sort((a, b) => b.total - a.total)[0];
+      if (topCanal && topCanal.total > 0) {
+        insights.push(
+          `${topCanal.canal} concentra ${topCanal.total.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} casos (${topCanal.pct}%).`,
+        );
+      }
+      if (t.primera_n > 0 && t.primera_med !== null) {
+        insights.push(
+          `Primera respuesta: mediana ${(Math.round(t.primera_med * 10) / 10).toLocaleString("es-PE")} min y p90 ${t.primera_p90 !== null ? (Math.round(t.primera_p90 * 10) / 10).toLocaleString("es-PE") : "—"} min; ${t.primera_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} con dato (${kpis.primeraCobertura}%).`,
+        );
+      }
+      if (t.resolucion_n > 0 && t.resolucion_med !== null) {
+        insights.push(
+          `Resolución: mediana ${(Math.round(t.resolucion_med * 10) / 10).toLocaleString("es-PE")} min y p90 ${t.resolucion_p90 !== null ? (Math.round(t.resolucion_p90 * 10) / 10).toLocaleString("es-PE") : "—"} min; ${t.resolucion_n.toLocaleString("es-PE")} de ${total.toLocaleString("es-PE")} con tiempo válido (${kpis.resolucionCobertura}%); ${t.resolucion_excluidas} sin tiempo válido.`,
+        );
+      }
+      const topAsesor = [...asesores].sort((a, b) => b.total - a.total)[0];
+      if (topAsesor && topAsesor.total > 0) {
+        insights.push(
+          `${topAsesor.asesor} concentra ${topAsesor.total.toLocaleString("es-PE")} casos (${topAsesor.pct}%).`,
+        );
+      }
+    } else {
+      insights.push("No se registraron casos de quejas o devoluciones en el periodo seleccionado.");
+    }
+
+    return {
+      kpis,
+      estados,
+      tipos,
+      canales,
+      tiemposPorTipo,
+      asesores,
+      evolucion: {
+        actual,
+        anterior,
+        totalActual: total,
+        totalAnterior: prevTotal,
+        variacionAbs,
+        variacionPct,
+      },
+      insights,
     };
   },
 };

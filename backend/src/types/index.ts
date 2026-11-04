@@ -8,6 +8,8 @@
 export interface DashboardFilters {
   fechaHoraInicio?: string;   // YYYY-MM-DD HH:mm (datetime ISO)
   fechaHoraFin?: string;      // YYYY-MM-DD HH:mm (datetime ISO)
+  /** Universo opcional para el detalle. "final" = cerradas + resueltas. */
+  universo?: "final" | "todos";
   canal?: string[];
   subcanal?: string[];
   pais?: string[];
@@ -80,12 +82,19 @@ export interface PaisDominioFila {
   total: number;
 }
 
+export interface PaisEvolucionFila {
+  periodo: string;
+  pais: string;
+  total: number;
+}
+
 export interface PaisResponse {
   filas: PaisRow[];
   totales: PaisRow;
   paisCanal: PaisCanalFila[];
   paisCanalSub: PaisCanalSubFila[];
   dominiosPais: PaisDominioFila[];
+  evolucionPais: PaisEvolucionFila[];
 }
 
 export interface AsesorRow {
@@ -148,65 +157,281 @@ export interface DetalleResponse {
 /* ──────── Categorías V2 ──────── */
 
 export interface CategoriasV2Response {
+  universo: {
+    total: number;
+    totalRango: number;
+    excluidas: number;
+    abiertas: number;
+    sinEstado: number;
+  };
   totalCategorias: number;
   totalSubcategorias: number;
   categoriaLider: { nombre: string; volumen: number } | null;
   subcategoriaLider: { nombre: string; volumen: number } | null;
-  paretoCategorias: { categoria: string; volumen: number; pct: number; acumulado: number }[];
-  paretoSubcategorias: { subcategoria: string; volumen: number; pct: number; acumulado: number }[];
+  paretoCategorias: {
+    categoria: string;
+    volumen: number;
+    pct: number;
+    acumulado: number;
+    tecnica: boolean;
+  }[];
+  paretoSubcategorias: {
+    categoria: string;
+    subcategoria: string;
+    volumen: number;
+  }[];
   jerarquia: { categoria: string; subcategoria: string; dominio: string; volumen: number }[];
-  categoriasTiempo: { categoria: string; volumen: number; tiempo_resolucion: number | null; tiempo_espera: number | null; tiempo_atencion: number | null; sla: number | null }[];
-  subcategoriasTiempo: { subcategoria: string; categoria: string; volumen: number; tiempo_resolucion: number | null; sla: number | null }[];
-  categoriasSLA: { categoria: string; volumen: number; sla: number | null }[];
-  subcategoriasSLA: { subcategoria: string; categoria: string; volumen: number; sla: number | null }[];
-  matrizAsesor: { asesor: string; categoria: string; volumen: number }[];
-  matrizSubAsesor: { asesor: string; subcategoria: string; volumen: number }[];
-  impacto: { categoria: string; volumen: number; tiempo: number | null; sla: number | null }[];
+  categoriasTiempo: {
+    categoria: string;
+    volumen: number;
+    conDato: number;
+    tiempo_atencion: number | null;
+    tecnica: boolean;
+  }[];
+  categoriasSLA: {
+    categoria: string;
+    volumen: number;
+    conDato: number;
+    cumple: number;
+    noCumple: number;
+    pctCumple: number | null;
+    pctIncumple: number | null;
+    tecnica: boolean;
+  }[];
+  slaMetas: { whatsapp: number; correo: number; otro: number };
+  asesorDetalle: { asesor: string; categoria: string; subcategoria: string; volumen: number }[];
+  asesorTrazabilidad: { original: string; consolidado: string; volumen: number }[];
+  totalSinAsesor: number;
 }
 
 /* ──────── Clientes V2 ──────── */
 
+export interface ClienteResumen {
+  cliente: string;
+  clave: string;
+  total: number;
+  pct: number;
+  variacionPct: number | null;
+  tiempoPromedio: number | null;
+  conDato: number;
+  noCumple: number;
+  pctIncumple: number | null;
+  reincidenciaMax: number;
+  canales: string[];
+  esNoIdentificado: boolean;
+  ultimaAtencion: string | null;
+}
+
+export interface ClienteSeguimiento {
+  cliente: string;
+  clave: string;
+  total: number;
+  totalAnterior: number;
+  variacionPct: number | null;
+  reincidenciaMax: number;
+  subcategoriaRecurrente: string | null;
+  tiempoPromedio: number | null;
+  conDato: number;
+  noCumple: number;
+  pctIncumple: number | null;
+  motivos: string[];
+  senales: number;
+}
+
 export interface ClientesV2Response {
-  kpis: {
-    unicos: number;
-    totalAtenciones: number;
-    conDominio: number;
-    pctConDominio: number;
-    sinDominio: number;
-    pctSinDominio: number;
-    wpp: number;
-    pctWpp: number;
-    correo: number;
-    pctCorreo: number;
-    promedioAtenciones: number;
+  universo: {
+    total: number;
+    totalAnterior: number | null;
+    variacionPct: number | null;
+    rango: { inicio: string; fin: string; comparadoCon: { inicio: string; fin: string } } | null;
   };
-  jerarquia: { cliente: string; canal: string; categoria: string; subcategoria: string; total: number; tiempo_espera: number | null; tiempo_resolucion: number | null; sla: number | null }[];
-  ranking: { cliente: string; total: number; pct: number; tiempo_espera: number | null; tiempo_resolucion: number | null; sla: number | null }[];
-  rankingTiempo: { cliente: string; tiempo_resolucion: number | null; total: number; sla: number | null }[];
-  rankingSLA: { cliente: string; sla: number | null; total: number; tiempo_resolucion: number | null }[];
-  riesgo: { cliente: string; score: number; total: number; tiempo_resolucion: number | null; sla: number | null; nivel: string }[];
-  evolucion: { cliente: string; periodo: string; total: number }[];
+  kpis: {
+    clientesIdentificados: number;
+    atenciones: number;
+    atencionesIdentificadas: number;
+    atencionesNoIdentificadas: number;
+    pctNoIdentificadas: number;
+    promedioAtenciones: number;
+    clientesConSeguimiento: number;
+    clientesMulticanal: number;
+  };
+  calidad: {
+    atencionesNoIdentificadas: number;
+    pctNoIdentificadas: number;
+    dominiosInvalidos: number;
+    numerosDistintos: number;
+    identificadosPorCorreo: number;
+  };
+  canales: {
+    ambos: number;
+    soloWhatsapp: number;
+    soloCorreo: number;
+    total: number;
+  };
+  ranking: ClienteResumen[];
+  rankingTotal: number;
+  seguimiento: ClienteSeguimiento[];
+  seguimientoTotal: number;
+}
+
+export interface ClientesListaResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: ClienteResumen[];
+}
+
+export interface ClienteCategoria {
+  categoria: string;
+  total: number;
+  pct: number;
+  tiempoPromedio: number | null;
+  conDato: number;
+  noCumple: number;
+  pctIncumple: number | null;
+}
+
+export interface ClienteCategoriasResponse {
+  cliente: string;
+  clave: string;
+  esNoIdentificado: boolean;
+  total: number;
+  categorias: ClienteCategoria[];
+}
+
+export interface ClienteSubcategoria extends ClienteCategoria {
+  subcategoria: string;
+}
+
+export interface ClienteSubcategoriasResponse {
+  cliente: string;
+  clave: string;
+  categoria: string;
+  esNoIdentificado: boolean;
+  total: number;
+  subcategorias: ClienteSubcategoria[];
+}
+
+export interface ClienteTicket {
+  ticket: string;
+  canal: string;
+  fecha: string;
+  categoria: string;
+  subcategoria: string;
+  dominio: string;
+  contacto: string | null;
+  numero: string | null;
+  asesor: string;
+  estado: string;
+  tiempoResolucion: number | null;
+  cumpleSla: boolean | null;
+  umbralMinutos: number;
+  urlTicket: string | null;
+}
+
+export interface ClienteTicketsResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: ClienteTicket[];
+}
+
+export interface ClienteEvolucionResponse {
+  cliente: string;
+  clave: string;
+  esNoIdentificado: boolean;
+  granularidad: "diaria" | "semanal" | "mensual";
+  actual: { periodo: string; total: number }[];
+  anterior: { periodo: string; total: number }[];
+  totalActual: number;
+  totalAnterior: number;
+  variacionPct: number | null;
 }
 
 /* ──────── Quejas y Devoluciones ──────── */
 
+export interface QuejasDevolucionesKpis {
+  totalCasos: number;
+  quejas: number;
+  devoluciones: number;
+  pctQuejas: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
+  primeraN: number;
+  primeraCobertura: number;
+  primeraMediana: number | null;
+  primeraP90: number | null;
+  primeraPromedio: number | null;
+  primeraSinDato: number;
+  resolucionN: number;
+  resolucionCobertura: number;
+  resolucionMediana: number | null;
+  resolucionP90: number | null;
+  resolucionPromedio: number | null;
+  resolucionExcluidas: number;
+}
+
+export interface QuejasEstado {
+  estado: string;
+  etiqueta: string;
+  total: number;
+  pct: number;
+}
+
+export interface QuejasTipo {
+  tipo: "queja" | "devolucion";
+  etiqueta: string;
+  total: number;
+  pct: number;
+}
+
+export interface QuejasCanal {
+  canal: string;
+  quejas: number;
+  devoluciones: number;
+  total: number;
+  pct: number;
+}
+
+export interface QuejasTiempoTipo {
+  tipo: "queja" | "devolucion";
+  etiqueta: string;
+  total: number;
+  primeraN: number;
+  primeraMediana: number | null;
+  primeraP90: number | null;
+  primeraPromedio: number | null;
+  resolucionN: number;
+  resolucionMediana: number | null;
+  resolucionP90: number | null;
+  resolucionPromedio: number | null;
+}
+
+export interface QuejasAsesor {
+  asesor: string;
+  quejas: number;
+  devoluciones: number;
+  total: number;
+  pct: number;
+}
+
+export interface QuejasEvolucion {
+  actual: { periodo: string; quejas: number; devoluciones: number; total: number }[];
+  anterior: { periodo: string; quejas: number; devoluciones: number; total: number }[];
+  totalActual: number;
+  totalAnterior: number | null;
+  variacionAbs: number | null;
+  variacionPct: number | null;
+}
+
 export interface QuejasDevolucionesResponse {
-  totalQuejas: number;
-  totalDevoluciones: number;
-  totalGeneral: number;
-  totalClientesConNombre: number;
-  evolucion: { periodo: string; quejas: number; devoluciones: number }[];
-  porCanal: { canal: string; quejas: number; devoluciones: number }[];
-  porPais: { pais: string; quejas: number; devoluciones: number }[];
-  porAsesor: { asesor: string; quejas: number; devoluciones: number }[];
-  porCliente: { cliente: string; quejas: number; devoluciones: number }[];
-  porDia: { fecha: string; quejas: number; devoluciones: number }[];
-  porDiaSemana: { dia: string; orden: number; quejas: number; devoluciones: number }[];
-  porHora: { hora: number; quejas: number; devoluciones: number }[];
-  tiempos: { tipo: string; primeraRespuestaPromedio: number | null; resolucionPromedio: number | null }[];
-  variacion: {
-    total:    { actual: number; anterior: number | null; delta: number | null; pct: number | null };
-    quejas:   { actual: number; anterior: number | null; delta: number | null; pct: number | null };
-    devoluciones: { actual: number; anterior: number | null; delta: number | null; pct: number | null };
-  };
+  kpis: QuejasDevolucionesKpis;
+  estados: QuejasEstado[];
+  tipos: QuejasTipo[];
+  canales: QuejasCanal[];
+  tiemposPorTipo: QuejasTiempoTipo[];
+  asesores: QuejasAsesor[];
+  evolucion: QuejasEvolucion;
+  insights: string[];
 }

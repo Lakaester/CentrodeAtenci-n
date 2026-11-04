@@ -5,7 +5,7 @@
  */
 import {
   LayoutDashboard, Activity, Users, Tags, Building2,
-  MessageCircle, Headphones, TrendingUp, Globe, AlertTriangle, type LucideIcon,
+  MessageCircle, Headphones, Globe, AlertTriangle, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -24,6 +24,6 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/reportes/clientes",   label: "Clientes",   icon: Building2 },
   { path: "/reportes/whatsapp",   label: "WhatsApp",   icon: MessageCircle },
   { path: "/reportes/zendesk",    label: "Zendesk",    icon: Headphones },
-  { path: "/reportes/tendencias", label: "Tendencias",  icon: TrendingUp },
+  { path: "/reportes/calidad-registro", label: "Calidad de Registro", icon: ShieldCheck },
   { path: "/reportes/quejas",    label: "Quejas y Devoluciones", icon: AlertTriangle },
 ];

@@ -18,7 +18,6 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/reportes/clientes": "Clientes",
   "/reportes/whatsapp": "WhatsApp",
   "/reportes/zendesk": "Zendesk",
-  "/reportes/tendencias": "Tendencias",
   "/reportes/sla": "SLA",
   "/admin/guias": "Conocimiento",
   "/configuracion": "Configuracion",

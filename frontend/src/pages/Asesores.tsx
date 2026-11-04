@@ -70,6 +70,7 @@ async function fetchAsesoresMatrix(params: Record<string, string>): Promise<Ases
 const OFFICIAL_ADVISORS = [
   "Lidia Ceferino", "Victor Guevara", "Danilo Peña",
   "Eveling Lovera", "Andres Espinoza", "Lisbeth Giron", "Sheyla Guevara",
+  "Alex López",
 ];
 
 function normalizeAdvisor(raw: string | null | undefined): string | null {

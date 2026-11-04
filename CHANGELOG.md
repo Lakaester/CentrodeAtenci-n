@@ -1,5 +1,268 @@
 # Changelog
 
+## Quejas y Devoluciones — rediseño e incorporación de Alex López
+
+### Datos
+- `public.v_unificado` amplió su lista blanca para incluir `alex lopez` en las dos listas del filtro (exacta y `unaccent`).
+- Migración reversible en `backend/sql/migrations/` y script `backend/scripts/migrar-vista-alex.ts`.
+- Respaldo de la definición original y línea base por asesor.
+- Rollback comprobado: Alex 0, total 23,452. Reaplicación: Alex 215, total 23,667.
+- Al cierre de la validación la base viva llegó a 23,673 y Alex a 216; el crecimiento adicional no proviene del parche y coincide con las fuentes.
+- Sin cambios atribuibles al parche en los conteos de los asesores existentes; sin duplicados.
+- La recuperación es retroactiva por corrección de vista: no se insertaron filas ni se duplicaron atenciones.
+
+### Homologación transversal
+- `OFFICIAL_FILTER` incluye a Alex en Asesores y Asesores Matrix.
+- Equivalencias de Categorías: Alex, Alex Lopez y Alex López → Alex López.
+- Asesores agrega a Alex López a la lista oficial y a su color.
+- Filtro global de asesor incluye `Alex Lopez`.
+- Aportes de Alex en octubre 2026: Resumen 179; Operación 187; País 185; Asesores 185; Categorías 179; Clientes 181; WhatsApp 143; Zendesk 44; Calidad 185; Quejas y Devoluciones 0.
+- Alex no registra casos Q/D; no se inventaron casos.
+
+### Backend de Quejas y Devoluciones
+- `quejasDevoluciones` reescrito sobre fecha real de creación, con rango semiabierto.
+- Universo: `categoria = 'GESTION'` y subcategoría normalizada `queja` / `solicitud de devolucion`.
+- Nuevo contrato: KPIs, estados, tipos, canales, tiempos por tipo con `n` y cobertura, asesores, evolución e insights.
+- Corregido `totalGeneral`: ahora es la suma Q/D, no todas las atenciones.
+- Corregida la variación contra el periodo anterior con el mismo filtro Q/D.
+- Resolución excluye `resolucion_min_norm = 0` con primera respuesta nula.
+- Retirados FCR, SLA, país, clientes, hora, día de semana y promedios sin `n`.
+- Nuevo `backend/scripts/validar-quejas.ts` (43 comprobaciones) y `backend/scripts/perf-quejas.ts`.
+- Nuevo `backend/scripts/validar-alex.ts` (31 comprobaciones).
+
+### Frontend
+- Quejas y Devoluciones rediseñado: 4 KPI, estados, evolución actual vs. anterior, canal, tiempos por tipo, distribución por asesor e insights.
+- Eliminados dona, tabla de variación separada, ranking de clientes, tabla por país, día de semana, hora y KPI de total atenciones.
+- Documentación en `docs/QUEJAS_DEVOLUCIONES.md` y `docs/ALEX_LOPEZ.md`.
+- Captura en `docs/captures/quejas-general.html`.
+
+### Validación
+- Octubre 2026: 17 casos Q/D; 7 quejas; 10 devoluciones; 14 cerrados; 3 resueltos; 15 Correo; 2 WhatsApp.
+- Primera respuesta: n 16/17, cobertura 94.1%, mediana 498.0 min, p90 3,109.5 min, promedio 1,374.0 min.
+- Resolución: n 16/17, cobertura 94.1%, mediana 2,423.1 min, p90 5,922.0 min, promedio 2,752.8 min; 1 sin tiempo válido.
+- Evolución: 17 vs 19 (-10.5%).
+- `validar-quejas.ts`: 43/43 OK.
+- `validar-alex.ts`: 32/32 OK; conteos por asesor reconciliados contra fuentes y crecimiento vivo separado del parche.
+- Asesores existentes sin cambios; total consolidado = línea base + Alex.
+- `validar-operacion.ts` sin controles fijos de filas: valida invariantes dinámicas y reconcilia WAMETA contra la fuente.
+
+## Retiro del reporte Tendencias
+
+### Frontend
+- Eliminada la opción **Tendencias** del menú de Reportes.
+- Eliminada la página `frontend/src/pages/Tendencias.tsx` y sus componentes visuales exclusivos, definidos dentro del mismo archivo.
+- La ruta `/reportes/tendencias` ya no muestra el reporte: redirige a `/reportes` para que los enlaces antiguos no queden en blanco.
+- Retirado el título de Tendencias del mapa de navegación.
+
+### Backend
+- Retirado `GET /api/dashboard/tendencias`, junto con su controlador, servicio y método del repositorio.
+- Retirados los tipos `TendenciasKpi`, `TendenciasResponse` y `Alerta`, usados solo por ese endpoint.
+- La serie `evolucionPais`, única parte del endpoint que consumía el reporte País, se trasladó a `GET /api/dashboard/pais` como `evolucionPais`.
+- País ahora obtiene su evolución en la misma consulta que el resto de sus datos, sin una segunda petición.
+
+### Alcance
+- No se eliminaron tablas, vistas, datos históricos, filtros globales ni reglas de negocio compartidas.
+- No se agregaron gráficos ni indicadores de reemplazo.
+- Otros reportes no fueron modificados.
+
+### Validación
+- Sin referencias activas a la página, ruta, endpoint o tipos de Tendencias.
+- TypeScript limpio en backend y frontend; builds correctos.
+- `evolucionPais` conserva 260 filas y 2,845 atenciones para octubre 2026.
+- `/api/dashboard/tendencias` responde 404.
+- Smoke test OK en Resumen, Operación, País, Asesores, Categorías, Clientes, WhatsApp y Zendesk, sin errores de consola.
+- La ruta `/reportes/tendencias` redirige a `/reportes` y la navegación ya no muestra Tendencias.
+
+## Reporte Zendesk — impacto operativo
+
+### Backend
+- `zendesk` reescrito sobre la fecha real de creación (`tickets_created_at` UTC → America/Lima), no sobre la `fecha` de reporte.
+- Universo: 750 tickets en octubre 2026 vs. 729 por fecha de reporte; diferencia de 21 documentada.
+- Estados mutuamente excluyentes: cerrado, resuelto, abierto, pendiente, en espera y otros.
+- Resolución válida excluye `resolucion_min_norm = 0 AND primera_respuesta_min_norm IS NULL` (14 filas); se reporta como “sin tiempo válido”.
+- SLA exclusivo de primera respuesta ≤1,440 min, con cumple/evaluables y umbral.
+- Retiro de FCR, SLA de resolución, treemap, rankings de asesores, países, dominios, tiempos por categoría/subcategoría/asesor y tendencia histórica de backlog.
+- Backlog al corte con `NOW() AT TIME ZONE 'America/Lima'`, sin reconstrucción histórica.
+- Evolución actual vs. periodo anterior equivalente, con serie diaria completa.
+- Nuevos tipos `ZendeskKpis`, `ZendeskEstado`, `ZendeskEvolucion`, `ZendeskBacklog` y `ZendeskResponse`.
+- Nuevo `backend/scripts/validar-zendesk.ts` (15 puertas, 48 comprobaciones) y `backend/scripts/perf-zendesk.ts`.
+
+### Frontend
+- Zendesk rediseñado: 4 KPI (tickets, primera respuesta, resolución, SLA), distribución de estados, evolución actual vs. anterior, backlog, capacidad e insights.
+- Mediana y p90 como lectura principal; promedio secundario con `n` y cobertura.
+- Eliminados FCR, donuts, treemaps, rankings de asesores, países y tiempos por categoría/subcategoría/asesor.
+- Documentación en `docs/ZENDESK.md` y captura en `docs/captures/`.
+
+### Validación
+- 48/48 comprobaciones SQL OK.
+- Octubre 2026: 750 tickets; 691 cerrados; 59 resueltos; 0 abiertos/pendientes/en espera.
+- Primera respuesta: mediana 322.5 min, p90 2,354.0 min, n 664, cobertura 88.5%, SLA 81.6%.
+- Resolución: mediana 1,128.6 min, p90 4,944.0 min, n 736, cobertura 98.1%, 14 sin tiempo válido.
+- Evolución: 750 vs 807 (-7.1%).
+- Backlog al corte: 0.
+
+## Reporte WhatsApp — impacto operativo
+
+### Backend
+- `whatsapp` reescrito sobre el universo completo del canal (Wameta + Whaticket), incluyendo abiertas, cerradas y sin estado homologado.
+- Estados conciliados: cerradas + abiertas + sin estado homologado = total; los `SI`/`NO` de Whaticket no se reinterpretan.
+- Tiempos faltantes (`raw IS NULL AND min = 0`) excluidos de mediana, p90, promedio y SLA; cobertura con denominador total por plataforma.
+- Percentiles consolidados calculados sobre todos los registros válidos, no promedios ponderados de medianas por plataforma.
+- SLA exclusivo de primera respuesta ≤15 min, con cumple/evaluables y umbral.
+- Retiro de FCR, espera, regla de 20 min y meta provisional de resolución de 120 min.
+- Evolución consolidada actual vs. periodo anterior, serie diaria completa, horas y días.
+- Excepciones operativas: abiertas >24 h y cerradas/sin estado >8 h, con estado y tipo de tiempo.
+- Nuevo `backend/scripts/validar-whatsapp.ts` (57 comprobaciones) y `backend/scripts/perf-whatsapp.ts`.
+
+### Frontend
+- WhatsApp rediseñado: 4 KPI, distribución de estados, evolución consolidada, demanda por hora y por día, tabla de plataformas, excepciones e insights.
+- Nombre visible de la plataforma estandarizado como **Wameta**.
+- Eliminados el mapa de calor, Paretos, ranking de asesores, panel de riesgos, país → categoría → asesor y la tabla de conversaciones más largas.
+- Documentación en `docs/WHATSAPP.md` y captura en `docs/captures/`.
+
+### Validación
+- 57/57 comprobaciones SQL OK.
+- Octubre 2026: 2,116 conversaciones; 2,044 Wameta; 72 Whaticket; 2,042 cerradas; 2 abiertas; 72 sin estado.
+- Primera respuesta: mediana 4.8 min, p90 24.0 min, n 2,008, cobertura 94.9%, SLA 81.3%.
+- Resolución: mediana 52.1 min, p90 126.0 min, n 2,089, cobertura 98.7%.
+- Evolución: 2,116 vs 2,477 (-14.6%).
+- Pruebas backend, TypeScript y builds.
+
+## Reporte Clientes — comportamiento y seguimiento
+
+### Backend
+- `clientesV2` reescrito sobre atenciones finalizadas y fecha real de creación (Zendesk UTC → America/Lima; WhatsApp local).
+- Identificación de clientes con dominio válido y fallback corporativo desde el correo de Zendesk; exclusión de proveedores gratuitos y trazabilidad de los recuperados.
+- Separación explícita del grupo “No identificados”, fuera de rankings, promedios y seguimiento.
+- SLA por canal con denominador `conDato`; tiempo con `AVG(resolucion_min_norm)`.
+- Nuevos endpoints de clientes paginados, categorías, subcategorías, tickets paginados y evolución.
+- Reemplazo del score de riesgo por “Clientes que requieren seguimiento” con cuatro señales y motivos explicables.
+- Exportación por nivel: Excel para agregados y CSV para tickets.
+- Nuevo `backend/scripts/validar-clientes.ts` (60 comprobaciones) y `backend/scripts/perf-clientes.ts`.
+
+### Frontend
+- Clientes rediseñado: 4 KPI, franja de calidad, seguimiento, explorador Cliente → Categoría → Subcategoría → Tickets, ranking Top 20 con “Ver todos”, mezcla multicanal y evolución actual vs. anterior.
+- Eliminados los gráficos de categorías/subcategorías del cliente, el donut de canales y la tabla de score.
+- Ticket visible y enlace externo a Zendesk solo con subdominio válido.
+- Documentación en `docs/CLIENTES.md` y capturas en `docs/captures/`.
+
+### Validación
+- 60/60 comprobaciones SQL OK.
+- Octubre 2026: 2,792 atenciones; 907 clientes identificados; 2,480 identificadas; 312 no identificadas; 43 clientes con seguimiento.
+- Zona horaria validada con tickets de medianoche (35177, 35175).
+- Pruebas backend, TypeScript y builds.
+
+## Reporte Categorías — atenciones finalizadas
+
+### Backend
+- `categoriasV2` ahora usa el universo de atenciones finalizadas (`cerrado` + `resuelto`), el mismo de Resumen, y expone `universo` con total, rango, excluidas, abiertas y sin estado.
+- SLA por canal desde `SLA_MINUTOS.resolucion` (120 / 1,440 / 480 min), con denominador `conDato` y campos `cumple`, `noCumple`, `pctCumple`, `pctIncumple`.
+- Ranking de tiempo con `AVG(resolucion_min_norm)`; se deja de usar la suma de primera respuesta + resolución.
+- Pareto de subcategorías contextual agrupado por categoría.
+- Análisis por asesor con tabla explícita de equivalencias (15 originales → 7 consolidados), `asesorDetalle` y `asesorTrazabilidad`.
+- Retiro de matrices, impacto y subcategorías de tiempo/SLA del contrato.
+- Opción aditiva `fechaRangoSargable` en `construirWhere`, usada solo por Categorías; reduce el tiempo de consulta del rango completo de ~6.9 s a ~3.0 s.
+- Nuevo `backend/scripts/validar-categorias.ts` (47 comprobaciones) y `backend/scripts/perf-categorias.ts`.
+
+### Frontend
+- Categorías rediseñado: 4 KPI, Pareto de categorías con referencia 80%, Pareto contextual de subcategorías, rankings de tiempo e incumplimiento, análisis de asesor con filtros y tabla jerárquica.
+- Eliminados los mapas de calor Categoría × Asesor y Subcategoría × Asesor, la burbuja de impacto y los gráficos de subcategorías por tiempo/SLA.
+- Categorías técnicas identificadas visualmente; bloque `Sin asignar` solo si existe.
+- Documentación en `docs/CATEGORIAS.md`.
+
+### Validación
+- 47/47 comprobaciones SQL OK; total 22,777; evaluables SLA 22,753; técnicas 4,812; 7 asesores; 2 tickets duplicados documentados.
+- 519 pruebas backend OK, TypeScript limpio y builds OK.
+
+## Reporte Operación — planificación de capacidad
+
+### Backend
+- Nueva base de demanda para Operación: fecha/hora de creación real, con Zendesk convertido de UTC a America/Lima y WhatsApp en hora local.
+- Deduplicación condicional de tickets Meta/Whaticket para no ocultar filas al filtrar un canal individual.
+- KPI de total, promedio por día calendario, día pico y hora pico con comparación contra periodo anterior.
+- Heatmap con dimensión día × hora, días observados por DOW y soporte para celdas sin datos.
+- Evolución diaria, semanal, mensual y trimestral con serie actual y anterior, además de desagregación por subcanal.
+- Top de asesores y categorías sobre demanda recibida.
+- Nuevo `backend/scripts/validar-operacion.ts` y `backend/scripts/check-zendesk-time.ts`.
+
+### Frontend
+- Operación rediseñado: 4 KPI, mapa de calor protagonista, hallazgos, evolución con granularidad, canal, asesor y categoría.
+- Eliminados los gráficos redundantes de curva horaria y carga por día.
+- Rango inicial de últimos 90 días.
+- Aviso de muestra corta y ocultamiento de evolución para rangos de un día.
+- Reconciliación visible entre consolidado y suma de canales.
+
+### Validación
+- Zendesk: `tickets_created_at` coincide con el `created_at` UTC de la API en 5 tickets contrastados.
+- `validar-operacion.ts`: 27/27 comprobaciones OK.
+- Base cruda 23,381; consolidada 23,379; 2 duplicados entre canales.
+- 519 pruebas backend OK; TypeScript y builds OK.
+
+## Reporte Resumen — universo de atenciones finalizadas
+
+### Backend
+- El reporte Resumen calcula todos sus indicadores sobre `estado_homologado IN ('cerrado','resuelto')`.
+- Nuevos KPI en `/dashboard/resumen`: cumplimiento de primera respuesta y resolución con conteos dentro/fuera/con dato, además de promedios que ignoran tiempos nulos.
+- Tiempos promedio agrupados por `subcanal` (WATICKET, WAMETA, ZENDESK), sin mezclar canales.
+- Ranking de asesores calculado solo con atenciones finalizadas; se agrega cumplimiento de resolución sin cambiar la fórmula del score.
+- `/dashboard/detalle` acepta `universo=final`; el Resumen lo envía siempre.
+- Periodo anterior del Resumen corregido para incluir el día completo.
+- Nuevo script `backend/scripts/validar-resumen.ts`.
+
+### Frontend
+- Resumen reducido a 4 KPI: atenciones finalizadas, cumplimiento de primera respuesta, cumplimiento de resolución y tiempo promedio de resolución.
+- Se eliminan las tarjetas de atenciones cerradas y cumplimiento SLA duplicado.
+- Una sola distribución por canal operativo, con cantidad y porcentaje.
+- Top 3 asesores con cumplimiento de primera respuesta y resolución.
+- País y categoría compactos, top 8 sin scroll interno.
+- Detalle de atenciones sin selector de estados; solo cerradas/resueltas.
+
+### Validación
+- `npx tsx backend/scripts/validar-resumen.ts`: 40/40 comprobaciones OK.
+- Línea base 22,765 finalizadas verificada; el dato posterior pasó a 22,766 por una nueva atención finalizada.
+- 519 pruebas backend OK.
+- TypeScript y builds backend/frontend OK.
+
+## Calidad de Registro — reestructuración UX/UI ejecutiva
+
+### Frontend
+- Resumen ejecutivo reducido a 4 tarjetas: cumplimiento de categorización, cumplimiento de vinculación de dominio y dos tarjetas de pendientes.
+- Total analizado como chip contextual; se eliminó la tarjeta de total.
+- Dos gráficos de evolución simplificados: categorizadas/pendientes y con dominio/sin dominio, con el porcentaje como línea principal.
+- Comparativo por canal en una única tabla ordenable con indicadores visuales de mejor/peor cumplimiento.
+- Terminología ejecutiva: se ocultaron homologación, dominio válido, brechas y cumplimiento integral de la vista principal.
+- Indicadores técnicos movidos a la sección colapsada **Diagnóstico técnico**.
+- Tabla histórica completa movida a la sección colapsada **Detalle histórico por periodo**.
+- Exportación Excel reorganizada: Resumen ejecutivo, Evolución, Por canal, Diagnóstico, Detalle histórico y Filtros.
+- Sin cambios en backend, endpoint, SQL, reglas de negocio, 835 validaciones ni 519 pruebas.
+
+## Calidad de Registro — seguimiento de categorización y dominios
+
+### Backend
+- Nuevo endpoint `GET /api/dashboard/calidad-registro` con filtros globales de fecha, canal (`subcanal`) y granularidad (`semana`, `mes`, `trimestre`).
+- Nuevo repositorio `calidadRegistro.repository.ts`: una sola lectura de `v_unificado_norm` para rango actual y anterior, deduplicación consolidada Meta/Whaticket y separación de Zendesk.
+- Indicadores independientes:
+  - categoría registrada (texto de origen válido) y categoría homologada (catálogo de 13 categorías);
+  - dominio informado (no vacío) y dominio válido (`isValidDomainFormat`);
+  - cumplimiento integral (homologada + dominio válido) con cuatro escenarios mutuamente excluyentes.
+- Regla SQL de dominio válido espejo de `isValidDomainFormat`; validación de 0 discrepancias contra la función JS.
+- Invariantes reforzadas en SQL y en TypeScript: `cat_homologadas <= cat_registradas <= total`, `dom_validos <= dom_informados <= total`, escenarios = total.
+- `construirWhere` acepta `endExclusive` opcional para no excluir los segundos del minuto final.
+
+### Frontend
+- Nueva pestaña **Calidad de Registro** en Reportes (`/reportes/calidad-registro`).
+- Resumen ejecutivo con 8 KPIs, brechas de homologación/dominio y comparativo contra el periodo anterior.
+- Evolución de categorización y dominio con barras apiladas y líneas de porcentaje; vista consolidada o por canal.
+- Comparativo por canal, distribución de los cuatro escenarios y hallazgos automáticos.
+- Tabla histórica con vistas Base/Calidad/Integral/Completa, orden, filtros y exportación a Excel.
+- Rango inicial de últimos 12 meses; sincronización de la barra global de filtros.
+
+### Validación
+- `npx tsx backend/scripts/validar-calidad-registro.ts`: 835/835 comprobaciones OK contra PostgreSQL.
+- `vitest`: 519 pruebas OK (incluye 42 nuevas pruebas del módulo).
+- Builds backend y frontend OK.
+- Documentación: `docs/CALIDAD_REGISTRO.md`.
+
 ## AT-002 — Tickets y Tareas estilo Micro-Services en el Panel Operativo
 
 ### Backend

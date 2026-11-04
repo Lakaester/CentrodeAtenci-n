@@ -3638,5 +3638,47 @@
     "fechaCreacion": "2026-09-30T17:09:22.703Z",
     "fechaActualizacion": "2026-09-30T17:09:22.706Z",
     "activo": true
+  },
+  {
+    "id": "cli_1791125111761_v1pw",
+    "nombre": "Alvaro Torres",
+    "correoPrincipal": "alvarotmas@gmail.com",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "dondeyolo.restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-10-04T14:45:11.761Z",
+    "ultimoContacto": "2026-10-04T14:45:11.761Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-10-04T14:45:11.761Z",
+    "fechaActualizacion": "2026-10-04T14:45:11.768Z",
+    "activo": true
+  },
+  {
+    "id": "cli_1791125320099_pehg",
+    "nombre": "Jecos",
+    "correoPrincipal": "jecos@ilds.pe",
+    "correosSecundarios": [],
+    "telefonos": [],
+    "empresa": null,
+    "pais": null,
+    "dominios": [
+      "lacasadepepe.restaurant.pe"
+    ],
+    "categorias": [],
+    "subcategorias": [],
+    "totalTickets": 0,
+    "primerContacto": "2026-10-04T14:48:40.099Z",
+    "ultimoContacto": "2026-10-04T14:48:40.099Z",
+    "ultimoTicket": null,
+    "fechaCreacion": "2026-10-04T14:48:40.099Z",
+    "fechaActualizacion": "2026-10-04T14:48:40.109Z",
+    "activo": true
   }
 ]

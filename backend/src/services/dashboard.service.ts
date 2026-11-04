@@ -27,6 +27,41 @@ export const dashboardService = {
   async clientesV2(filters: DashboardFilters) {
     return unificadoRepository.clientesV2(filters);
   },
+  async clientesLista(
+    filters: DashboardFilters,
+    opts: { page?: number; pageSize?: number; search?: string; all?: boolean },
+  ) {
+    return unificadoRepository.clientesLista(filters, opts);
+  },
+  async clienteCategorias(filters: DashboardFilters, clave: string) {
+    return unificadoRepository.clienteCategorias(filters, clave);
+  },
+  async clienteSubcategorias(
+    filters: DashboardFilters,
+    clave: string,
+    categoria: string,
+  ) {
+    return unificadoRepository.clienteSubcategorias(filters, clave, categoria);
+  },
+  async clienteTickets(
+    filters: DashboardFilters,
+    params: {
+      clave: string;
+      categoria: string;
+      subcategoria: string;
+      page?: number;
+      pageSize?: number;
+      all?: boolean;
+    },
+  ) {
+    return unificadoRepository.clienteTickets(filters, params);
+  },
+  async clienteEvolucion(
+    filters: DashboardFilters,
+    params: { clave: string; granularidad: "diaria" | "semanal" | "mensual" },
+  ) {
+    return unificadoRepository.clienteEvolucion(filters, params);
+  },
 
   async whatsapp(filters: DashboardFilters) {
     return unificadoRepository.whatsapp(filters);
@@ -34,10 +69,6 @@ export const dashboardService = {
 
   async zendesk(filters: DashboardFilters) {
     return unificadoRepository.zendesk(filters);
-  },
-
-  async tendencias(filters: DashboardFilters) {
-    return unificadoRepository.tendencias(filters);
   },
 
   async pais(filters: DashboardFilters) {

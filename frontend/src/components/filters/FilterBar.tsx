@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
@@ -42,6 +42,11 @@ export function FilterBar() {
   const { filters, setFilters, clear } = useFilters();
   const [draft, setDraft] = useState<DashboardFilters>(filters);
   const { data: opciones } = useQuery({ queryKey: ["opciones"], queryFn: fetchOpciones });
+
+  // Mantiene la barra sincronizada cuando otra vista/preset cambia los filtros globales.
+  useEffect(() => {
+    setDraft(filters);
+  }, [filters]);
 
   const toggle = (key: keyof DashboardFilters, value: string) => {
     setDraft((d) => {
