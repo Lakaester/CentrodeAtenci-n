@@ -93,6 +93,12 @@ export interface TareabiTicketLogDTO {
     tarea_estado: string | null;
     tarea_comentario: string | null;
     responsable: string | null;
+    /** Referencia declarada en la tarea (URL o código). */
+    referencia: string | null;
+    /** Descripción funcional/técnica de la tarea. */
+    descripcion: string | null;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
     historial: Array<{
       fecha: string | null;
       persona: string | null;

@@ -83,6 +83,11 @@ export class TareabiService {
       const estado = this.estadoActualDeLog(ultima, "tarea_estado");
       const valorActualPlano = this.parseJsonPlano(ultima.logtabla_valoractual);
       const comentario = (valorActualPlano?.tarea_comentario as string | undefined) ?? null;
+      const texto = (v: unknown): string | null => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s && s !== "-" ? s : null;
+      };
 
       const historial = entradas.map((log) => ({
         fecha: log.logtabla_fecharegistro ?? null,
@@ -96,7 +101,17 @@ export class TareabiService {
           })),
       }));
 
-      tareas.push({ tareabi_id: tareabiId, tarea_estado: estado, tarea_comentario: comentario, responsable: null, historial });
+      tareas.push({
+        tareabi_id: tareabiId,
+        tarea_estado: estado,
+        tarea_comentario: comentario,
+        responsable: texto(valorActualPlano?.tarea_dev),
+        referencia: texto(valorActualPlano?.tarea_referencia),
+        descripcion: texto(valorActualPlano?.tarea_descripcion),
+        fecha_inicio: texto(valorActualPlano?.tarea_fechainicio),
+        fecha_fin: texto(valorActualPlano?.tarea_fechafin),
+        historial,
+      });
     }
     return tareas;
   }

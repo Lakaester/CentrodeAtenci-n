@@ -1,8 +1,6 @@
-import { useState } from "react";
-import { SeccionColapsable, ND, fmtFecha } from "../HistoriaClinicaUI";
-import { useTareabiLogs } from "@/modules/tareabi";
-import type { TareabiTareaLog } from "@/modules/tareabi";
+import { SeccionColapsable, fmtFecha } from "../HistoriaClinicaUI";
 import type { HistoriaClinicaData } from "../../hooks/useHistoriaClinicaData";
+import { TicketsDev } from "./TicketsDev";
 import { cn } from "@/lib/utils";
 import { normalizeDomain } from "@/domain/normalizacion";
 
@@ -12,7 +10,7 @@ import { normalizeDomain } from "@/domain/normalizacion";
  * Responde: "¿Qué actividad tiene o ha tenido este cliente/unidad?"
  *
  * Incluye:
- *   - Tickets (de desarrollo LocalBI, con logs de Tareabi bajo demanda).
+ *   - Tickets de desarrollo (TICKETS DEV, LocalBI + Tareabi bajo demanda).
  *   - Tareas sueltas.
  *   - Actividad en COPE (atenciones v_unificado_norm).
  *   - Módulos utilizados.
@@ -26,17 +24,7 @@ export function ActividadUnidad({ data }: { data: HistoriaClinicaData }) {
   return (
     <div className="space-y-0.5">
       {/* Tickets de desarrollo */}
-      <SeccionColapsable title="Tickets" defaultOpen badge={tickets.length ? <span className="text-[9px] text-black-45">{tickets.length}</span> : undefined}>
-        {tickets.length === 0 ? (
-          <p className="text-[10px] text-black-25">Sin tickets registrados</p>
-        ) : (
-          <div className="space-y-1">
-            {tickets.map((t) => (
-              <TicketExpandible key={t.ticket_id} ticket={t} />
-            ))}
-          </div>
-        )}
-      </SeccionColapsable>
+      <TicketsDev tickets={tickets} />
 
       {/* Tareas sueltas */}
       <SeccionColapsable title="Tareas" badge={tareasSueltas.length ? <span className="text-[9px] text-black-45">{tareasSueltas.length}</span> : undefined}>
@@ -236,108 +224,3 @@ function SoporteKpi({ label, value, tone, wide }: { label: string; value: React.
   );
 }
 
-interface TicketLocal {
-  ticket_id: string;
-  localbi_id: string;
-  link_dominio: string;
-  tipo: string;
-  subcategoria: string;
-  titulo: string;
-  estado: string;
-  fecha_creacion: string;
-  area_responsable: string;
-  tareas?: Array<{ tarea_id: string; titulo: string; estado: string; responsable: string; conclusion: string }>;
-}
-
-/** Ticket expandible que carga logs de Tareabi bajo demanda. */
-function TicketExpandible({ ticket }: { ticket: TicketLocal }) {
-  const [abierto, setAbierto] = useState(false);
-  const primeraTareaId = ticket.tareas?.[0]?.tarea_id ?? null;
-  const { data: logs, isLoading } = useTareabiLogs(abierto ? primeraTareaId : null, abierto ? ticket.ticket_id : null);
-
-  const estadoTicket = abierto && logs ? logs.ticket_estado_actual ?? ticket.estado : ticket.estado;
-  const tareas: TareabiTareaLog[] = abierto && logs ? logs.tareas : [];
-
-  return (
-    <div className="rounded border border-black-10 bg-light p-1.5">
-      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center gap-2 text-left">
-        <span className="font-mono text-[9px] font-semibold text-primary">#{ticket.ticket_id}</span>
-        <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-black-85">{ticket.titulo || "—"}</span>
-        <EstadoTareaBadge estado={estadoTicket} />
-      </button>
-
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-black-45">
-        <span>{ticket.tipo || "—"}</span>
-        <span>{ticket.subcategoria || "—"}</span>
-        <span>{fmtFecha(ticket.fecha_creacion)}</span>
-        {ticket.area_responsable && <span>· {ticket.area_responsable}</span>}
-        {!abierto && <button type="button" onClick={() => setAbierto(true)} className="text-primary underline">Ver detalle</button>}
-      </div>
-
-      {abierto && (
-        <div className="mt-1.5 border-t border-black-10 pt-1.5">
-          {!primeraTareaId ? (
-            <p className="text-[9px] text-black-25">Sin tareas asociadas para consultar estado/comentario.</p>
-          ) : isLoading ? (
-            <p className="text-[9px] text-black-25">Consultando estado y comentarios…</p>
-          ) : !logs ? (
-            <p className="text-[9px] text-black-25">No se pudo consultar el detalle de Tareabi.</p>
-          ) : (
-            <div className="space-y-2">
-              {logs.ticket_estado_actual && (
-                <div className="flex items-center gap-1.5 text-[9px] text-black-45">
-                  <span>Estado del ticket:</span><EstadoTareaBadge estado={logs.ticket_estado_actual} />
-                </div>
-              )}
-              {tareas.length === 0 && (
-                <p className="text-[9px] text-black-25">Sin tareas con historial.</p>
-              )}
-              {tareas.map((t) => (
-                <div key={t.tareabi_id} className="rounded border border-black-5 bg-white p-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[9px] text-primary">#{t.tareabi_id}</span>
-                    <EstadoTareaBadge estado={t.tarea_estado} />
-                  </div>
-                  {t.tarea_comentario && (
-                    <p className="mt-1 whitespace-pre-line text-[9px] text-black-65">{t.tarea_comentario}</p>
-                  )}
-                  {t.historial.length > 0 && (
-                    <div className="mt-1.5 space-y-0.5 border-t border-black-5 pt-1">
-                      <p className="text-[8px] font-medium uppercase tracking-wider text-black-25">Historial</p>
-                      {t.historial.map((h, i) => (
-                        <div key={i} className="flex flex-wrap items-center gap-x-2 text-[8px] text-black-45">
-                          <span className="shrink-0 tabular-nums">{fmtFecha(h.fecha)}</span>
-                          {h.persona && <span className="shrink-0 font-medium text-black-65">{h.persona}</span>}
-                          {h.cambios.map((c, j) => (
-                            <span key={j} className="rounded bg-black-5 px-1 text-[8px] text-black-45">
-                              {c.campo}: {c.anterior || "—"} → {c.nuevo || "—"}
-                            </span>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Badge de estado de ticket/tarea. */
-function EstadoTareaBadge({ estado }: { estado: string | null | undefined }) {
-  if (!estado) return <ND />;
-  return <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-medium", tonoEstadoTarea(estado))}>{estado}</span>;
-}
-
-/** Tono semántico del estado de una tarea/ticket (presentación). */
-function tonoEstadoTarea(estado: string | null | undefined): string {
-  const e = (estado ?? "").toLowerCase();
-  if (/rechaz/.test(e)) return "bg-danger-5 text-danger";
-  if (/complet|hecho|resuelt|cerrad/.test(e)) return "bg-success-5 text-success";
-  if (/proceso|curso|prueba/.test(e)) return "bg-primary-5 text-primary";
-  return "bg-black-5 text-black-45";
-}

@@ -16,6 +16,10 @@ export interface TareabiTareaLog {
   tarea_estado: string | null;
   tarea_comentario: string | null;
   responsable: string | null;
+  referencia: string | null;
+  descripcion: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
   historial: TareabiHistorialEntrada[];
 }
 

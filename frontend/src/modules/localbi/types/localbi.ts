@@ -36,6 +36,11 @@ export interface LocalbiTarea {
   detalle: string;
   conclusion: string;
   sprint: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  fecha_tentativa?: string;
+  fecha_solicitud?: string;
+  registrado_por?: string;
 }
 
 export interface LocalbiTicket {
