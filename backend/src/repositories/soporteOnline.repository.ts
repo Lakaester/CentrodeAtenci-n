@@ -35,6 +35,8 @@ export interface SoporteResumen {
   ultima_incidencia: string | null;
   prom_espera_min: number | null;
   prom_solucion_min: number | null;
+  esperaN: number;
+  solucionN: number;
   categorias: { nombre: string; cantidad: number }[];
   estados: { nombre: string; cantidad: number }[];
   porLocal: { local: string; cantidad: number }[];
@@ -60,6 +62,34 @@ function agrupar<T>(filas: T[], k: (r: T) => string | null | undefined): { nombr
     m.set(v, (m.get(v) ?? 0) + 1);
   }
   return [...m.entries()].map(([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad);
+}
+
+/**
+ * Agrupa locales por nombre normalizado (trim, espacios y mayúsculas).
+ * Conserva como etiqueta la variante más frecuente para no inventar nombres.
+ * Los registros sin local se exponen explícitamente.
+ */
+function agruparLocales(filas: IncidenciaRow[]): { local: string; cantidad: number }[] {
+  const grupos = new Map<string, { total: number; variantes: Map<string, number> }>();
+  for (const f of filas) {
+    const raw = (f.local_nombre ?? "").trim().replace(/\s+/g, " ");
+    const key = raw ? raw.toLocaleLowerCase("es-PE") : "__sin_local__";
+    const g = grupos.get(key) ?? { total: 0, variantes: new Map<string, number>() };
+    g.total += 1;
+    if (raw) g.variantes.set(raw, (g.variantes.get(raw) ?? 0) + 1);
+    grupos.set(key, g);
+  }
+  return [...grupos.entries()]
+    .map(([key, g]) => {
+      if (key === "__sin_local__") return { local: "Sin local asignado", cantidad: g.total };
+      const etiqueta =
+        [...g.variantes.entries()].sort((a, b) => {
+          if (b[1] !== a[1]) return b[1] - a[1];
+          return a[0].localeCompare(b[0], "es");
+        })[0]?.[0] ?? key;
+      return { local: etiqueta, cantidad: g.total };
+    })
+    .sort((a, b) => b.cantidad - a.cantidad || a.local.localeCompare(b.local, "es"));
 }
 
 export const soporteOnlineRepository = {
@@ -109,9 +139,11 @@ export const soporteOnlineRepository = {
         ultima_incidencia: fechas.length ? fechas[fechas.length - 1].toISOString() : null,
         prom_espera_min: conEspera.length ? Math.round(conEspera.reduce((a, f) => a + (f.tiempo_espera_minutos ?? 0), 0) / conEspera.length) : null,
         prom_solucion_min: conSolucion.length ? Math.round(conSolucion.reduce((a, f) => a + (f.tiempo_solucion_minutos ?? 0), 0) / conSolucion.length) : null,
+        esperaN: conEspera.length,
+        solucionN: conSolucion.length,
         categorias: agrupar(filasD, (f) => f.tipoproblema),
         estados: agrupar(filasD, (f) => f.estado),
-        porLocal: agrupar(filasD, (f) => f.local_nombre).map((g) => ({ local: g.nombre, cantidad: g.cantidad })),
+        porLocal: agruparLocales(filasD),
       };
       // últimas incidencias ordenadas por fecha desc
       ultimas[d] = [...filasD].sort((a, b) => b.ticket_timestamp.getTime() - a.ticket_timestamp.getTime()).slice(0, 20);

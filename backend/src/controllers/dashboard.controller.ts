@@ -7,6 +7,16 @@ import { clientesExportService } from "../services/clientesExport.service";
 import type { DashboardFilters } from "../types";
 
 export const dashboardController = {
+  async gerencial(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filters = (req as Request & { filters: DashboardFilters }).filters ?? {};
+      const data = await dashboardService.gerencial(filters);
+      res.json({ ok: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async resumen(req: Request, res: Response, next: NextFunction) {
     try {
       const filters = (req as Request & { filters: DashboardFilters }).filters ?? {};

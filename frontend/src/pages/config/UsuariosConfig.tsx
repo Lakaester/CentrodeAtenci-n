@@ -65,7 +65,7 @@ export default function UsuariosConfig() {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-black-85"><Users size={15} className="text-primary" /> Usuarios</h2>
-            <p className="mt-0.5 text-xs text-black-45">Administración de usuarios y acceso a COPE.</p>
+            <p className="mt-0.5 text-xs text-black-45">Administración de usuarios y acceso a C.O.S.E.</p>
           </div>
           <button type="button" onClick={abrirNuevo} className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[11px] font-medium text-white hover:bg-primary-85">
             <Plus size={13} /> Nuevo usuario

@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  /* PRIMARY */
-  --primary: oklch(0.62 0.20 255);
-  --primary-85: oklch(0.66 0.18 255);
-  --primary-65: oklch(0.70 0.16 255);
-  --primary-45: oklch(0.76 0.13 255);
-  --primary-25: oklch(0.82 0.10 255);
-  --primary-10: oklch(0.90 0.06 255);
-  --primary-5: oklch(0.96 0.03 255);
+  /* PRIMARY — identidad Restaurant.pe (naranja accesible) */
+  --primary: oklch(0.5553 0.1455 49);      /* #B45309 · acciones/activo, 5.02:1 con blanco */
+  --primary-85: oklch(0.4732 0.1247 46.2); /* #92400E · hover accesible */
+  --primary-65: oklch(0.62 0.15 49);
+  --primary-45: oklch(0.6970 0.1713 51);   /* #EE781F · naranja de marca para acentos */
+  --primary-25: oklch(0.8143 0.1064 60.4); /* #F5B27A */
+  --primary-10: oklch(0.9434 0.0323 61.4); /* #FDE8D7 */
+  --primary-5: oklch(0.9780 0.0144 64.3);  /* #FFF6EE */
 
   /* SUCCESS */
   --success: oklch(0.70 0.16 145);
@@ -80,24 +80,24 @@
   --light-10: oklch(0.98 0.008 250);
   --light-5: oklch(0.99 0.005 250);
 
-  /* DARK */
-  --dark: oklch(0.25 0 0);
-  --dark-45: oklch(0.45 0 0);
-  --dark-25: oklch(0.60 0 0);
-  --dark-10: oklch(0.75 0 0);
+  /* DARK — carbón Restaurant.pe */
+  --dark: oklch(0.4599 0.0197 215.6);      /* #4C5B5F */
+  --dark-45: oklch(0.55 0.015 215.6);
+  --dark-25: oklch(0.65 0.010 215.6);
+  --dark-10: oklch(0.78 0.006 215.6);
 
-  /* GREYS / BLACK */
-  --black: oklch(0.25 0 0);
-  --black-85: oklch(0.35 0 0);
-  --black-65: oklch(0.45 0 0);
-  --black-45: oklch(0.60 0 0);
-  --black-25: oklch(0.75 0 0);
-  --black-10: oklch(0.88 0 0);
-  --black-5: oklch(0.94 0 0);
+  /* GREYS / BLACK — neutros con matiz carbón */
+  --black: oklch(0.28 0.014 215.6);
+  --black-85: oklch(0.4599 0.0197 215.6);  /* #4C5B5F */
+  --black-65: oklch(0.55 0.015 215.6);
+  --black-45: oklch(0.56 0.010 215.6);
+  --black-25: oklch(0.70 0.006 215.6);
+  --black-10: oklch(0.88 0.004 215.6);
+  --black-5: oklch(0.94 0.003 215.6);
 
   --white: oklch(1 0 0);
 
-  --border: oklch(0.88 0 0);
+  --border: oklch(0.88 0.004 215.6);
   --radius: 4px;
   --ring: transparent;
 }

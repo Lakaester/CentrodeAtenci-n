@@ -40,6 +40,8 @@ export const soporteOnlineService = {
         ultima_incidencia: null,
         prom_espera_min: null,
         prom_solucion_min: null,
+        esperaN: 0,
+        solucionN: 0,
         categorias: [],
         estados: [],
         porLocal: [],

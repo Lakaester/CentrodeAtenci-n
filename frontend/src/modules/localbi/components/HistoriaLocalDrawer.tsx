@@ -1,7 +1,8 @@
 import { X, ArrowLeft } from "lucide-react";
 import type { HistoriaLocal, LocalbiTarea, LocalbiTicket } from "@/modules/localbi";
-import { EstadoLocalBadge, fmtMoneda, fmtFecha, fmtNps } from "./HistoriaClinicaUI";
+import { EstadoLocalBadge, fmtMoneda, fmtFecha, fmtNps, useHistoriaDensity } from "./HistoriaClinicaUI";
 import { normalizeDomain } from "@/domain/normalizacion";
+import { cn } from "@/lib/utils";
 
 interface Props {
   data: HistoriaLocal;
@@ -10,34 +11,38 @@ interface Props {
 }
 
 function Fila({ label, children }: { label: string; children: React.ReactNode }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   return (
-    <div className="flex items-center justify-between py-0.5">
-      <span className="shrink-0 text-[9px] text-black-25">{label}</span>
-      <span className="ml-2 max-w-[60%] truncate text-right text-[10px] font-medium text-black-85">{children}</span>
+    <div className={cn("flex items-center justify-between", comfortable ? "py-1.5" : "py-0.5")}>
+      <span className={cn("shrink-0", comfortable ? "text-[12px] text-black-45" : "text-[9px] text-black-25")}>{label}</span>
+      <span className={cn("ml-2 max-w-[60%] truncate text-right font-medium text-black-85", comfortable ? "text-[13px]" : "text-[10px]")}>{children}</span>
     </div>
   );
 }
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   return (
-    <div className="mb-4">
-      <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-black-45">{titulo}</p>
-      <div className="rounded-lg border border-black-10 bg-light p-3">{children}</div>
+    <div className={comfortable ? "mb-5" : "mb-4"}>
+      <p className={cn("font-semibold uppercase tracking-wider text-black-45", comfortable ? "mb-2 text-[13px]" : "mb-1.5 text-[9px]")}>{titulo}</p>
+      <div className={cn("rounded-lg border border-black-10", comfortable ? "bg-white p-4" : "bg-light p-3")}>{children}</div>
     </div>
   );
 }
 
 function Kpi({ label, value }: { label: string; value: React.ReactNode }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   return (
-    <div className="rounded border border-black-10 bg-light px-2 py-1.5">
-      <p className="text-sm font-semibold leading-tight text-black-85">{value}</p>
-      <p className="mt-0.5 text-[9px] text-black-45">{label}</p>
+    <div className={cn("rounded-lg border border-black-10", comfortable ? "bg-white px-4 py-3" : "bg-light px-2 py-1.5")}>
+      <p className={cn("leading-tight text-black-85", comfortable ? "text-[24px] font-bold" : "text-sm font-semibold")}>{value}</p>
+      <p className={cn(comfortable ? "mt-1 text-[13px] text-black-65" : "mt-0.5 text-[9px] text-black-45")}>{label}</p>
     </div>
   );
 }
 
 export function HistoriaLocalDrawer({ data, onVolver, onCerrar }: Props) {
   const l = data.local;
+  const comfortable = useHistoriaDensity() === "comfortable";
   const resumenAct = data.actividadLocal.resumen as { total: number; canales: { nombre: string; cantidad: number }[]; categorias: { nombre: string; cantidad: number }[]; ultima_atencion: string | null };
   const soporte = data.soporte ? data.soporte.resumen as { total: number; abiertas: number; cerradas: number; ultima_incidencia: string | null; categorias: { nombre: string; cantidad: number }[] } : null;
 
@@ -45,15 +50,21 @@ export function HistoriaLocalDrawer({ data, onVolver, onCerrar }: Props) {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={onCerrar} />
       <div className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col border-l border-black-10 bg-white">
-        <div className="flex items-center justify-between border-b border-black-10 px-4 py-3">
+        <div className={cn("flex items-center justify-between border-b border-black-10", comfortable ? "px-5 py-4" : "px-4 py-3")}>
           <div className="min-w-0">
-            <button type="button" onClick={onVolver} className="inline-flex items-center gap-1 text-[9px] font-medium text-primary hover:underline">
-              <ArrowLeft size={11} /> Volver al cliente
+            <button
+              type="button"
+              onClick={onVolver}
+              className={cn("inline-flex items-center gap-1 font-medium text-primary hover:underline", comfortable ? "text-[12px]" : "text-[9px]")}
+            >
+              <ArrowLeft size={comfortable ? 14 : 11} /> Volver al cliente
             </button>
-            <h3 className="truncate text-xs font-semibold text-black-85">{l?.nombre || "Local"}</h3>
-            <p className="font-mono text-[9px] text-black-45">{normalizeDomain(l?.link_dominio || data.dominio) || "—"}</p>
+            <h3 className={cn("truncate font-semibold text-black-85", comfortable ? "text-[18px]" : "text-xs")}>{l?.nombre || "Local"}</h3>
+            <p className={cn("font-mono text-black-45", comfortable ? "text-[13px]" : "text-[9px]")}>
+              {normalizeDomain(l?.link_dominio || data.dominio) || "—"}
+            </p>
           </div>
-          <button type="button" onClick={onCerrar} className="rounded p-1 text-black-45 hover:bg-light"><X size={14} /></button>
+          <button type="button" onClick={onCerrar} className="rounded p-1 text-black-45 hover:bg-light"><X size={comfortable ? 18 : 14} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -74,8 +85,8 @@ export function HistoriaLocalDrawer({ data, onVolver, onCerrar }: Props) {
             <Kpi label="NPS" value={fmtNps(data.nps?.llamadabi_nps != null ? Number(data.nps.llamadabi_nps) : null)} />
           </div>
 
-          {/* Actividad COPE por local */}
-          <Seccion titulo="Actividad COPE">
+          {/* COSE por local */}
+          <Seccion titulo="COSE">
             {!data.disponible.actividadLocal && !data.disponible.actividadDominio ? (
               <p className="text-[10px] text-black-25">Sin atenciones registradas.</p>
             ) : (
@@ -87,7 +98,7 @@ export function HistoriaLocalDrawer({ data, onVolver, onCerrar }: Props) {
                 </div>
                 <p className="mt-1 text-[9px] text-black-45">
                   {data.disponible.actividadLocal
-                    ? "Nivel local (por localbi_id)"
+                    ? "Nivel local (por localbi_id) · conteo sin deduplicar (compatibilidad)"
                     : "Nivel dominio (la fuente no permite el local)"}
                 </p>
               </>

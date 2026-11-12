@@ -1,7 +1,11 @@
 import { unificadoRepository } from "../repositories/unificado.repository";
+import { dashboardGerencialRepository } from "../repositories/dashboardGerencial.repository";
 import type { DashboardFilters } from "../types";
 
 export const dashboardService = {
+  async gerencial(filters: DashboardFilters) {
+    return dashboardGerencialRepository.obtener(filters);
+  },
   async resumen(filters: DashboardFilters) {
     return unificadoRepository.resumen(filters);
   },

@@ -48,7 +48,7 @@ export function FilterItem({ config, value, options, onChange, status = "idle", 
               onChange(next.length ? next : undefined);
             }}
             disabled={isDisabled}
-            className="w-full rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85 outline-none focus:border-[#0B3B5C] disabled:bg-black-5 disabled:text-black-10"
+            className="w-full rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85 outline-none focus:border-primary disabled:bg-black-5 disabled:text-black-10"
           />
           <input
             type="date"
@@ -59,7 +59,7 @@ export function FilterItem({ config, value, options, onChange, status = "idle", 
               onChange(next.length ? next : undefined);
             }}
             disabled={isDisabled}
-            className="w-full rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85 outline-none focus:border-[#0B3B5C] disabled:bg-black-5 disabled:text-black-10"
+            className="w-full rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85 outline-none focus:border-primary disabled:bg-black-5 disabled:text-black-10"
           />
         </div>
       )}
@@ -82,8 +82,8 @@ export function FilterItem({ config, value, options, onChange, status = "idle", 
                 className={cn(
                   "w-full rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
                   selected
-                    ? "bg-[#0B3B5C]/10 text-dark font-medium"
-                    : "text-[#475569] hover:bg-black-5",
+                    ? "bg-primary/10 text-dark font-medium"
+                    : "text-black-65 hover:bg-black-5",
                   isDisabled && "cursor-not-allowed opacity-50",
                 )}
               >
@@ -114,9 +114,9 @@ export function FilterItem({ config, value, options, onChange, status = "idle", 
                   checked={checked}
                   disabled={isDisabled}
                   onChange={() => handleSelect(opt)}
-                  className="accent-[#0B3B5C]"
+                  className="accent-primary"
                 />
-                <span className="text-[#475569]">{opt}</span>
+                <span className="text-black-65">{opt}</span>
               </label>
             );
           })}

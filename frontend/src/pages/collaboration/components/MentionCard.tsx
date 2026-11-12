@@ -6,7 +6,7 @@ interface Props { item: MentionUI }
 
 export const MentionCard = memo(function MentionCard({ item }: Props) {
   return (
-    <div className={cn("flex gap-3 rounded-lg border p-3 text-xs transition-colors", item.isRead ? "border-black-10 bg-white" : "border-[#2563EB]/30 bg-primary-5/30")} role="listitem">
+    <div className={cn("flex gap-3 rounded-lg border p-3 text-xs transition-colors", item.isRead ? "border-black-10 bg-white" : "border-primary/30 bg-primary-5/30")} role="listitem">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {!item.isRead && <span className="h-2 w-2 rounded-full bg-primary" aria-label="No leído" />}

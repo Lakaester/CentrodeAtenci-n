@@ -32,7 +32,7 @@ export default function IntegracionesConfig() {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-black-85"><Plug size={15} className="text-primary" /> Integraciones</h2>
-            <p className="mt-0.5 text-xs text-black-45">Estado de conexión de los servicios externos de COPE.</p>
+            <p className="mt-0.5 text-xs text-black-45">Estado de conexión de los servicios externos de C.O.S.E.</p>
           </div>
           <button type="button" onClick={() => refetchSource()} className="inline-flex items-center gap-1.5 rounded border border-black-10 px-2 py-1 text-[10px] text-black-45 hover:bg-light">
             <RefreshCw size={12} /> Refrescar
@@ -52,7 +52,7 @@ export default function IntegracionesConfig() {
         </div>
 
         <p className="mt-4 text-[10px] text-black-25">
-          No se muestran credenciales ni tokens. El estado refleja lo que los servicios existentes de COPE pueden reportar.
+          No se muestran credenciales ni tokens. El estado refleja lo que los servicios existentes de C.O.S.E pueden reportar.
         </p>
       </div>
     </div>

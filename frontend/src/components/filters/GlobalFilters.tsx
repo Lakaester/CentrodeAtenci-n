@@ -20,7 +20,7 @@ export function GlobalFilters() {
         onChange={(e) =>
           setFilters({ ...filters, fechaHoraInicio: e.target.value ? fromInput(e.target.value) : undefined })
         }
-        className="rounded-lg border border-black-10 bg-light px-3 py-1.5 text-sm text-black-85 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]/30"
+        className="rounded-lg border border-black-10 bg-light px-3 py-1.5 text-sm text-black-85 outline-none focus:border-primary"
       />
       <span className="text-black-25">→</span>
       <div className="flex items-center gap-1.5 text-xs font-medium text-black-45 uppercase tracking-wide">
@@ -32,7 +32,7 @@ export function GlobalFilters() {
         onChange={(e) =>
           setFilters({ ...filters, fechaHoraFin: e.target.value ? fromInput(e.target.value) : undefined })
         }
-        className="rounded-lg border border-black-10 bg-light px-3 py-1.5 text-sm text-black-85 outline-none focus:border-[#F97316] focus:ring-1 focus:ring-[#F97316]/30"
+        className="rounded-lg border border-black-10 bg-light px-3 py-1.5 text-sm text-black-85 outline-none focus:border-primary"
       />
 
       {(filters.fechaHoraInicio || filters.fechaHoraFin) && (

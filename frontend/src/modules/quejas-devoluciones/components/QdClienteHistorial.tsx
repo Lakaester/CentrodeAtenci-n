@@ -44,7 +44,12 @@ export function QdClienteHistorial({ dominios }: { dominios: string[] }) {
               {c.tipo === "devolucion" && <span>{fmtMoneda(c.monto_devuelto)}</span>}
             </div>
           </div>
-          <Link to="/quejas-devoluciones" className="mt-1 inline-block text-[9px] text-primary hover:underline">Abrir caso operativo</Link>
+          <Link
+            to={`/gestion/quejas-devoluciones?caso=${encodeURIComponent(c.id)}`}
+            className="mt-1 inline-block text-[9px] text-primary hover:underline"
+          >
+            Abrir caso operativo
+          </Link>
         </div>
       ))}
     </div>

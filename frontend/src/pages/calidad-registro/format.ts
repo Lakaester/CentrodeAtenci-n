@@ -1,4 +1,6 @@
 /** Formateadores y constantes visuales del módulo Calidad de Registro. */
+import { CHART } from "@/lib/chartPalette";
+
 export const CANAL_ORDER = ["WHATICKET", "WHATMETA", "ZENDESK"] as const;
 
 export const CANAL_LABELS: Record<string, string> = {
@@ -9,14 +11,14 @@ export const CANAL_LABELS: Record<string, string> = {
 };
 
 export const C = {
-  verde: "#10b981",
-  verdeOscuro: "#0f766e",
-  ambar: "#f59e0b",
-  rojo: "#ef4444",
-  azul: "#3b82f6",
-  gris: "#94a3b8",
-  violeta: "#8b5cf6",
-  naranja: "#f97316",
+  verde: CHART.success,
+  verdeOscuro: CHART.aqua,
+  ambar: CHART.warning,
+  rojo: CHART.danger,
+  azul: CHART.primary,
+  gris: CHART.muted,
+  violeta: CHART.purple,
+  naranja: CHART.brand,
 };
 
 export function canalLabel(canal: string): string {

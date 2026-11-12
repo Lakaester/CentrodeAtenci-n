@@ -37,7 +37,7 @@ export function ModuloDiagnosticoOperativo() {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
-        <Shield size={11} className="text-[#6366F1]" />
+        <Shield size={11} className="text-primary" />
         <span className="text-[9px] font-semibold uppercase tracking-wider text-black-25">Diagnóstico</span>
         <div className="ml-auto flex gap-0.5">
           {ESTADOS.map((e) => (
@@ -65,7 +65,7 @@ export function ModuloDiagnosticoOperativo() {
           <div className="flex gap-1">
             <input type="text" value={hipotesis} onChange={(e) => setHipotesis(e.target.value)}
               placeholder="Ej: Problema de facturación..."
-              className="flex-1 rounded border border-black-10 bg-light px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:outline-none"
+              className="flex-1 rounded border border-black-10 bg-light px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-primary focus:outline-none"
             />
             <button onClick={cambiarHipotesis}
               className="rounded bg-primary px-2 py-1 text-[10px] font-medium text-white hover:bg-primary-85">
@@ -80,7 +80,7 @@ export function ModuloDiagnosticoOperativo() {
           <div className="flex gap-1">
             <input type="text" value={pendiente} onChange={(e) => setPendiente(e.target.value)}
               placeholder="¿Qué falta investigar?"
-              className="flex-1 rounded border border-dashed border-amber-200 bg-warning-5/30 px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:outline-none"
+              className="flex-1 rounded border border-dashed border-amber-200 bg-warning-5/30 px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-primary focus:outline-none"
             />
           </div>
         </div>

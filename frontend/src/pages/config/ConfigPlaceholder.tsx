@@ -3,11 +3,11 @@ import { SeccionNoConfigurada } from "./SeccionNoConfigurada";
 const PLACEHOLDERS: Record<string, { titulo: string; descripcion: string }> = {
   preferencias: {
     titulo: "Preferencias",
-    descripcion: "Preferencias generales de COPE se administrarán aquí en una futura etapa.",
+    descripcion: "Preferencias generales de C.O.S.E se administrarán aquí en una futura etapa.",
   },
   atencion: {
     titulo: "Configuración de Atención",
-    descripcion: "Canales, colas, estados y parámetros operativos de Atención se centralizarán aquí. Actualmente COPE no dispone de un catálogo administrable para esta sección.",
+    descripcion: "Canales, colas, estados y parámetros operativos de Atención se centralizarán aquí. Actualmente C.O.S.E no dispone de un catálogo administrable para esta sección.",
   },
   reporteria: {
     titulo: "Configuración de Reportería",
@@ -23,7 +23,7 @@ const PLACEHOLDERS: Record<string, { titulo: string; descripcion: string }> = {
   },
   auditoria: {
     titulo: "Auditoría",
-    descripcion: "Registro de cambios por usuario y módulo. COPE aún no dispone de un sistema de auditoría; no se fabrican registros.",
+    descripcion: "Registro de cambios por usuario y módulo. C.O.S.E aún no dispone de un sistema de auditoría; no se fabrican registros.",
   },
 };
 

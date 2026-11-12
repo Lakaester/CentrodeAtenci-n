@@ -59,7 +59,7 @@ export function ZendeskTicketCard({ ticket, activa, onClick }: Props) {
       className={cn(
         "flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-all",
         activa
-          ? "border-[#2563EB] bg-primary-5 "
+          ? "border-primary bg-primary-5 "
           : "border-black-5 hover:border-black-10 hover:bg-light",
       )}
     >
@@ -81,7 +81,7 @@ export function ZendeskTicketCard({ ticket, activa, onClick }: Props) {
         {ticket.subject || "Sin asunto"}
       </p>
 
-      <div className="flex items-center gap-1.5 text-[11px] text-[#475569]">
+      <div className="flex items-center gap-1.5 text-[11px] text-black-65">
         <span className="truncate font-medium">{ticket.requesterName}</span>
         {ticket.requesterEmail && (
           <>

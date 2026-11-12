@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useInbox, inboxToCompactItem } from "@/modules/inbox";
 import type { InboxTicketDTO } from "@/modules/inbox/dto/inbox.dto";
 import { useConversation, conversationToTicketComentario } from "@/modules/conversation";
@@ -13,7 +14,23 @@ import type { TicketComentario } from "@/hooks/useTicketDetail";
 
 export default function Atenciones() {
   const [activa, setActiva] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const ticketParam = searchParams.get("ticket");
+  const canalParam = searchParams.get("canal");
+  const esDeepLinkZendesk = Boolean(ticketParam && (canalParam === "CORREO" || canalParam === "ZENDESK"));
   const [retryKey, setRetryKey] = useState(0);
+
+  // Deep link de COSE: solo para atenciones de Zendesk/CORREO.
+  // Los IDs de WhatsApp pueden coincidir con IDs de Zendesk, por eso se exige canal.
+  useEffect(() => {
+    if (!ticketParam) return;
+    if (canalParam === "CORREO" || canalParam === "ZENDESK") {
+      setActiva(ticketParam);
+    } else {
+      // Evita abrir por accidente un ID de WhatsApp contra el detalle de Zendesk.
+      setActiva(null);
+    }
+  }, [ticketParam, canalParam]);
   const [panelOpen, setPanelOpen] = useState(true);
   const { tickets: inboxTickets, count, isLoading, isError, error, refetch } = useInbox();
   const ticketDetail = useTicketDetail(activa, retryKey);
@@ -91,7 +108,20 @@ export default function Atenciones() {
 
       {/* Columna Central: Workspace */}
       <div className="flex flex-1 flex-col min-w-0 bg-white border-r border-black-10">
-        <WorkspaceArea ticketId={activa} ticketDetail={ticketDetailWithConv} onRefresh={handleRefresh} />
+        {activa && !ticketDetail.loading && (ticketDetail.error || (esDeepLinkZendesk && !ticketDetail.ticket)) ? (
+          <div className="flex flex-1 items-center justify-center p-6">
+            <div className="max-w-md text-center">
+              <p className="text-sm font-medium text-danger">No se pudo cargar la atención #{activa}</p>
+              <p className="mt-1 text-xs text-danger-65">
+                {esDeepLinkZendesk && (!ticketDetail.error || /status code (404|500)/i.test(ticketDetail.error))
+                  ? "El ticket no existe o no está disponible en la bandeja."
+                  : ticketDetail.error}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <WorkspaceArea ticketId={activa} ticketDetail={ticketDetailWithConv} onRefresh={handleRefresh} />
+        )}
       </div>
 
       {/* Columna Derecha: Panel Operativo (permanente, abatible 48px / expandido 420-520px) */}

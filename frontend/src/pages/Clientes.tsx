@@ -18,6 +18,7 @@ import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
 import { fmtNum, fmtDur, KpiCard, Section } from "@/components/dashboard/shared";
 import { cn } from "@/lib/utils";
+import { CHART } from "@/lib/chartPalette";
 
 /* ─── Tipos ─── */
 interface ClienteResumen {
@@ -453,7 +454,7 @@ function SeguimientoTable({
             {filtrados.map((r) => (
               <tr
                 key={r.clave}
-                className="cursor-pointer border-t border-black-5 align-top hover:bg-[#F8F9FA]"
+                className="cursor-pointer border-t border-black-5 align-top hover:bg-black-5"
                 onClick={() => onSelect(r)}
               >
                 <td className="py-2.5 pr-3 font-medium text-black-85">
@@ -669,7 +670,7 @@ function Explorador({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar cliente…"
-                className="w-full rounded-lg border border-black-10 py-1.5 pl-9 pr-3 text-xs text-black-85 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="w-full rounded-lg border border-black-10 py-1.5 pl-9 pr-3 text-xs text-black-85 focus:border-primary focus:outline-none"
               />
             </div>
           </div>
@@ -691,7 +692,7 @@ function Explorador({
                       onSelect({ clave: r.clave, nombre: r.cliente, esNoIdentificado: false })
                     }
                     className={cn(
-                      "cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]",
+                      "cursor-pointer border-t border-black-5 hover:bg-black-5",
                       selected?.clave === r.clave && "bg-primary-10",
                     )}
                   >
@@ -712,14 +713,14 @@ function Explorador({
             <button
               onClick={() => onSelect(sinIdentificados)}
               className={cn(
-                "flex w-full items-center justify-between gap-2 border-t border-dashed border-black-10 px-3 py-2 text-left hover:bg-[#F8F9FA]",
+                "flex w-full items-center justify-between gap-2 border-t border-dashed border-black-10 px-3 py-2 text-left hover:bg-black-5",
                 selected?.clave === SIN_IDENTIFICAR && "bg-primary-10",
               )}
             >
               <span className="flex items-center gap-2 text-xs text-black-45">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#94a3b8]" />
+                <span className="inline-block h-2 w-2 rounded-full bg-black-25" />
                 No identificados
-                <Badge className="border-black-10 bg-[#F8F9FA] text-black-45">calidad</Badge>
+                <Badge className="border-black-10 bg-black-5 text-black-45">calidad</Badge>
               </span>
               <span className="text-xs text-black-45">
                 {fmtNum(summary.calidad.atencionesNoIdentificadas)}
@@ -818,7 +819,7 @@ function Explorador({
                           <tr
                             key={c.categoria}
                             onClick={() => setCategoria(c.categoria)}
-                            className="cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]"
+                            className="cursor-pointer border-t border-black-5 hover:bg-black-5"
                           >
                             <td className="py-2 pr-3 text-xs font-medium text-black-85">
                               {c.categoria}
@@ -877,7 +878,7 @@ function Explorador({
                           <tr
                             key={s.subcategoria}
                             onClick={() => setSubcategoria(s.subcategoria)}
-                            className="cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]"
+                            className="cursor-pointer border-t border-black-5 hover:bg-black-5"
                           >
                             <td className="py-2 pr-3 text-xs font-medium text-black-85">
                               {s.subcategoria}
@@ -1095,7 +1096,7 @@ function RankingTable({
               <tr
                 key={r.clave}
                 onClick={() => onSelect(r)}
-                className="cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]"
+                className="cursor-pointer border-t border-black-5 hover:bg-black-5"
               >
                 <td className="py-2 pr-2 text-xs text-black-25">
                   {(verTodos ? (page - 1) * 20 : 0) + i + 1}
@@ -1154,13 +1155,13 @@ function RankingTable({
 function MezclaCanales({ data }: { data: ClientesV2Response["canales"] }) {
   const total = data.total || 1;
   const partes = [
-    { label: "Solo WhatsApp", value: data.soloWhatsapp, color: "#F97316" },
-    { label: "Solo correo", value: data.soloCorreo, color: "#3B82F6" },
-    { label: "Ambos", value: data.ambos, color: "#10B981" },
+    { label: "Solo WhatsApp", value: data.soloWhatsapp, color: CHART.brand },
+    { label: "Solo correo", value: data.soloCorreo, color: CHART.primary },
+    { label: "Ambos", value: data.ambos, color: CHART.success },
   ];
   return (
     <div>
-      <div className="flex h-4 overflow-hidden rounded-full bg-[#F1F5F9]">
+      <div className="flex h-4 overflow-hidden rounded-full bg-black-5">
         {partes.map((p) => (
           <div
             key={p.label}
@@ -1243,8 +1244,8 @@ function Evolucion({
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#F97316", width: 3 },
-          itemStyle: { color: "#F97316" },
+          lineStyle: { color: CHART.brand, width: 3 },
+          itemStyle: { color: CHART.brand },
           areaStyle: { color: "rgba(249,115,22,0.10)" },
           data: actual.map((p) => p.total),
         },
@@ -1253,8 +1254,8 @@ function Evolucion({
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#94A3B8", width: 2, type: "dashed" },
-          itemStyle: { color: "#94A3B8" },
+          lineStyle: { color: CHART.muted, width: 2, type: "dashed" },
+          itemStyle: { color: CHART.muted },
           data: actual.map((_, i) => anterior[i]?.total ?? null),
         },
       ],
@@ -1287,7 +1288,7 @@ function Evolucion({
             </span>
           )}
         </div>
-        <div className="flex gap-1 rounded-lg border border-black-10 bg-[#F8F9FA] p-1">
+        <div className="flex gap-1 rounded-lg border border-black-10 bg-black-5 p-1">
           {(["diaria", "semanal", "mensual"] as Granularidad[]).map((g) => (
             <button
               key={g}

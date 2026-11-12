@@ -61,7 +61,7 @@ function ActionChip({ accion }: { accion: WidgetAccionFE }) {
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-medium transition-colors",
         accion.disponible
-          ? "border-[#2563EB] bg-primary-5 text-primary hover:bg-primary hover:text-white"
+          ? "border-primary bg-primary-5 text-primary hover:bg-primary hover:text-white"
           : "border-black-10 bg-light text-black-25 cursor-not-allowed",
       )}
     >
@@ -99,7 +99,7 @@ export function WidgetSeccionRenderer({ widgets, seccion }: Props) {
   };
 
   const iconos: Record<string, React.ReactNode> = {
-    diagnostico: <Shield size={12} className="text-[#6366F1]" />,
+    diagnostico: <Shield size={12} className="text-primary" />,
     herramientas: <BarChart3 size={12} className="text-primary" />,
     resultado: <FileText size={12} className="text-success" />,
   };
@@ -118,7 +118,7 @@ export function GuiaResolucionRenderer({ guia }: { guia: { objetivo: string; pas
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-black-10 bg-[#F0F7FF] p-2.5">
+      <div className="rounded-lg border border-black-10 bg-primary-5 p-2.5">
         <p className="text-[10px] font-semibold text-primary">Objetivo</p>
         <p className="mt-0.5 text-xs text-black-85">{guia.objetivo}</p>
       </div>
@@ -128,7 +128,7 @@ export function GuiaResolucionRenderer({ guia }: { guia: { objetivo: string; pas
           <p className="text-[10px] font-semibold uppercase tracking-wider text-black-45">Pasos recomendados</p>
           <ol className="list-inside list-decimal space-y-1">
             {guia.pasos.map((paso, i) => (
-              <li key={i} className="text-[11px] text-[#475569]">{paso}</li>
+              <li key={i} className="text-[11px] text-black-65">{paso}</li>
             ))}
           </ol>
         </div>
@@ -139,7 +139,7 @@ export function GuiaResolucionRenderer({ guia }: { guia: { objetivo: string; pas
           <p className="text-[10px] font-semibold uppercase tracking-wider text-black-45">Buenas prácticas</p>
           <ul className="space-y-1">
             {guia.buenasPracticas.map((bp, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-[11px] text-[#475569]">
+              <li key={i} className="flex items-start gap-1.5 text-[11px] text-black-65">
                 <span className="mt-0.5 text-success">•</span>
                 <span>{bp}</span>
               </li>

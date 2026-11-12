@@ -117,9 +117,12 @@ export class AtencionOperativaService {
     }
   }
 
-  /** Obtiene la vista operativa actual de una atención por ticket Zendesk. */
+  /**
+   * Obtiene la vista operativa actual de una atención por ticket Zendesk.
+   * Lectura pura: no crea una atención vacía si no existe.
+   */
   async obtenerPorTicket(zendeskTicketId: string): Promise<AtencionOperativaView | null> {
-    const atencion = await atencionOperativaRepository.obtenerOCrearPorTicket(zendeskTicketId);
+    const atencion = await atencionOperativaRepository.obtenerPorTicket(zendeskTicketId);
     if (!atencion) return null;
     const auditoria = await atencionOperativaRepository.listarAuditoria(atencion.id);
     return { atencion, auditoria };

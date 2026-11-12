@@ -82,7 +82,7 @@ export function DiagnosticoFE() {
           {ACCIONES.map((a) => (
             <button
               key={a.label}
-              className="inline-flex items-center gap-1 rounded-md border border-[#2563EB]/30 bg-[#F0F7FF] px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary hover:text-white"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary-5 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary hover:text-white"
             >
               <ExternalLink size={11} />
               {a.label}

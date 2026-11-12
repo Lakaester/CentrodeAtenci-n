@@ -85,6 +85,9 @@ export const CATEGORY_HIERARCHY: Record<string, SubcatEntry[]> = {
     { label: "Duplicado o spam", value: "duplicado_o_spam" },
     { label: "No contestó", value: "no_contestó" },
   ],
+  "RECLAMO": [
+    { label: "Reclamo", value: "reclamo" },
+  ],
   "QUEJA": [
     { label: "Servicio", value: "queja_servicio" },
     { label: "Producto", value: "queja_producto" },

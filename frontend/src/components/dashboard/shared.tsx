@@ -2,12 +2,10 @@
 
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { CHART, CHART_SERIES } from "@/lib/chartPalette";
 
-/* ── Pastel chart palette (10 colors, brand-derived) ── */
-export const CHART_COLORS = [
-  "#FED7AA", "#A7F3D0", "#BFDBFE", "#DDD6FE", "#FECDD3",
-  "#FEF08A", "#BAE6FD", "#BBF7D0", "#E9D5FF", "#FDBA74",
-];
+/* ── Paleta categórica de gráficos (10 colores, derivada de los tokens) ── */
+export const CHART_COLORS = [...CHART_SERIES, CHART.soft, CHART.tint];
 
 export function getChartColor(index: number): string {
   return CHART_COLORS[index % CHART_COLORS.length];

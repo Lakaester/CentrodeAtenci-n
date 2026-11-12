@@ -1,8 +1,18 @@
 /**
- * ActividadCopeService — lógica de negocio de la actividad de COPE
+ * ActividadCopeService — lógica de negocio de la actividad de COPE/COSE
  * (atenciones de v_unificado_norm) para enriquecer la Historia Clínica.
+ *
+ * `obtenerActividadPorDominios` conserva la semántica anterior (compatibilidad).
+ * `obtenerActividadCose` expone el agregado COSE deduplicado y con período.
  */
-import { actividadCopeRepository, normalizarDominioActividad, type ActividadResumen, type ActividadLocalRow } from "../../../repositories/actividadCope.repository";
+import {
+  actividadCopeRepository,
+  normalizarDominioActividad,
+  type ActividadResumen,
+  type ActividadLocalRow,
+  type CoseAgregada,
+  type CoseFiltros,
+} from "../../../repositories/actividadCope.repository";
 
 export interface ActividadDominio {
   dominio: string;                    // dominio normalizado (clave)
@@ -40,9 +50,17 @@ export const actividadCopeService = {
   },
 
   /**
+   * Agregado COSE a nivel cliente: deduplicado por (canal, ticket_id),
+   * con período, filtros y agregados calculados en SQL.
+   */
+  async obtenerActividadCose(dominios: string[], filtros: CoseFiltros = {}): Promise<CoseAgregada> {
+    return actividadCopeRepository.actividadCoseAgregada(dominios, filtros);
+  },
+
+  /**
    * Resumen de actividad por localbi_id (Nivel 1). Cada local obtiene su
    * propio total y última atención. Las atenciones sin localbi_id (NULL) NO
-   * se asignan a ningún local.
+   * se asignan a ningún local. Se mantiene sin deduplicar (compatibilidad).
    */
   async obtenerActividadPorLocales(localbiIds: string[]): Promise<Record<string, { total: number; ultima_atencion: string | null }>> {
     return actividadCopeRepository.resumenPorLocalbiIds(localbiIds);

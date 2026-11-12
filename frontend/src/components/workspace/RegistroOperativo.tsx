@@ -34,7 +34,7 @@ const TIPO_IDENTIFICACION_LABEL: Record<string, string> = {
 };
 
 const ORIGEN_LABEL: Record<string, string> = {
-  cope: "COPE",
+  cope: "C.O.S.E",
   zendesk: "Zendesk",
 };
 

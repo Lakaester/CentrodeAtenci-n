@@ -1,15 +1,17 @@
+import { CHART } from "@/lib/chartPalette";
+
 export const CHART_PALETTE: Record<string, string> = {
-  whatsapp: "#10B981",
-  correo: "#2563EB",
-  alta: "#EF4444",
-  media: "#F59E0B",
-  baja: "#64748B",
-  disponible: "#10B981",
-  ocupado: "#EF4444",
-  pausa: "#F59E0B",
-  offline: "#94A3B8",
+  whatsapp: CHART.success,
+  correo: CHART.primary,
+  alta: CHART.danger,
+  media: CHART.warning,
+  baja: CHART.muted,
+  disponible: CHART.success,
+  ocupado: CHART.danger,
+  pausa: CHART.warning,
+  offline: CHART.muted,
 };
 
 export function getChartColor(key: string): string {
-  return CHART_PALETTE[key] ?? "#2563EB";
+  return CHART_PALETTE[key] ?? CHART.primary;
 }

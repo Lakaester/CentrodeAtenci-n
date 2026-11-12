@@ -3,6 +3,15 @@ import { z } from "zod";
 import { qdService } from "../services/quejasDevoluciones.service";
 import { qdRepository } from "../repositories/quejasDevoluciones.repository";
 import { qdExportService } from "../services/quejasDevolucionesExport.service";
+import {
+  ejecutarBackfillZendesk,
+  exportarDryRunCsv,
+  postgresBackfillSource,
+  repararFechasFaltantes,
+  resumenDesdeRun,
+} from "../services/qydZendeskBackfill.service";
+import { qydBackfillRepository } from "../repositories/qydBackfill.repository";
+import { esFechaISO, fechaLimaHoy } from "../utils/fechaQyd";
 import { DomainError } from "../core/errors/types";
 import { AuthedRequest } from "../middlewares/auth.middleware";
 
@@ -52,7 +61,8 @@ const actualizarSchema = z.object({
   clasificacion: z.string().nullable().optional(),
   producto: z.string().nullable().optional(),
   observacion: z.string().nullable().optional(),
-  fechaSolicitud: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD").nullable().optional(),
+  // La fecha de origen no puede quedar vacía en un expediente existente.
+  fechaSolicitud: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD").optional(),
 });
 
 function toHttp(err: unknown): number {
@@ -234,6 +244,108 @@ export const qdController = {
       }
       const resultado = await qdService.backfillQuejasDevoluciones(desde, hasta);
       res.json({ ok: true, data: resultado });
+    } catch (err) { handle(res, err); }
+  },
+
+  /**
+   * Backfill retroactivo desde Zendesk (01/07/2026 → hoy por defecto).
+   *
+   * Seguridad:
+   * - Requiere permiso "administrar" (definido en la ruta).
+   * - `dryRun` es true por defecto; para escribir hay que enviar
+   *   `dryRun: false` y `confirmar: "EJECUTAR_BACKFILL_QYD"`.
+   * - Usa checkpoints; si se interrumpe, se reanuda con `reanudarRunId`.
+   */
+  async backfillZendesk(req: Request, res: Response, next: NextFunction) {
+    try {
+      const desde = String(req.body?.desde ?? "2026-07-01").trim();
+      const hasta = String(req.body?.hasta ?? fechaLimaHoy()).trim();
+      if (!esFechaISO(desde) || !esFechaISO(hasta)) {
+        return res.status(400).json({ ok: false, error: "Fechas inválidas. Formato esperado: YYYY-MM-DD" });
+      }
+      const dryRun = req.body?.dryRun !== false;
+      if (!dryRun && String(req.body?.confirmar ?? "") !== "EJECUTAR_BACKFILL_QYD") {
+        return res.status(400).json({
+          ok: false,
+          error: "Para ejecutar el backfill real envíe dryRun=false y confirmar='EJECUTAR_BACKFILL_QYD'.",
+          code: "CONFIRMACION_REQUERIDA",
+        });
+      }
+      const reanudarRunId = req.body?.reanudarRunId ? String(req.body.reanudarRunId) : undefined;
+      const incluirDetalle = req.body?.incluirDetalle === true;
+      const paginaDetalle = Number(req.body?.paginaDetalle ?? 1);
+      const porPaginaDetalle = Number(req.body?.porPaginaDetalle ?? 50);
+      const formato = String(req.body?.formato ?? "").toLowerCase();
+
+      if (formato === "csv") {
+        if (!dryRun) {
+          return res.status(400).json({
+            ok: false,
+            error: "La exportación CSV está disponible solo para dryRun=true.",
+            code: "CSV_SOLO_DRY_RUN",
+          });
+        }
+        const { csv, total, filename } = await exportarDryRunCsv({
+          desde, hasta, usuario: usuarioDe(req),
+        });
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("X-Export-Total", String(total));
+        return res.send(csv);
+      }
+
+      const data = await ejecutarBackfillZendesk({
+        desde, hasta, dryRun, reanudarRunId, usuario: usuarioDe(req),
+        incluirDetalle,
+        paginaDetalle: Number.isFinite(paginaDetalle) ? paginaDetalle : 1,
+        porPaginaDetalle: Number.isFinite(porPaginaDetalle) ? porPaginaDetalle : 50,
+      });
+      res.json({ ok: true, data });
+    } catch (err) { handle(res, err); }
+  },
+
+  async estadoBackfillZendesk(req: Request, res: Response, next: NextFunction) {
+    try {
+      const run = await qydBackfillRepository.obtenerRun(req.params.runId);
+      if (!run) return res.status(404).json({ ok: false, error: "Ejecución no encontrada" });
+      const [resumen, items, incidencias] = await Promise.all([
+        resumenDesdeRun(run),
+        qydBackfillRepository.items(run.id, 500),
+        qdRepository.listarIncidencias(200),
+      ]);
+      res.json({ ok: true, data: { run, resumen, items, incidencias } });
+    } catch (err) { handle(res, err); }
+  },
+
+  /**
+   * Repara fechas de origen faltantes desde Zendesk. No inventa fechas: si no
+   * puede verificar el ticket, registra una incidencia de datos.
+   */
+  async repararFechas(req: Request, res: Response, next: NextFunction) {
+    try {
+      const dryRun = req.body?.dryRun !== false;
+      if (!dryRun && String(req.body?.confirmar ?? "") !== "REPARAR_FECHAS_QYD") {
+        return res.status(400).json({
+          ok: false,
+          error: "Para reparar fechas envíe dryRun=false y confirmar='REPARAR_FECHAS_QYD'.",
+          code: "CONFIRMACION_REQUERIDA",
+        });
+      }
+      const limite = Math.min(Math.max(Number(req.body?.limite ?? 500), 1), 5000);
+      const data = await repararFechasFaltantes({
+        source: postgresBackfillSource,
+        usuario: usuarioDe(req),
+        dryRun,
+        limite,
+      });
+      res.json({ ok: true, data });
+    } catch (err) { handle(res, err); }
+  },
+
+  async listarIncidencias(req: Request, res: Response, next: NextFunction) {
+    try {
+      const limite = Math.min(Math.max(Number(req.query.limite ?? 200), 1), 1000);
+      res.json({ ok: true, data: await qdRepository.listarIncidencias(limite) });
     } catch (err) { handle(res, err); }
   },
 

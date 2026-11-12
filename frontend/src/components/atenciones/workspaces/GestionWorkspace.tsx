@@ -4,7 +4,7 @@ import { AccesosRapidos } from "./AccesosRapidos";
 function Widget({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-black-10 bg-light p-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#06B6D4]/10 text-[#06B6D4]">{icon}</div>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-aqua-10 text-aqua">{icon}</div>
       <div>
         <p className="text-[10px] text-black-45">{label}</p>
         <p className="text-sm font-semibold text-black-85">{value}</p>

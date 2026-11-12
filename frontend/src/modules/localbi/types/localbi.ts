@@ -43,6 +43,17 @@ export interface LocalbiTarea {
   registrado_por?: string;
 }
 
+/**
+ * Tarea independiente (sin ticket) con el local del que proviene.
+ * `localbi_id` es la relación válida; `tarea_localbi_id` de Tareabi es un
+ * placeholder y no debe usarse.
+ */
+export interface TareaIndependiente extends LocalbiTarea {
+  localbi_id: string;
+  local_nombre: string;
+  dominio: string;
+}
+
 export interface LocalbiTicket {
   ticket_id: string;
   localbi_id: string;
@@ -172,6 +183,75 @@ export interface ActividadDominio {
   ultimasAtenciones: AtencionActividad[];
 }
 
+/** COSE: atención operativa deduplicada (canal + ticket_id). */
+export interface CoseAtencion {
+  ticket_id: string;
+  fecha: string;
+  hora: string;
+  canal: string | null;
+  subcanal: string | null;
+  estado: string | null;
+  estado_homologado: string | null;
+  primera_respuesta_min_norm: number | null;
+  resolucion_min_norm: number | null;
+  respuesta_promedio_min_norm: number | null;
+  rango_atencion: string | null;
+  comentario_cierre: string | null;
+  tickets_created_at: string | null;
+  tickets_updated_at: string | null;
+  contacto: string | null;
+  numero: string | null;
+  localbi_id: string | null;
+  dominio: string | null;
+  categoria: string | null;
+  subcategoria: string | null;
+  asesor: string | null;
+}
+
+export interface CoseIndicadorTiempo {
+  n: number;
+  promedio: number | null;
+  mediana: number | null;
+  cobertura: number;
+}
+
+export interface CoseResumen {
+  total: number;
+  sin_local: number;
+  duplicados: number;
+  canales: ActividadAgrupada[];
+  categorias: ActividadAgrupada[];
+  subcategorias: ActividadAgrupada[];
+  asesores: ActividadAgrupada[];
+  estados: ActividadAgrupada[];
+  locales: { localbi_id: string; cantidad: number }[];
+  primera_respuesta: CoseIndicadorTiempo;
+  resolucion: CoseIndicadorTiempo;
+  primera_atencion: string | null;
+  ultima_atencion: string | null;
+}
+
+export interface CoseOpciones {
+  canales: ActividadAgrupada[];
+  estados: ActividadAgrupada[];
+  asesores: ActividadAgrupada[];
+  locales: { localbi_id: string | null; cantidad: number }[];
+  sin_local: number;
+}
+
+/** Conteos de los chips: aplican el resto de filtros e ignoran su dimensión. */
+export interface CoseChips {
+  estados: ActividadAgrupada[];
+  sin_local: number;
+}
+
+export interface CoseAgregada {
+  resumen: CoseResumen;
+  ultimasAtenciones: CoseAtencion[];
+  opciones: CoseOpciones;
+  chips: CoseChips;
+}
+
 /** Soporte en Línea (public.incidencias). */
 export interface Incidencia {
   id_incidencia: string;
@@ -199,9 +279,11 @@ export interface SoporteResumen {
   ultima_incidencia: string | null;
   prom_espera_min: number | null;
   prom_solucion_min: number | null;
+  esperaN: number;
+  solucionN: number;
   categorias: ActividadAgrupada[];
   estados: ActividadAgrupada[];
-  porLocal: ActividadAgrupada[];
+  porLocal: { local: string; cantidad: number }[];
 }
 
 export interface SoporteOnlineDominio {

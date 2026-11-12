@@ -45,7 +45,7 @@ export function BandejaZendesk({ tickets, loading, activa, onSelect }: Props) {
           <input
             type="text" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por cliente, ID o asunto..."
-            className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+            className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none"
           />
         </div>
       </div>
@@ -69,7 +69,7 @@ export function BandejaZendesk({ tickets, loading, activa, onSelect }: Props) {
                 className={cn(
                   "flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-all",
                   estaActiva
-                    ? "border-[#2563EB] bg-primary-5 "
+                    ? "border-primary bg-primary-5 "
                     : "border-black-5 hover:border-black-10 hover:bg-light",
                 )}
               >

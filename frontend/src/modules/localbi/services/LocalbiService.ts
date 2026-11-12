@@ -6,7 +6,19 @@ import type {
   ActividadDominio,
   SoporteOnlineResult,
   HistoriaLocal,
+  CoseAgregada,
 } from "../types/localbi";
+
+export interface CoseQueryParams {
+  desde?: string;
+  hasta?: string;
+  limite?: number;
+  localbi_id?: string;
+  canal?: string;
+  asesor?: string;
+  estado?: string;
+  q?: string;
+}
 
 export type LocalbiApiResult<T> =
   | { status: "success" | "warning"; data: T; warnings: string[] }
@@ -50,6 +62,14 @@ export const localbiService = {
   async actividad(dominios: string[]): Promise<ActividadDominio[]> {
     const res = await api.get("/localbi/actividad", { params: { dominios: dominios.join(",") } });
     return res.data.data ?? [];
+  },
+
+  /** COSE: agregado deduplicado por cliente, con período y filtros. */
+  async actividadCose(dominios: string[], params: CoseQueryParams = {}): Promise<CoseAgregada> {
+    const res = await api.get("/localbi/actividad-cose", {
+      params: { dominios: dominios.join(","), ...params },
+    });
+    return res.data.data as CoseAgregada;
   },
 
   /** Resumen de actividad por localbi_id (Nivel 1). */

@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
 import { fmtNum, fmtPct, fmtDur, KpiCard, Section } from "@/components/dashboard/shared";
+import { CHART } from "@/lib/chartPalette";
 
 /* ─── Tipos ─── */
 interface CategoriasV2Response {
@@ -102,9 +103,9 @@ function ParetoChart({
   height?: number;
   maxItems?: number;
 }) {
-  const primary = cssVar("--primary", "#F97316");
-  const muted = cssVar("--muted", "#64748B");
-  const border = cssVar("--border", "#E5E7EB");
+  const primary = cssVar("--primary", CHART.brand);
+  const muted = cssVar("--muted", CHART.muted);
+  const border = cssVar("--border", CHART.grid);
   const top = maxItems ? items.slice(0, maxItems) : items;
 
   const option: EChartsOption = {
@@ -119,7 +120,7 @@ function ParetoChart({
           `Atenciones: <b>${fmtNum(i.volumen)}</b>`,
           `Participación: ${fmtPct1(i.pct)}`,
           `Acumulado: ${fmtPct1(i.acumulado)}`,
-          i.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+          i.tecnica ? `<span style='color:${CHART.muted}'>Categoría técnica</span>` : "",
         ]
           .filter(Boolean)
           .join("<br/>");
@@ -168,7 +169,7 @@ function ParetoChart({
         barMaxWidth: 28,
         data: top.map((i) => ({
           value: i.volumen,
-          itemStyle: { color: i.tecnica ? "#94a3b8" : primary, borderRadius: [3, 3, 0, 0] },
+          itemStyle: { color: i.tecnica ? CHART.muted : primary, borderRadius: [3, 3, 0, 0] },
         })),
         label: {
           show: true,
@@ -186,23 +187,23 @@ function ParetoChart({
         symbol: "circle",
         symbolSize: 5,
         smooth: false,
-        lineStyle: { color: "#ef4444", width: 2 },
-        itemStyle: { color: "#ef4444" },
+        lineStyle: { color: CHART.danger, width: 2 },
+        itemStyle: { color: CHART.danger },
         label: {
           show: top.length <= 10,
           position: "top",
-          color: "#ef4444",
+          color: CHART.danger,
           fontSize: 9,
           formatter: (p: any) => `${p.value}%`,
         },
         markLine: {
           silent: true,
           symbol: "none",
-          lineStyle: { color: "#ef4444", type: "dashed", width: 1 },
+          lineStyle: { color: CHART.danger, type: "dashed", width: 1 },
           label: {
             formatter: "80%",
             position: "insideEndTop",
-            color: "#ef4444",
+            color: CHART.danger,
             fontSize: 9,
           },
           data: [{ yAxis: 80 }],
@@ -218,9 +219,9 @@ function ParetoChart({
 /*  RANKING DE TIEMPO DE RESOLUCIÓN                                */
 /* ════════════════════════════════════════════════════════════════ */
 function RankingTiempo({ items }: { items: CategoriasV2Response["categoriasTiempo"] }) {
-  const primary = cssVar("--primary", "#F97316");
-  const muted = cssVar("--muted", "#64748B");
-  const border = cssVar("--border", "#E5E7EB");
+  const primary = cssVar("--primary", CHART.brand);
+  const muted = cssVar("--muted", CHART.muted);
+  const border = cssVar("--border", CHART.grid);
   const sorted = useMemo(
     () => [...items].sort((a, b) => (b.tiempo_atencion ?? -1) - (a.tiempo_atencion ?? -1)),
     [items],
@@ -237,7 +238,7 @@ function RankingTiempo({ items }: { items: CategoriasV2Response["categoriasTiemp
           `Tiempo promedio: <b>${fmtDur(r.tiempo_atencion)}</b>`,
           `Atenciones: ${fmtNum(r.volumen)}`,
           `Con tiempo registrado: ${fmtNum(r.conDato)}`,
-          r.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+          r.tecnica ? `<span style='color:${CHART.muted}'>Categoría técnica</span>` : "",
         ]
           .filter(Boolean)
           .join("<br/>");
@@ -263,7 +264,7 @@ function RankingTiempo({ items }: { items: CategoriasV2Response["categoriasTiemp
         data: sorted.map((r) => ({
           value: r.tiempo_atencion ?? 0,
           itemStyle: {
-            color: r.tecnica ? "#94a3b8" : primary,
+            color: r.tecnica ? CHART.muted : primary,
             borderRadius: [0, 4, 4, 0],
           },
         })),
@@ -297,8 +298,8 @@ function RankingTiempo({ items }: { items: CategoriasV2Response["categoriasTiemp
 /*  RANKING DE INCUMPLIMIENTO SLA                                  */
 /* ════════════════════════════════════════════════════════════════ */
 function RankingSLA({ items }: { items: CategoriasV2Response["categoriasSLA"] }) {
-  const muted = cssVar("--muted", "#64748B");
-  const border = cssVar("--border", "#E5E7EB");
+  const muted = cssVar("--muted", CHART.muted);
+  const border = cssVar("--border", CHART.grid);
   const sorted = useMemo(
     () => [...items].sort((a, b) => (b.pctIncumple ?? -1) - (a.pctIncumple ?? -1)),
     [items],
@@ -315,7 +316,7 @@ function RankingSLA({ items }: { items: CategoriasV2Response["categoriasSLA"] })
           `Incumplimiento: <b>${fmtPct1(r.pctIncumple)}</b>`,
           `Incumplen: ${fmtNum(r.noCumple)} de ${fmtNum(r.conDato)} evaluables`,
           `Cumplen: ${fmtNum(r.cumple)} (${fmtPct1(r.pctCumple)})`,
-          r.tecnica ? "<span style='color:#94a3b8'>Categoría técnica</span>" : "",
+          r.tecnica ? `<span style='color:${CHART.muted}'>Categoría técnica</span>` : "",
         ]
           .filter(Boolean)
           .join("<br/>");
@@ -342,7 +343,7 @@ function RankingSLA({ items }: { items: CategoriasV2Response["categoriasSLA"] })
         data: sorted.map((r) => ({
           value: r.pctIncumple ?? 0,
           itemStyle: {
-            color: r.tecnica ? "#94a3b8" : "#ef4444",
+            color: r.tecnica ? CHART.muted : CHART.danger,
             borderRadius: [0, 4, 4, 0],
           },
         })),
@@ -476,7 +477,7 @@ function AnalisisAsesor({ data }: { data: CategoriasV2Response }) {
                   <span className="ml-2 text-xs text-black-45">{fmtPct1(r.pct)}</span>
                 </span>
               </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#F1F5F9]">
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-black-5">
                 <div
                   className="h-full rounded-full bg-primary"
                   style={{ width: `${(r.volumen / max) * 100}%` }}
@@ -491,7 +492,7 @@ function AnalisisAsesor({ data }: { data: CategoriasV2Response }) {
         <div className="mt-4 border-t border-dashed border-black-10 pt-3">
           <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="flex items-center gap-2 text-black-45">
-              <span className="inline-block h-2 w-2 rounded-full bg-[#94a3b8]" />
+              <span className="inline-block h-2 w-2 rounded-full bg-black-25" />
               Sin asignar <span className="text-[10px] uppercase">(calidad)</span>
             </span>
             <span className="whitespace-nowrap text-right">
@@ -501,16 +502,16 @@ function AnalisisAsesor({ data }: { data: CategoriasV2Response }) {
               <span className="ml-2 text-xs text-black-45">{fmtPct1(filas.sinAsignar.pct)}</span>
             </span>
           </div>
-          <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#F1F5F9]">
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-black-5">
             <div
-              className="h-full rounded-full bg-[#94a3b8]"
+              className="h-full rounded-full bg-black-25"
               style={{ width: `${(filas.sinAsignar.volumen / max) * 100}%` }}
             />
           </div>
         </div>
       ) : null}
 
-      <details className="mt-4 rounded-lg border border-black-10 bg-[#F8F9FA] p-3">
+      <details className="mt-4 rounded-lg border border-black-10 bg-black-5 p-3">
         <summary className="cursor-pointer text-xs font-medium text-black-45">
           Ver equivalencias de nombres ({data.asesorTrazabilidad.length} originales →{" "}
           {new Set(data.asesorTrazabilidad.map((r) => r.consolidado)).size} asesores)
@@ -626,7 +627,7 @@ function TablaJerarquica({
             return (
               <Fragment key={cat.categoria}>
                 <tr
-                  className="cursor-pointer border-t border-black-5 hover:bg-[#F8F9FA]"
+                  className="cursor-pointer border-t border-black-5 hover:bg-black-5"
                   onClick={() => toggleCat(cat.categoria)}
                 >
                   <td className="py-2.5 pr-3">
@@ -640,7 +641,7 @@ function TablaJerarquica({
                     <span className="flex flex-wrap items-center gap-2">
                       {cat.categoria}
                       {esTecnica(cat.categoria) ? (
-                        <span className="rounded border border-black-10 bg-[#F8F9FA] px-1.5 py-0.5 text-[9px] font-medium uppercase text-black-45">
+                        <span className="rounded border border-black-10 bg-black-5 px-1.5 py-0.5 text-[9px] font-medium uppercase text-black-45">
                           técnica
                         </span>
                       ) : null}
@@ -665,38 +666,38 @@ function TablaJerarquica({
                     return (
                       <Fragment key={subKey}>
                         <tr
-                          className="cursor-pointer border-t border-[#F8F9FA] hover:bg-[#F8F9FA]"
+                          className="cursor-pointer border-t border-black-5 hover:bg-black-5"
                           onClick={() => toggleSub(subKey)}
                         >
                           <td className="py-2 pr-3" />
                           <td className="py-2 pr-3" />
-                          <td className="py-2 pl-6 pr-3 text-xs text-[#475569]">
+                          <td className="py-2 pl-6 pr-3 text-xs text-black-65">
                             {sub.subcategoria}
                           </td>
                           <td className="py-2 pr-3 text-xs text-black-25">
                             {subOpen ? "" : `${sub.dominios.length} dominios`}
                           </td>
-                          <td className="py-2 pr-3 text-right text-xs text-[#475569]">
+                          <td className="py-2 pr-3 text-right text-xs text-black-65">
                             {fmtNum(sub.total)}
                           </td>
-                          <td className="py-2 text-right text-xs text-[#475569]">
+                          <td className="py-2 text-right text-xs text-black-65">
                             {fmtPct((sub.total / tree.grandTotal) * 100)}
                           </td>
                         </tr>
 
                         {subOpen &&
                           sub.dominios.map((dom) => (
-                            <tr key={`${subKey}|${dom.dominio}`} className="border-t border-[#F8F9FA]">
+                            <tr key={`${subKey}|${dom.dominio}`} className="border-t border-black-5">
                               <td className="py-2 pr-3" />
                               <td className="py-2 pr-3" />
                               <td className="py-2 pr-3" />
-                              <td className="py-2 pl-10 pr-3 font-mono text-xs text-[#475569]">
+                              <td className="py-2 pl-10 pr-3 font-mono text-xs text-black-65">
                                 {dom.dominio}
                               </td>
-                              <td className="py-2 pr-3 text-right text-xs text-[#475569]">
+                              <td className="py-2 pr-3 text-right text-xs text-black-65">
                                 {fmtNum(dom.total)}
                               </td>
-                              <td className="py-2 text-right text-xs text-[#475569]">
+                              <td className="py-2 text-right text-xs text-black-65">
                                 {fmtPct((dom.total / tree.grandTotal) * 100)}
                               </td>
                             </tr>

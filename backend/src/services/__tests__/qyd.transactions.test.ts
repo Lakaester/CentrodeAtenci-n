@@ -10,7 +10,6 @@ vi.mock("../../repositories/quejasDevoluciones.repository", () => ({
   qdRepository: {
     porId: vi.fn(),
     porTicketGeneral: vi.fn(),
-    buscarCasoAbiertoParaTicket: vi.fn(),
     asociarInteraccion: vi.fn(),
     asignarDominio: vi.fn(),
     cerrarCaso: vi.fn(),
@@ -102,6 +101,81 @@ describe("QyD transacciones (O4-B T1/T2 + CAS)", () => {
     (qdRepository.porId as any).mockResolvedValue(casoAbierto);
     (qdRepository.consolidarCasos as any).mockResolvedValue(0);
     await expect(qdService.consolidarCasos("c1", ["c2"], "ana")).rejects.toMatchObject({ code: "CONSOLIDACION_INVALIDA" });
+    expect(qdRepository.registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  it("consolidarCasos: tres casos, principal más antiguo y secundarios con CERRADO", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) => {
+      if (id === "c1") return { ...casoAbierto, estado: "Pendiente de conciliación" };
+      if (id === "c2") return { ...casoAbierto, id, numero: "QUE-c2", estado: "CERRADO", caso_cerrado: true };
+      return { ...casoAbierto, id, numero: "QUE-c3", estado: "Resuelto", caso_cerrado: true };
+    });
+    (qdRepository.consolidarCasos as any).mockResolvedValue(2);
+
+    const r = await qdService.consolidarCasos("c1", ["c2", "c3"], "ana", "unificar");
+
+    expect(r.consolidados).toBe(2);
+    expect(qdRepository.consolidarCasos).toHaveBeenCalledWith("c1", ["c2", "c3"], "ana", tx);
+    expect(qdRepository.registrarAuditoria).toHaveBeenCalledTimes(3);
+  });
+
+  it("consolidarCasos: deduplica secundarios repetidos", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) =>
+      id === "c1" ? casoAbierto : { ...casoAbierto, id, numero: `QUE-${id}` },
+    );
+    (qdRepository.consolidarCasos as any).mockResolvedValue(1);
+
+    await qdService.consolidarCasos("c1", ["c2", "c2"], "ana");
+
+    expect(qdRepository.consolidarCasos).toHaveBeenCalledWith("c1", ["c2"], "ana", tx);
+  });
+
+  it("consolidarCasos: consolidación parcial → error y rollback lógico sin auditoría", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) =>
+      id === "c1" ? casoAbierto : { ...casoAbierto, id, numero: `QUE-${id}` },
+    );
+    (qdRepository.consolidarCasos as any).mockResolvedValue(1);
+
+    await expect(qdService.consolidarCasos("c1", ["c2", "c3"], "ana"))
+      .rejects.toMatchObject({ code: "CONSOLIDACION_INVALIDA" });
+    expect(qdRepository.registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  it("consolidarCasos: principal cerrado se permite y conserva su estado", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) =>
+      id === "c1"
+        ? { ...casoAbierto, estado: "CERRADO", caso_cerrado: true }
+        : { ...casoAbierto, id, numero: `QUE-${id}`, estado: "CERRADO", caso_cerrado: true },
+    );
+    (qdRepository.consolidarCasos as any).mockResolvedValue(2);
+
+    const r = await qdService.consolidarCasos("c1", ["c2", "c3"], "ana");
+
+    expect(r.consolidados).toBe(2);
+    expect(r.principal.estado).toBe("CERRADO");
+    expect(qdRepository.consolidarCasos).toHaveBeenCalled();
+  });
+
+  it("consolidarCasos: si falla la consolidación en DB → no audita y propaga", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) =>
+      id === "c1" ? casoAbierto : { ...casoAbierto, id, numero: `QUE-${id}` },
+    );
+    (qdRepository.consolidarCasos as any).mockRejectedValue(new Error("db constraint"));
+
+    await expect(qdService.consolidarCasos("c1", ["c2"], "ana")).rejects.toThrow("db constraint");
+    expect(qdRepository.registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  it("consolidarCasos: repetir una consolidación ya realizada → error sin duplicar", async () => {
+    (qdRepository.porId as any).mockImplementation(async (id: string) =>
+      id === "c1"
+        ? casoAbierto
+        : { ...casoAbierto, id, numero: `QUE-${id}`, consolidado_en: "c1" },
+    );
+
+    await expect(qdService.consolidarCasos("c1", ["c2"], "ana"))
+      .rejects.toMatchObject({ code: "CONSOLIDACION_INVALIDA" });
+    expect(qdRepository.consolidarCasos).not.toHaveBeenCalled();
     expect(qdRepository.registrarAuditoria).not.toHaveBeenCalled();
   });
 });

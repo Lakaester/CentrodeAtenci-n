@@ -35,7 +35,7 @@ export function FiltrosRapidos({ activo, onChange, searchValue, onSearchChange }
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Buscar por cliente, dominio, ticket..."
-          className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-7 text-xs text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-7 text-xs text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none"
         />
         {searchValue && (
           <button onClick={() => onSearchChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-black-25 hover:text-black-45">

@@ -15,6 +15,8 @@ function htmlToText(html: string): string {
 }
 import { AssignModal } from "./AssignModal";
 import { CategoryModal } from "./CategoryModal";
+import { interpretarRespuestaCategoria, toneClasses, type CategoryResult } from "./categoryResult";
+import { buildActionPayload } from "./actionPayload";
 import type { TicketDetail as TicketDetailType, TicketComentario } from "@/hooks/useTicketDetail";
 
 interface TicketDetailHookResult {
@@ -91,32 +93,56 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [casoReutilizado, setCasoReutilizado] = useState<{ numero: string; tipo: string; id: string } | null>(null);
+  const [categoryResult, setCategoryResult] = useState<CategoryResult | null>(null);
   const [attachFiles, setAttachFiles] = useState<{ name: string; base64: string; contentType: string }[]>([]);
   const [dragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { ticket, comentarios, loading, error } = ticketDetail;
 
-  const accion = async (endpoint: string, body?: Record<string, unknown>) => {
-    if (!ticketId) return;
+  const accion = async (endpoint: string, body?: Record<string, unknown>): Promise<boolean> => {
+    if (!ticketId) return false;
     setSending(true);
     try {
-      const res = await api.post(`/zendesk/tickets/${ticketId}/${endpoint}`, { ...body, autor: "COPE" });
+      const res = await api.post(`/zendesk/tickets/${ticketId}/${endpoint}`, buildActionPayload(body));
       const result = res.data as any;
       if (result?.data?.nuevoEstado && ticket) {
         ticket.ticketOriginalStatus = result.data.nuevoEstado;
       }
-      // Si la categorización detectó un caso Q/D existente (hilo relacionado),
-      // informar al asesor sin interrumpir la atención.
-      if (endpoint === "categorize" && result?.data?.casoReutilizado && result?.data?.caso) {
-        setCasoReutilizado({
-          numero: result.data.caso.numero,
-          tipo: result.data.caso.tipo,
-          id: result.data.caso.id,
-        });
+      if (endpoint === "categorize") {
+        const outcome = interpretarRespuestaCategoria(result?.data);
+        switch (outcome.kind) {
+          case "creado":
+            setCategoryResult({
+              tone: "success",
+              message: outcome.message,
+              caso: { id: outcome.caso.id, numero: outcome.caso.numero },
+            });
+            setCasoReutilizado(null);
+            break;
+          case "reutilizado":
+            // Se mantiene el aviso existente de "atención relacionada".
+            setCasoReutilizado(outcome.caso);
+            setCategoryResult(null);
+            break;
+          case "pendiente":
+            setCategoryResult({ tone: "warning", message: outcome.message });
+            break;
+          case "no_elegible":
+            setCategoryResult({ tone: "neutral", message: outcome.message });
+            break;
+          default:
+            setCategoryResult({ tone: "success", message: outcome.message });
+        }
       }
       if (onRefresh) onRefresh();
+      return true;
     } catch (err: any) {
       console.error(`[Workspace] Error en ${endpoint}:`, err.message);
+      if (endpoint === "categorize") {
+        const msg = err?.response?.data?.error?.message ?? err?.message ?? "No se pudo completar la acción.";
+        setCategoryResult({ tone: "error", message: msg });
+      }
+      return false;
     } finally {
       setSending(false);
       setReplyText("");
@@ -136,7 +162,6 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
     try {
       await api.post(`/zendesk/tickets/${ticketId}/reply-resolve`, {
         body: plain,
-        autor: "COPE",
         resolver: false,
         archivos: attachFiles,
       });
@@ -171,14 +196,13 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
       if (plain) {
         await api.post(`/zendesk/tickets/${ticketId}/reply-resolve`, {
           body: plain,
-          autor: "COPE",
           resolver: false,
           archivos: attachFiles,
         });
         setAttachFiles([]);
         setReplyText("");
       }
-      const res = await api.post(`/zendesk/tickets/${ticketId}/status`, { status: "solved", autor: "COPE" });
+      const res = await api.post(`/zendesk/tickets/${ticketId}/status`, { status: "solved" });
       const newStatus = res.data?.data?.nuevoEstado;
       if (newStatus !== "solved") {
         throw new Error(`Zendesk respondió con estado "${newStatus}" en lugar de "solved"`);
@@ -312,14 +336,25 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
           </button>
           <AssignModal open={assignOpen} onClose={() => setAssignOpen(false)}
             onAssign={(agentId) => accion("assign", { assigneeId: agentId })} />
-          <button type="button" onClick={() => setCategoryOpen(true)}
+          <button type="button" onClick={() => { setCategoryResult(null); setCategoryOpen(true); }}
             disabled={sending}
             className="rounded border border-black-10 px-1.5 py-0.5 text-[9px] text-black-45 hover:bg-light disabled:opacity-40">
             Categorizar
           </button>
-          <CategoryModal open={categoryOpen} onClose={() => setCategoryOpen(false)}
-            onSave={(c, s) => { setCategoryOpen(false); accion("categorize", { categoria: c, subcategoria: s }); }}
-            currentSubcategory={ticket?.tags?.[0]} />
+          <CategoryModal
+            open={categoryOpen}
+            onClose={() => setCategoryOpen(false)}
+            onSave={async (c, s) => {
+              const ok = await accion("categorize", {
+                categoria: c,
+                subcategoria: s,
+                canal: ticket?.canal ?? ticket?.canalRaw ?? undefined,
+              });
+              return ok;
+            }}
+            currentSubcategory={ticket?.tags?.[0]}
+            errorMessage={categoryResult?.tone === "error" ? categoryResult.message : null}
+          />
           <button type="button" onClick={handleResolve}
             disabled={sending || ticket?.ticketOriginalStatus === "solved" || ticket?.ticketOriginalStatus === "closed"}
             className={cn(
@@ -331,6 +366,22 @@ export function WorkspaceArea({ ticketId, ticketDetail, onRefresh }: Props) {
             {ticket?.ticketOriginalStatus === "solved" ? "Resuelto" : ticket?.ticketOriginalStatus === "closed" ? "Cerrado" : "Resolver"}
           </button>
         </div>
+        {categoryResult && (
+          <div className={cn("mt-1 flex flex-wrap items-center gap-2 rounded px-2 py-1.5 text-[10px]", toneClasses(categoryResult.tone))}>
+            <span className="min-w-0 flex-1">{categoryResult.message}</span>
+            {categoryResult.caso && (
+              <Link
+                to={`/gestion/quejas-devoluciones?caso=${encodeURIComponent(categoryResult.caso.id)}`}
+                className="shrink-0 font-medium underline"
+              >
+                Abrir expediente
+              </Link>
+            )}
+            <button type="button" onClick={() => setCategoryResult(null)} className="shrink-0 opacity-70 hover:opacity-100" title="Descartar">
+              x
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

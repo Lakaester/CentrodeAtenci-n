@@ -214,11 +214,11 @@ export function DetalleTable() {
             <input type="datetime-local" value={localFechaHoraFin.replace(" ", "T")} onChange={(e) => setLocalFechaHoraFin(e.target.value.replace("T", " "))}
               className="mt-0.5 block rounded-lg border border-black-10 bg-white px-2 py-1.5 text-xs text-black-85" />
           </label>
-          <span className="mb-1 inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700">
+          <span className="mb-1 inline-flex items-center rounded-lg border border-success-25 bg-success-5 px-2.5 py-1.5 text-[10px] font-medium text-success">
             Universo: cerradas + resueltas
           </span>
           <button onClick={aplicar}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-[#E8620A]">
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-85">
             Aplicar
           </button>
           <button onClick={limpiar}
@@ -226,7 +226,7 @@ export function DetalleTable() {
             <RotateCcw size={12} /> Limpiar
           </button>
           <button onClick={exportar} disabled={exporting || total === 0}
-            className="flex items-center gap-1 rounded-lg border border-[#F97316] bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-10 disabled:opacity-50">
+            className="flex items-center gap-1 rounded-lg border border-primary bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-10 disabled:opacity-50">
             <Download size={12} /> {exporting ? "Exportando..." : "Descargar Excel"}
           </button>
         </div>

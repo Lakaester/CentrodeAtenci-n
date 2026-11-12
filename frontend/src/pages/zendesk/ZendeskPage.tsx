@@ -131,7 +131,7 @@ export default function ZendeskPage() {
             <Search size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-black-25" />
             <input type="text" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por cliente, email o ticket..."
-              className="w-full rounded-md border border-black-10 bg-light py-1 pl-7 pr-2 text-[11px] text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+              className="w-full rounded-md border border-black-10 bg-light py-1 pl-7 pr-2 text-[11px] text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none"
             />
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { zendeskTestController } from "./ZendeskTestController";
+import { requirePermission } from "../../middlewares/auth.middleware";
 
 export const zendeskTestRouter = Router();
 
@@ -26,5 +27,5 @@ zendeskTestRouter.get("/agents", zendeskTestController.agents);
 zendeskTestRouter.post("/tickets/:id/internal-note", zendeskTestController.internalNote);
 zendeskTestRouter.post("/tickets/:id/assign", zendeskTestController.assign);
 zendeskTestRouter.post("/tickets/:id/status", zendeskTestController.changeStatus);
-zendeskTestRouter.post("/tickets/:id/categorize", zendeskTestController.categorize);
+zendeskTestRouter.post("/tickets/:id/categorize", requirePermission("Atenciones", "editar"), zendeskTestController.categorize);
 zendeskTestRouter.post("/tickets/:id/reply", zendeskTestController.reply);

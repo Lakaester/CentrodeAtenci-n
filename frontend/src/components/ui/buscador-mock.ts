@@ -23,7 +23,7 @@ export const MOCK_RESULTADOS: SearchResult[] = [
   { id: "doc1", tipo: "DOCUMENTOS", icon: "📄", nombre: "Factura_202507.png", descripcion: "Cliente: Carlos Mendoza · 245 KB", ultimaActualizacion: "10/07", accion: "Abrir Documento" },
   { id: "doc2", tipo: "DOCUMENTOS", icon: "📄", nombre: "sistema_fe_log_20250710.txt", descripcion: "Log de facturación · 12 KB", ultimaActualizacion: "10/07", accion: "Abrir Documento" },
   { id: "nb1", tipo: "NOTEBOOKS", icon: "📘", nombre: "Guía FE — Errores comunes", descripcion: "Documentación de Facturación Electrónica", ultimaActualizacion: "Actualizado", accion: "Abrir NotebookLM" },
-  { id: "nb2", tipo: "NOTEBOOKS", icon: "📘", nombre: "Manual COPE v3.2", descripcion: "Guía de usuario del sistema COPE", ultimaActualizacion: "Actualizado", accion: "Abrir NotebookLM" },
+  { id: "nb2", tipo: "NOTEBOOKS", icon: "📘", nombre: "Manual C.O.S.E v3.2", descripcion: "Guía de usuario del sistema C.O.S.E", ultimaActualizacion: "Actualizado", accion: "Abrir NotebookLM" },
   { id: "conf1", tipo: "CONFIGURACIONES", icon: "⚙️", nombre: "Facturación Electrónica", descripcion: "Configuración de FE · Cliente: Carlos Mendoza", ultimaActualizacion: "—", accion: "Abrir Configuración" },
   { id: "conf2", tipo: "CONFIGURACIONES", icon: "⚙️", nombre: "Notificación SMS", descripcion: "Configuración de SMS · Cliente: Carlos Mendoza", ultimaActualizacion: "—", accion: "Abrir Configuración" },
 ];

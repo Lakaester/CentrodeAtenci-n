@@ -32,10 +32,22 @@ export interface TareabiTicketLog {
 export interface TareabiDetalleTarea {
   tareabi_id: string;
   tarea_estado: string;
-  tarea_comentario?: string;
+  tarea_comentario?: string | null;
   tarea_dev: string;
-  tarea_fechainicio: string;
+  tarea_fechainicio: string | null;
   tarea_fechafin: string | null;
-  ticketbi_id: string;
+  ticketbi_id: string | null;
+  tarea_referencia?: string | null;
+  tarea_descripcion?: string | null;
+  tarea_proyecto?: string | null;
+  tarea_categoria?: string | null;
+  tarea_tipo?: string | null;
+  tarea_etapa?: string | null;
+  tarea_prioridad?: string | null;
+  tarea_sprint?: string | null;
+  tarea_fechasolicitud?: string | null;
+  tarea_fechaentrega?: string | null;
+  localbi_id?: string | null;
+  tarea_personaregistronombre?: string | null;
   [k: string]: unknown;
 }

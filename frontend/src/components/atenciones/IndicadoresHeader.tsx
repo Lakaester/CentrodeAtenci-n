@@ -8,7 +8,7 @@ interface Props {
 function Chip({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs ">
-      <span className={cn("h-2 w-2 rounded-full", color ?? "bg-[#64748B]")} />
+      <span className={cn("h-2 w-2 rounded-full", color ?? "bg-black-45")} />
       <span className="font-medium text-black-85">{value}</span>
       <span className="text-black-45">{label}</span>
     </div>

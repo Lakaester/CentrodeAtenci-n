@@ -1,11 +1,19 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, ExternalLink, Search, X } from "lucide-react";
 import { useTareabiLogs, useTareabiLogsMulti } from "@/modules/tareabi";
 import type { TareabiHistorialEntrada } from "@/modules/tareabi";
 import type { LocalbiTarea, LocalbiTicket } from "../../types/localbi";
 import { SeccionColapsable } from "../HistoriaClinicaUI";
 import { config } from "@/config/env";
 import { cn } from "@/lib/utils";
+import {
+  fmtDuracion,
+  fmtFechaHora,
+  parseFechaLocal,
+  textoValido,
+  tieneHora,
+  tonoEstadoTarea,
+} from "../../utils/tareasFechas";
 
 /**
  * TICKETS DEV — tickets de desarrollo (LocalBI → Tareabi).
@@ -15,94 +23,133 @@ import { cn } from "@/lib/utils";
  * - Tarea: detalle + historial de Tareabi bajo demanda.
  * - Enlace externo: ruta oficial verificada de Tareabi por `tareabi_id`.
  *
- * Regla de oro: no se inventan fechas, desarrolladores, referencias ni estados.
- * Si la fuente no entrega un dato, se muestra explícitamente "No disponible".
+ * Reglas:
+ * - El estado del ticket es el propio (`ticket.estado`); el estado de una
+ *   tarea solo se muestra dentro de su tarea.
+ * - Desarrollador y área responsable son datos distintos.
+ * - No se inventan fechas, referencias, responsables ni estados.
+ * - Los textos largos envuelven; no se usa `truncate` ni `nowrap`.
  */
 
 const BASE_TAREABI = config.tareabiApiUrl.replace(/\/+$/, "");
 
 type TicketsDensity = "compact" | "comfortable";
 
-/**
- * Densidad propia de la sección. Clientes la usa en variante comfortable;
- * el valor por defecto cubre ese caso sin depender del proveedor global.
- */
 const DensityContext = createContext<TicketsDensity>("comfortable");
 function useDensity(): TicketsDensity {
   return useContext(DensityContext);
 }
 
-/** Parsea "YYYY-MM-DD[ HH:mm[:ss]]" como hora local (Lima), sin TZ implícita. */
-function parseFecha(v: string | null | undefined): Date | null {
-  if (!v) return null;
-  const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  if (!m) {
-    const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  const [, y, mo, d, h = "0", mi = "0", s = "0"] = m;
-  return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
-}
+const parseFecha = parseFechaLocal;
+const valor = textoValido;
+const tonoEstado = tonoEstadoTarea;
 
-/** La fuente a veces entrega solo fecha (00:00:00); no se inventa una hora. */
-function tieneHora(v: string | null | undefined): boolean {
-  const m = v?.trim().match(/[ T](\d{2}):(\d{2})/);
-  return Boolean(m && !(m[1] === "00" && m[2] === "00"));
-}
-
-function fmtFechaHora(v: string | null | undefined): string {
-  const d = parseFecha(v);
-  if (!d) return "—";
-  const fecha = d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
-  if (!tieneHora(v)) return fecha;
-  return `${fecha}, ${d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
-}
-
-/** Duración legible: "2 días, 4 horas" / "3 horas, 12 min" / "45 min". */
-function fmtDuracion(ms: number | null): string {
-  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return "menos de 1 min";
-  const dias = Math.floor(min / 1440);
-  const horas = Math.floor((min % 1440) / 60);
-  const minutos = min % 60;
-  const partes: string[] = [];
-  if (dias) partes.push(`${dias} ${dias === 1 ? "día" : "días"}`);
-  if (horas) partes.push(`${horas} ${horas === 1 ? "hora" : "horas"}`);
-  if (!dias && minutos) partes.push(`${minutos} min`);
-  return partes.join(", ");
-}
-
+/** Estados finales propios del ticket (no de la tarea). */
 function esTerminal(estado: string | null | undefined): boolean {
   return /complet|rechaz|cerrad|resuelt|cancel/i.test(estado ?? "");
 }
 
-/** Duración total de un ticket finalizado. No inventa precisión si solo hay fecha. */
-function fmtResolucion(creado: Date | null, fin: Date | null): string {
-  if (!creado || !fin) return "No disponible";
-  if (fin.getTime() <= creado.getTime()) {
-    const mismoDia =
-      creado.getFullYear() === fin.getFullYear() &&
-      creado.getMonth() === fin.getMonth() &&
-      creado.getDate() === fin.getDate();
-    return mismoDia ? "Mismo día" : "0 min";
+/**
+ * Referencia verificada. No se clasifica cualquier texto corto como
+ * referencia: se aceptan URLs o códigos con dígitos y sin espacios.
+ * Ante ambigüedad, el texto se conserva como título.
+ */
+function referenciaVerificada(v: string | null | undefined): string | null {
+  const s = valor(v);
+  if (!s) return null;
+  if (/^https?:\/\/\S+$/i.test(s)) return s;
+  if (/^[A-Za-z0-9._/-]{1,40}$/.test(s) && /\d/.test(s)) return s;
+  return null;
+}
+
+interface TextosTicket {
+  titulo: string | null;
+  resto: string | null;
+  descripcion: string | null;
+}
+
+/** Separa título y descripción sin duplicar el mismo contenido. */
+function textosDeTicket(ticket: LocalbiTicket, referencia: string | null): TextosTicket {
+  const tareas = ticket.tareas ?? [];
+  const descripcionTarea = tareas.map((t) => valor(t.detalle)).find((v): v is string => Boolean(v)) ?? null;
+  const tituloFuente = referencia
+    ? descripcionTarea
+    : valor(ticket.titulo) ?? descripcionTarea;
+  const lineas = tituloFuente
+    ? tituloFuente.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
+    : [];
+  const titulo = lineas[0] ?? null;
+  const resto = lineas.length > 1 ? lineas.slice(1).join("\n") : null;
+  const descripcion = descripcionTarea ?? (!referencia ? valor(ticket.titulo) : null);
+  return { titulo, resto, descripcion };
+}
+
+function desarrolladoresDe(ticket: LocalbiTicket): string[] {
+  return [
+    ...new Set(
+      (ticket.tareas ?? [])
+        .map((t) => valor(t.responsable))
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ];
+}
+
+function claveEstado(ticket: LocalbiTicket): string {
+  return valor(ticket.estado) ?? "__sin_estado__";
+}
+
+function claveArea(ticket: LocalbiTicket): string {
+  return valor(ticket.area_responsable) ?? "__sin_area__";
+}
+
+function claveDesarrollador(ticket: LocalbiTicket): string[] {
+  const devs = desarrolladoresDe(ticket);
+  return devs.length ? devs : ["__sin_desarrollador__"];
+}
+
+function etiquetaEstado(v: string): string {
+  return v === "__sin_estado__" ? "Sin estado" : v;
+}
+
+function etiquetaArea(v: string): string {
+  return v === "__sin_area__" ? "Sin área" : v;
+}
+
+function etiquetaDesarrollador(v: string): string {
+  return v === "__sin_desarrollador__" ? "Sin asignar" : v;
+}
+
+function valoresUnicos(valores: string[], etiqueta: (v: string) => string): string[] {
+  return [...new Set(valores)].sort((a, b) => etiqueta(a).localeCompare(etiqueta(b), "es"));
+}
+
+interface TiempoTicket {
+  kind: "duracion" | "transcurrido" | "inconsistente" | "sin_datos";
+  ms?: number;
+  sinHora?: boolean;
+}
+
+/** Tiempo del ticket: `fecha_solucion` solo se usa si tiene sentido. */
+function resolverTiempoTicket(ticket: LocalbiTicket, ahora: number): TiempoTicket {
+  const creado = parseFecha(ticket.fecha_creacion);
+  const fin = parseFecha(ticket.fecha_solucion);
+  const terminal = esTerminal(ticket.estado);
+
+  if (creado && fin) {
+    if (fin.getTime() < creado.getTime()) return { kind: "inconsistente" };
+    if (terminal) {
+      return {
+        kind: "duracion",
+        ms: fin.getTime() - creado.getTime(),
+        sinHora: !tieneHora(ticket.fecha_creacion) && !tieneHora(ticket.fecha_solucion),
+      };
+    }
+    return { kind: "transcurrido", ms: Math.max(0, ahora - creado.getTime()) };
   }
-  return fmtDuracion(fin.getTime() - creado.getTime());
-}
 
-function tonoEstado(estado: string | null | undefined): string {
-  const e = (estado ?? "").toLowerCase();
-  if (/rechaz|cancel/.test(e)) return "bg-danger-5 text-danger";
-  if (/complet|resuelt|cerrad|hecho/.test(e)) return "bg-success-5 text-success";
-  if (/pendiente/.test(e)) return "bg-warning-5 text-warning-65";
-  if (/proceso|curso|prueba|desarrollo|producci/.test(e)) return "bg-primary-5 text-primary";
-  return "bg-black-5 text-black-45";
-}
-
-/** Normaliza un campo de texto de la fuente: "-" y vacío son "no disponible". */
-function valor(v: string | null | undefined): string | null {
-  const s = (v ?? "").trim();
-  return s && s !== "-" ? s : null;
+  if (!creado) return { kind: "sin_datos" };
+  if (terminal) return { kind: "sin_datos" };
+  return { kind: "transcurrido", ms: Math.max(0, ahora - creado.getTime()) };
 }
 
 /** Refresca el tiempo transcurrido mientras la ficha está abierta. */
@@ -132,8 +179,77 @@ export function TicketsDev({
 
 function TicketsDevContenido({ tickets }: { tickets: LocalbiTicket[] }) {
   const comfortable = useDensity() === "comfortable";
-  const hayAbiertos = tickets.some((t) => !esTerminal(t.estado));
+  const [busqueda, setBusqueda] = useState("");
+  const [estado, setEstado] = useState("todos");
+  const [desarrollador, setDesarrollador] = useState("todos");
+  const [area, setArea] = useState("todos");
+
+  const hayAbiertos = tickets.some(
+    (t) => resolverTiempoTicket(t, Date.now()).kind === "transcurrido",
+  );
   const ahora = useAhora(hayAbiertos);
+
+  const estados = useMemo(
+    () => valoresUnicos(tickets.map(claveEstado), etiquetaEstado),
+    [tickets],
+  );
+  const areas = useMemo(
+    () => valoresUnicos(tickets.map(claveArea), etiquetaArea),
+    [tickets],
+  );
+  const desarrolladores = useMemo(
+    () =>
+      valoresUnicos(
+        tickets.flatMap(claveDesarrollador),
+        etiquetaDesarrollador,
+      ),
+    [tickets],
+  );
+
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return tickets.filter((t) => {
+      if (estado !== "todos" && claveEstado(t) !== estado) return false;
+      if (area !== "todos" && claveArea(t) !== area) return false;
+      if (desarrollador !== "todos" && !claveDesarrollador(t).includes(desarrollador)) {
+        return false;
+      }
+      if (q) {
+        const texto = [
+          t.ticket_id,
+          t.titulo ?? "",
+          t.subcategoria ?? "",
+          ...(t.tareas ?? []).map((x) => x.detalle ?? ""),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!texto.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [tickets, estado, area, desarrollador, busqueda]);
+
+  const resumen = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of tickets) {
+      const k = claveEstado(t);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"));
+  }, [tickets]);
+
+  const hayFiltros =
+    estado !== "todos" ||
+    area !== "todos" ||
+    desarrollador !== "todos" ||
+    busqueda.trim() !== "";
+
+  const limpiar = () => {
+    setBusqueda("");
+    setEstado("todos");
+    setDesarrollador("todos");
+    setArea("todos");
+  };
 
   return (
     <SeccionColapsable
@@ -152,19 +268,165 @@ function TicketsDevContenido({ tickets }: { tickets: LocalbiTicket[] }) {
           Sin tickets de desarrollo registrados
         </p>
       ) : (
-        <div className={comfortable ? "space-y-3" : "space-y-1"}>
-          {tickets.map((t) => (
-            <TicketDevCard key={`${t.localbi_id}-${t.ticket_id}`} ticket={t} ahora={ahora} />
-          ))}
-          {tickets.some((t) => (t.tareas ?? []).length === 0) && (
-            <p className={comfortable ? "pt-1 text-[11px] text-black-45" : "pt-1 text-[8px] text-black-25"}>
-              Los tickets sin tareas asociadas no tienen expediente enlazable en el microservicio; se
-              muestran con los datos disponibles de LocalBI.
+        <div className={comfortable ? "space-y-3" : "space-y-2"}>
+          <ResumenEstados
+            resumen={resumen}
+            estadoActivo={estado}
+            onEstado={(e) => setEstado((prev) => (prev === e ? "todos" : e))}
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative">
+              <Search
+                size={comfortable ? 14 : 11}
+                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-black-45"
+              />
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por #ticket, referencia o título"
+                aria-label="Buscar tickets por número, referencia o título"
+                className={cn(
+                  "max-w-full rounded-md border border-black-10 bg-white pl-7 pr-2 text-black-85 outline-none placeholder:text-black-25 focus:border-primary-25",
+                  comfortable ? "h-8 w-64 text-[12px]" : "h-6 w-52 text-[9px]",
+                )}
+              />
+            </label>
+
+            <SelectFiltro
+              label="Estado"
+              value={estado}
+              onChange={setEstado}
+              options={[
+                { value: "todos", label: "Todos los estados" },
+                ...estados.map((e) => ({ value: e, label: etiquetaEstado(e) })),
+              ]}
+            />
+            <SelectFiltro
+              label="Desarrollador"
+              value={desarrollador}
+              onChange={setDesarrollador}
+              options={[
+                { value: "todos", label: "Todos los desarrolladores" },
+                ...desarrolladores.map((d) => ({ value: d, label: etiquetaDesarrollador(d) })),
+              ]}
+            />
+            <SelectFiltro
+              label="Área"
+              value={area}
+              onChange={setArea}
+              options={[
+                { value: "todos", label: "Todas las áreas" },
+                ...areas.map((a) => ({ value: a, label: etiquetaArea(a) })),
+              ]}
+            />
+
+            {hayFiltros && (
+              <button
+                type="button"
+                onClick={limpiar}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border border-black-10 text-black-65 hover:bg-light",
+                  comfortable ? "h-8 px-2.5 text-[12px]" : "h-6 px-2 text-[9px]",
+                )}
+              >
+                <X size={comfortable ? 12 : 9} /> Limpiar
+              </button>
+            )}
+          </div>
+
+          <p className={cn("text-black-45", comfortable ? "text-[12px]" : "text-[9px]")}>
+            Mostrando <span className="font-medium text-black-65">{filtrados.length}</span> de{" "}
+            <span className="font-medium text-black-65">{tickets.length}</span> tickets
+          </p>
+
+          {filtrados.length === 0 ? (
+            <p className={comfortable ? "text-[13px] text-black-45" : "text-[9px] text-black-25"}>
+              No hay tickets que coincidan con los filtros.
             </p>
+          ) : (
+            <div className={comfortable ? "space-y-3" : "space-y-1"}>
+              {filtrados.map((t) => (
+                <TicketDevCard key={`${t.localbi_id}-${t.ticket_id}`} ticket={t} ahora={ahora} />
+              ))}
+              {tickets.some((t) => (t.tareas ?? []).length === 0) && (
+                <p className={comfortable ? "pt-1 text-[11px] text-black-45" : "pt-1 text-[8px] text-black-25"}>
+                  Los tickets sin tareas asociadas no tienen expediente enlazable en el microservicio; se
+                  muestran con los datos disponibles de LocalBI.
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
     </SeccionColapsable>
+  );
+}
+
+function ResumenEstados({
+  resumen,
+  estadoActivo,
+  onEstado,
+}: {
+  resumen: [string, number][];
+  estadoActivo: string;
+  onEstado: (estado: string) => void;
+}) {
+  const comfortable = useDensity() === "comfortable";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {resumen.map(([e, n]) => (
+        <button
+          key={e}
+          type="button"
+          onClick={() => onEstado(e)}
+          title={`Filtrar por ${etiquetaEstado(e)}`}
+          className={cn(
+            "inline-flex items-center rounded-md font-medium transition-colors",
+            comfortable ? "px-2 py-1 text-[12px]" : "px-1.5 py-0.5 text-[9px]",
+            tonoEstado(e),
+            estadoActivo === e && "ring-2 ring-primary-25",
+          )}
+        >
+          {etiquetaEstado(e)} · {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SelectFiltro({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const comfortable = useDensity() === "comfortable";
+  return (
+    <label className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+      <span className={cn("shrink-0", comfortable ? "text-[12px] text-black-45" : "text-[9px] text-black-45")}>
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "min-w-0 max-w-full rounded-md border border-black-10 bg-white text-black-85 outline-none focus:border-primary-25",
+          comfortable ? "h-8 px-2 text-[12px]" : "h-6 px-1.5 text-[9px]",
+        )}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -178,50 +440,24 @@ function TicketDevCard({ ticket, ahora }: { ticket: LocalbiTicket; ahora: number
     ? `${BASE_TAREABI}/tareabi/${encodeURIComponent(tareaEnlace)}`
     : null;
 
-  const referencia = valor(ticket.titulo);
-  const descripcion = tareas.map((t) => valor(t.detalle)).find((v): v is string => Boolean(v)) ?? null;
-  const lineasDescripcion = descripcion
-    ? descripcion.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
-    : [];
-  const titulo = lineasDescripcion[0] ?? null;
-  const restoDescripcion = lineasDescripcion.length > 1 ? lineasDescripcion.slice(1).join("\n") : null;
-
-  const responsables = [
-    ...new Set(
-      tareas.map((t) => valor(t.responsable)).filter((v): v is string => Boolean(v)),
-    ),
-  ];
-
-  const creado = parseFecha(ticket.fecha_creacion);
-  const fin = parseFecha(ticket.fecha_solucion);
+  const referencia = referenciaVerificada(ticket.titulo);
+  const { titulo, resto } = textosDeTicket(ticket, referencia);
+  const responsables = desarrolladoresDe(ticket);
+  const areaResponsable = valor(ticket.area_responsable);
   const terminal = esTerminal(ticket.estado);
-  const duracion = terminal
-    ? creado && fin
-      ? fin.getTime() - creado.getTime()
-      : null
-    : creado
-      ? ahora - creado.getTime()
-      : null;
-
-  const ultima = [
-    ticket.fecha_creacion,
-    ticket.fecha_solucion,
-    ...tareas.flatMap((t) => [t.fecha_inicio, t.fecha_fin, t.fecha_solicitud]),
-  ]
-    .map((raw) => ({ raw, d: parseFecha(raw) }))
-    .filter((x): x is { raw: string; d: Date } => Boolean(x.d))
-    .sort((a, b) => b.d.getTime() - a.d.getTime())[0]?.raw;
+  const tiempo = resolverTiempoTicket(ticket, ahora);
+  const fin = parseFecha(ticket.fecha_solucion);
 
   return (
     <div
       className={cn(
-        "rounded-lg border border-black-10",
-        comfortable ? "bg-white p-4" : "border-black-10 bg-light p-2",
+        "min-w-0 max-w-full rounded-lg border border-black-10",
+        comfortable ? "bg-white p-4" : "bg-light p-2",
+        tiempo.kind === "inconsistente" && "border-warning-25",
       )}
     >
-      {/* Encabezado */}
-      <div className="flex items-start gap-3">
-        <div className="flex shrink-0 flex-col items-start gap-1">
+      <div className="flex min-w-0 max-w-full flex-col gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {href ? (
             <a
               href={href}
@@ -229,7 +465,7 @@ function TicketDevCard({ ticket, ahora }: { ticket: LocalbiTicket; ahora: number
               rel="noopener noreferrer"
               title="Abrir el expediente de la tarea en el microservicio de desarrollo"
               className={cn(
-                "inline-flex items-center gap-1 font-mono font-semibold text-primary hover:underline",
+                "inline-flex max-w-full shrink-0 items-center gap-1 font-mono font-semibold text-primary hover:underline",
                 comfortable ? "text-[15px]" : "text-[10px]",
               )}
             >
@@ -240,65 +476,71 @@ function TicketDevCard({ ticket, ahora }: { ticket: LocalbiTicket; ahora: number
             <span
               title="El microservicio no expone una ruta por ticket y este ticket no tiene tareas enlazables"
               className={cn(
-                "font-mono font-semibold text-black-45",
+                "max-w-full shrink-0 font-mono font-semibold text-black-45",
                 comfortable ? "text-[15px]" : "text-[10px]",
               )}
             >
               #{ticket.ticket_id}
             </span>
           )}
-          {referencia && (
+
+          <EstadoBadge estado={ticket.estado} />
+
+          {areaResponsable && (
             <span
               className={cn(
-                "rounded bg-black-5 font-mono text-black-65",
-                comfortable ? "px-1.5 py-0.5 text-[11px]" : "px-1 py-0.5 text-[8px]",
+                "inline-flex max-w-full items-center rounded-md bg-black-5 px-2 py-0.5 text-black-65",
+                comfortable ? "text-[11px]" : "text-[8px]",
               )}
-              title="Referencia externa registrada en el ticket"
+              title={areaResponsable}
             >
-              Ref. {referencia}
+              Área: <span className="ml-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{areaResponsable}</span>
+            </span>
+          )}
+
+          {valor(ticket.tipo) && (
+            <span className={cn("max-w-full text-black-65", comfortable ? "text-[12px]" : "text-[9px]")}>
+              {ticket.tipo}
+            </span>
+          )}
+          {valor(ticket.subcategoria) && (
+            <span className={cn("max-w-full text-black-45", comfortable ? "text-[12px]" : "text-[9px]")}>
+              · {ticket.subcategoria}
             </span>
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <EstadoBadge estado={ticket.estado} />
-            {valor(ticket.tipo) && (
-              <span className={comfortable ? "text-[12px] text-black-65" : "text-[9px] text-black-45"}>
-                {ticket.tipo}
-              </span>
-            )}
-            {valor(ticket.subcategoria) && (
-              <span className={comfortable ? "text-[12px] text-black-45" : "text-[9px] text-black-25"}>
-                · {ticket.subcategoria}
-              </span>
-            )}
+        {referencia && (
+          <div className="inline-flex min-w-0 max-w-full w-fit flex-wrap items-center gap-1 rounded-md bg-black-5 px-2 py-1 font-mono text-black-65">
+            <span className={comfortable ? "text-[11px]" : "text-[8px]"}>Ref.</span>
+            <Referencia value={referencia} />
           </div>
+        )}
+
+        <p
+          className={cn(
+            "min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] font-medium text-black-85",
+            comfortable ? "line-clamp-3 text-[14px] leading-snug" : "line-clamp-3 text-[10px]",
+          )}
+        >
+          {titulo ?? <span className="font-normal text-black-45">Sin detalle disponible</span>}
+        </p>
+
+        {resto && (
           <p
             className={cn(
-              "mt-1 font-medium text-black-85",
-              comfortable ? "line-clamp-2 text-[14px] leading-snug" : "line-clamp-2 text-[10px]",
+              "min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] line-clamp-3 text-black-65",
+              comfortable ? "text-[13px] leading-relaxed" : "text-[9px]",
             )}
           >
-            {titulo ?? <span className="font-normal text-black-45">Sin detalle disponible</span>}
+            {resto}
           </p>
-          {restoDescripcion && (
-            <p
-              className={cn(
-                "mt-1 line-clamp-2 text-black-65",
-                comfortable ? "text-[13px] leading-relaxed" : "text-[9px]",
-              )}
-            >
-              {restoDescripcion}
-            </p>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Información temporal */}
       <div
         className={cn(
-          "mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2",
+          "mt-3 grid min-w-0 max-w-full gap-x-6 gap-y-1.5 md:grid-cols-2",
           comfortable ? "text-[13px]" : "text-[9px]",
         )}
       >
@@ -308,29 +550,12 @@ function TicketDevCard({ ticket, ahora }: { ticket: LocalbiTicket; ahora: number
           tono={responsables.length ? undefined : "muted"}
         />
         <Dato label="Creado" value={fmtFechaHora(ticket.fecha_creacion)} />
-        {terminal ? (
-          <>
-            <Dato
-              label="Fecha de finalización"
-              value={ticket.fecha_solucion ? fmtFechaHora(ticket.fecha_solucion) : "No disponible"}
-              tono={ticket.fecha_solucion ? undefined : "muted"}
-            />
-            <Dato
-              label="Tiempo total de resolución"
-              value={terminal ? fmtResolucion(creado, fin) : "No disponible"}
-              tono={creado && fin ? undefined : "muted"}
-            />
-          </>
-        ) : (
-          <>
-            <Dato
-              label="Tiempo transcurrido"
-              value={duracion != null ? fmtDuracion(duracion) : "No disponible"}
-              tono={duracion != null ? undefined : "muted"}
-            />
-            <Dato label="Fecha de finalización" value="No disponible" tono="muted" />
-          </>
-        )}
+        <Dato
+          label="Fecha de finalización"
+          value={terminal ? fmtFechaHora(ticket.fecha_solucion) : "No disponible"}
+          tono={terminal && fin ? undefined : "muted"}
+        />
+        <Dato label="Tiempo" value={<ValorTiempo tiempo={tiempo} />} />
       </div>
 
       <div className="mt-3">
@@ -339,43 +564,51 @@ function TicketDevCard({ ticket, ahora }: { ticket: LocalbiTicket; ahora: number
           onClick={() => setAbierto((v) => !v)}
           aria-expanded={abierto}
           className={cn(
-            "inline-flex items-center gap-1 font-medium text-primary hover:underline",
+            "inline-flex max-w-full items-center gap-1 font-medium text-primary hover:underline",
             comfortable ? "text-[13px]" : "text-[9px]",
           )}
         >
           {abierto ? <ChevronDown size={comfortable ? 14 : 10} /> : <ChevronRight size={comfortable ? 14 : 10} />}
-          {abierto ? "Ocultar detalle" : "Ver detalle"}
+          {abierto ? "Ocultar detalle" : "Ver detalle completo"}
         </button>
       </div>
 
       {abierto && (
-        <TicketDevDetalle ticket={ticket} ahora={ahora} ultimaActualizacion={ultima} />
+        <TicketDevDetalle ticket={ticket} ahora={ahora} referencia={referencia} />
       )}
     </div>
   );
 }
 
+function ValorTiempo({ tiempo }: { tiempo: TiempoTicket }) {
+  switch (tiempo.kind) {
+    case "duracion":
+      if (tiempo.ms === 0 && tiempo.sinHora) {
+        return <span>Duración registrada: Mismo día</span>;
+      }
+      return <span>Duración registrada: {fmtDuracion(tiempo.ms ?? null)}</span>;
+    case "transcurrido":
+      return <span>Tiempo transcurrido: {fmtDuracion(tiempo.ms ?? null)}</span>;
+    case "inconsistente":
+      return <span className="font-medium text-warning-65">Fechas inconsistentes</span>;
+    default:
+      return <span className="text-black-45">No disponible</span>;
+  }
+}
+
 function TicketDevDetalle({
   ticket,
   ahora,
-  ultimaActualizacion,
+  referencia,
 }: {
   ticket: LocalbiTicket;
   ahora: number;
-  ultimaActualizacion?: string;
+  referencia: string | null;
 }) {
   const comfortable = useDensity() === "comfortable";
   const tareas = ticket.tareas ?? [];
   const terminal = esTerminal(ticket.estado);
-  const creado = parseFecha(ticket.fecha_creacion);
-  const fin = parseFecha(ticket.fecha_solucion);
-  const duracion = terminal
-    ? creado && fin
-      ? fin.getTime() - creado.getTime()
-      : null
-    : creado
-      ? ahora - creado.getTime()
-      : null;
+  const tiempo = resolverTiempoTicket(ticket, ahora);
 
   const logQueries = useTareabiLogsMulti(
     tareas.map((t) => ({ tareabiId: t.tarea_id, ticketbiId: ticket.ticket_id })),
@@ -386,25 +619,39 @@ function TicketDevDetalle({
     .map((raw) => ({ raw, d: parseFecha(raw) }))
     .filter((x): x is { raw: string; d: Date } => Boolean(x.d))
     .sort((a, b) => b.d.getTime() - a.d.getTime())[0]?.raw;
-  const ultima = ultimaLog ?? ultimaActualizacion;
 
-  const referencia = valor(ticket.titulo);
+  const ultima = [
+    ticket.fecha_creacion,
+    ticket.fecha_solucion,
+    ...tareas.flatMap((t) => [t.fecha_inicio, t.fecha_fin, t.fecha_solicitud]),
+    ultimaLog,
+  ]
+    .map((raw) => ({ raw, d: parseFecha(raw) }))
+    .filter((x): x is { raw: string; d: Date } => Boolean(x.d))
+    .sort((a, b) => b.d.getTime() - a.d.getTime())[0]?.raw;
+
   const observacion = valor(ticket.observaciones);
   const areaResponsable = valor(ticket.area_responsable);
+  const { descripcion } = textosDeTicket(ticket, referencia);
   const descripciones = [
-    ...new Set(tareas.map((t) => valor(t.detalle)).filter((v): v is string => Boolean(v))),
+    ...new Set(
+      [
+        ...tareas.map((t) => valor(t.detalle)),
+        descripcion,
+      ].filter((v): v is string => Boolean(v)),
+    ),
   ];
 
   return (
     <div
       className={cn(
-        "border-t border-black-10",
+        "min-w-0 max-w-full border-t border-black-10",
         comfortable ? "mt-3 space-y-3 pt-3" : "mt-2 space-y-2 pt-2",
       )}
     >
       <div
         className={cn(
-          "grid gap-x-6 gap-y-1.5 sm:grid-cols-2",
+          "grid min-w-0 max-w-full gap-x-6 gap-y-1.5 md:grid-cols-2",
           comfortable ? "text-[13px]" : "text-[9px]",
         )}
       >
@@ -419,29 +666,23 @@ function TicketDevDetalle({
           value={fmtFechaHora(ultima)}
           tono={parseFecha(ultima) ? undefined : "muted"}
         />
+        <Dato label="Tiempo" value={<ValorTiempo tiempo={tiempo} />} />
         <Dato
-          label={terminal ? "Tiempo total de resolución" : "Tiempo transcurrido"}
-          value={terminal ? fmtResolucion(creado, fin) : duracion != null ? fmtDuracion(duracion) : "No disponible"}
-          tono={terminal ? (creado && fin ? undefined : "muted") : duracion != null ? undefined : "muted"}
+          label="Fecha de finalización"
+          value={terminal ? fmtFechaHora(ticket.fecha_solucion) : "No disponible"}
+          tono={terminal && parseFecha(ticket.fecha_solucion) ? undefined : "muted"}
         />
-        {terminal && (
-          <Dato
-            label="Fecha de finalización"
-            value={ticket.fecha_solucion ? fmtFechaHora(ticket.fecha_solucion) : "No disponible"}
-            tono={ticket.fecha_solucion ? undefined : "muted"}
-          />
-        )}
-        {referencia && <Dato label="Referencia" value={<Referencia value={referencia} />} mono />}
+        {referencia && <Dato label="Referencia" value={<Referencia value={referencia} />} />}
       </div>
 
       {descripciones.length > 0 && (
-        <div>
+        <div className="min-w-0 max-w-full">
           <p className={cn("font-semibold uppercase tracking-wider text-black-45", comfortable ? "text-[11px]" : "text-[8px]")}>
             Descripción del requerimiento
           </p>
           <p
             className={cn(
-              "mt-1 whitespace-pre-line text-black-85",
+              "mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere] text-black-85",
               comfortable ? "text-[13px] leading-relaxed" : "text-[9px]",
             )}
           >
@@ -451,13 +692,13 @@ function TicketDevDetalle({
       )}
 
       {observacion && (
-        <div>
+        <div className="min-w-0 max-w-full">
           <p className={cn("font-semibold uppercase tracking-wider text-black-45", comfortable ? "text-[11px]" : "text-[8px]")}>
             Observación / conclusión
           </p>
           <p
             className={cn(
-              "mt-1 whitespace-pre-line text-black-65",
+              "mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere] text-black-65",
               comfortable ? "text-[13px] leading-relaxed" : "text-[9px]",
             )}
           >
@@ -466,7 +707,7 @@ function TicketDevDetalle({
         </div>
       )}
 
-      <div>
+      <div className="min-w-0 max-w-full">
         <p className={cn("font-semibold uppercase tracking-wider text-black-45", comfortable ? "text-[11px]" : "text-[8px]")}>
           Tareas asociadas ({tareas.length})
         </p>
@@ -517,18 +758,18 @@ function TareaDevItem({
   return (
     <div
       className={cn(
-        "rounded-lg border border-black-10 bg-white",
+        "min-w-0 max-w-full rounded-lg border border-black-10 bg-white",
         comfortable ? "p-3" : "border-black-5 p-1.5",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2">
         <a
           href={href}
           target="_blank"
           rel="noopener noreferrer"
           title="Abrir esta tarea en el microservicio de desarrollo"
           className={cn(
-            "inline-flex items-center gap-1 font-mono text-primary hover:underline",
+            "inline-flex max-w-full items-center gap-1 font-mono text-primary hover:underline",
             comfortable ? "text-[13px]" : "text-[9px]",
           )}
         >
@@ -540,20 +781,20 @@ function TareaDevItem({
 
       <div
         className={cn(
-          "mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2",
+          "mt-2 grid min-w-0 max-w-full gap-x-5 gap-y-1 md:grid-cols-2",
           comfortable ? "text-[12px]" : "text-[9px]",
         )}
       >
         <Dato label="Desarrollador" value={dev ?? "Sin asignar"} tono={dev ? undefined : "muted"} />
         <Dato label="Inicio" value={fmtFechaHora(inicio)} tono={inicio ? undefined : "muted"} />
         <Dato label="Fin" value={fin ? fmtFechaHora(fin) : "No disponible"} tono={fin ? undefined : "muted"} />
-        {referencia && <Dato label="Referencia" value={<Referencia value={referencia} />} mono />}
+        {referencia && <Dato label="Referencia" value={<Referencia value={referencia} />} />}
       </div>
 
       {descripcion && descripcion !== descripcionTicket && (
         <p
           className={cn(
-            "mt-2 whitespace-pre-line text-black-65",
+            "mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-black-65",
             comfortable ? "text-[13px] leading-relaxed" : "text-[9px]",
           )}
         >
@@ -562,7 +803,7 @@ function TareaDevItem({
       )}
 
       {conclusion && (
-        <p className={cn("mt-2 text-black-65", comfortable ? "text-[12px]" : "text-[9px]")}>
+        <p className={cn("mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-black-65", comfortable ? "text-[12px]" : "text-[9px]")}>
           <span className="font-medium">Conclusión:</span> {conclusion}
         </p>
       )}
@@ -595,18 +836,26 @@ function Historial({ entradas }: { entradas: TareabiHistorialEntrada[] }) {
         <div
           key={`${h.fecha ?? "sin-fecha"}-${i}`}
           className={cn(
-            "flex flex-wrap items-center text-black-65",
+            "flex min-w-0 max-w-full flex-wrap items-start text-black-65",
             comfortable ? "gap-x-2.5 gap-y-1 text-[12px]" : "gap-x-2 text-[8px] text-black-45",
           )}
         >
           <span className="shrink-0 tabular-nums">{fmtFechaHora(h.fecha)}</span>
-          {h.persona && <span className="shrink-0 font-medium text-black-65">{h.persona}</span>}
-          {h.accion && <span className={cn("shrink-0 text-black-45", comfortable ? "text-[11px]" : "text-[8px]")}>{h.accion}</span>}
+          {h.persona && (
+            <span className="min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] font-medium text-black-65">
+              {h.persona}
+            </span>
+          )}
+          {h.accion && (
+            <span className={cn("min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] text-black-45", comfortable ? "text-[11px]" : "text-[8px]")}>
+              {h.accion}
+            </span>
+          )}
           {h.cambios.map((c, j) => (
             <span
               key={j}
               className={cn(
-                "rounded bg-black-5 text-black-65",
+                "inline-block min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] rounded bg-black-5 text-black-65",
                 comfortable ? "px-1.5 py-0.5 text-[11px]" : "px-1 text-[8px] text-black-45",
               )}
             >
@@ -619,22 +868,35 @@ function Historial({ entradas }: { entradas: TareabiHistorialEntrada[] }) {
   );
 }
 
-/** Referencia: si es URL se abre en el proveedor original; si es código se muestra tal cual. */
+/** Referencia: URL clicable o texto; siempre envuelve dentro del ancho. */
 function Referencia({ value }: { value: string }) {
-  if (/^https?:\/\//i.test(value)) {
-    return (
-      <a
-        href={value}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="truncate text-primary hover:underline"
-        title={value}
-      >
-        {value}
-      </a>
-    );
-  }
-  return <span title={value}>{value}</span>;
+  const items = value.split(/\s+/).filter(Boolean);
+  return (
+    <span className="inline-flex min-w-0 max-w-full flex-wrap gap-x-2 gap-y-1 align-middle">
+      {items.map((x, i) =>
+        /^https?:\/\//i.test(x) ? (
+          <a
+            key={`${x}-${i}`}
+            href={x}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] text-primary hover:underline"
+            title={x}
+          >
+            {x}
+          </a>
+        ) : (
+          <span
+            key={`${x}-${i}`}
+            className="min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere]"
+            title={x}
+          >
+            {x}
+          </span>
+        ),
+      )}
+    </span>
+  );
 }
 
 function Dato({
@@ -650,16 +912,17 @@ function Dato({
 }) {
   const comfortable = useDensity() === "comfortable";
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3">
+    <div className="flex min-w-0 max-w-full flex-col gap-0.5 md:flex-row md:items-start md:justify-between md:gap-3">
       <span className={cn("shrink-0", comfortable ? "text-[12px] text-black-45" : "text-[9px] text-black-25")}>
         {label}
       </span>
       <span
         className={cn(
-          "min-w-0 truncate text-right font-medium",
+          "min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] text-left font-medium",
           mono && "font-mono",
           tono === "muted" ? "text-black-45" : "text-black-85",
           comfortable ? "text-[13px]" : "text-[9px]",
+          "md:text-right",
         )}
         title={typeof value === "string" ? value : undefined}
       >
@@ -675,7 +938,7 @@ function EstadoBadge({ estado }: { estado: string | null | undefined }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md font-medium",
+        "inline-flex max-w-full items-center rounded-md font-medium",
         comfortable ? "px-2 py-1 text-[12px]" : "px-1.5 py-0.5 text-[9px]",
         tonoEstado(estado),
       )}

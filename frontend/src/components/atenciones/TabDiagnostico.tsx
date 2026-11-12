@@ -130,7 +130,7 @@ export function TabDiagnostico({ data, loading }: Props) {
       <CardWrapper title="Recomendaciones" icon={<Sparkles size={12} />}>
         <div className="space-y-1">
           {d.recomendaciones.map((rec, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-lg border border-black-10 bg-[#F0F7FF] p-2.5 text-xs">
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-black-10 bg-primary-5 p-2.5 text-xs">
               <ArrowRight size={12} className="mt-0.5 shrink-0 text-primary" />
               <span className="text-black-85">{rec}</span>
             </div>
@@ -169,7 +169,7 @@ export function TabDiagnostico({ data, loading }: Props) {
           {ACCESOS.map((a) => (
             <button
               key={a}
-              className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-primary hover:text-primary"
             >
               <ExternalLink size={8} />
               {a}

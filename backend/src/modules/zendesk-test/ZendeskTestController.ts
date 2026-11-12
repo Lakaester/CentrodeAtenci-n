@@ -10,10 +10,15 @@ import { AtencionViewModelService } from "./AtencionViewModelService";
 import { AtencionCompletaService } from "./AtencionCompletaService";
 import { ClientStore } from "./ClientStore";
 import { AgentStore } from "./AgentStore";
-import { clasificarCategoriaQyd, normalizarCategoriaQyd, estadoZendeskCandidato } from "../../services/quejasCasos.service";
+import { clasificarCategoriaQyd, clasificacionQuejaDesdeSubcategoria } from "../../services/quejasCasos.service";
+import { fechaOrigenExacta } from "../../utils/fechaQyd";
+import { obtenerContextoQydLocal } from "../../services/qydContextoLocal.service";
 import { CustomerMemory } from "./CustomerMemory";
 import { atencionOperativaService } from "../../integrations/atenciones/services/AtencionOperativaService";
 import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
+import { env } from "../../config/env";
+import { authService } from "../../services/auth.service";
+import { identidadDe, type IdentidadUsuario } from "./identidad";
 
 const testService = new ZendeskTestService();
 const inboxService = new ZendeskInboxService();
@@ -24,8 +29,30 @@ const viewModelService = new AtencionViewModelService();
 const atencionCompletaService = new AtencionCompletaService();
 
 function usuarioDe(req: Request): string | null {
-  const auth = (req as AuthedRequest).auth;
-  return auth?.nombre ?? null;
+  return identidadDe(req)?.etiqueta ?? null;
+}
+
+/** Auditoría operativa con identidad autenticada. No falla la acción de Zendesk. */
+async function auditarAtencion(
+  ticketId: string,
+  identidad: IdentidadUsuario,
+  accion: string,
+  detalle: string,
+  campo?: string | null,
+  valorNuevo?: string | null,
+): Promise<void> {
+  try {
+    await atencionOperativaService.registrarAccion(ticketId, {
+      accion,
+      detalle,
+      campo: campo ?? null,
+      valorNuevo: valorNuevo ?? null,
+      usuario: identidad.etiqueta,
+      origen: "zendesk",
+    });
+  } catch (err) {
+    console.error(`[Operativa] No se pudo registrar ${accion} #${ticketId}:`, err);
+  }
 }
 
 export const zendeskTestController = {
@@ -106,9 +133,12 @@ export const zendeskTestController = {
   async internalNote(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { body, autor } = req.body;
-      if (isNaN(id) || !body || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
-      const result = await actionsService.internalNote(id, body, autor);
+      const { body } = req.body;
+      if (isNaN(id) || !body) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const identidad = identidadDe(req);
+      if (!identidad) return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+      const result = await actionsService.internalNote(id, body, identidad.etiqueta);
+      await auditarAtencion(String(id), identidad, "nota_interna", "Nota interna agregada", "nota");
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
   },
@@ -117,9 +147,12 @@ export const zendeskTestController = {
   async assign(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { assigneeId, autor } = req.body;
-      if (isNaN(id) || !assigneeId || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
-      const result = await actionsService.assign(id, assigneeId, autor);
+      const { assigneeId } = req.body;
+      if (isNaN(id) || !assigneeId) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const identidad = identidadDe(req);
+      if (!identidad) return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+      const result = await actionsService.assign(id, assigneeId, identidad.etiqueta);
+      await auditarAtencion(String(id), identidad, "asignacion", `Asignado a ${assigneeId}`, "asesor", String(assigneeId));
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
   },
@@ -128,27 +161,25 @@ export const zendeskTestController = {
   async changeStatus(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { status, autor, email } = req.body;
-      if (isNaN(id) || !status || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
-      const result = await actionsService.changeStatus(id, status, autor);
+      const { status, email } = req.body;
+      if (isNaN(id) || !status) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const identidad = identidadDe(req);
+      if (!identidad) return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+      const result = await actionsService.changeStatus(id, status, identidad.etiqueta);
       // CustomerMemory: register resolution
       if (status === "solved" && email) {
         CustomerMemory.registrarResolucion(email, String(id));
       }
 
       // ── Registro operativo COPE: estado + resolución/cierre ──
-      try {
-        await atencionOperativaService.registrarAccion(String(id), {
-          accion: status === "solved" ? "resolucion" : status === "closed" ? "cierre" : "cambio_estado",
-          detalle: `Estado: ${status}`,
-          campo: "estado",
-          valorNuevo: status,
-          usuario: autor,
-          origen: "zendesk",
-        });
-      } catch (err) {
-        console.error(`[Operativa] No se pudo registrar estado #${id}:`, err);
-      }
+      await auditarAtencion(
+        String(id),
+        identidad,
+        status === "solved" ? "resolucion" : status === "closed" ? "cierre" : "cambio_estado",
+        `Estado: ${status}`,
+        "estado",
+        status,
+      );
 
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
@@ -158,30 +189,140 @@ export const zendeskTestController = {
   async categorize(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { categoria, subcategoria, autor, email } = req.body;
-      if (isNaN(id) || !categoria || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
-      const result = await actionsService.categorize(id, categoria, subcategoria ?? "", autor);
-      // CustomerMemory: register category
+      const { categoria, subcategoria, email } = req.body;
+      if (isNaN(id) || !categoria) return res.status(400).json({ ok: false, error: "Faltan datos" });
+
+      // Identidad SIEMPRE desde la sesión autenticada. body.autor se ignora.
+      const identidad = identidadDe(req);
+      if (!identidad) {
+        return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+      }
+      const usuario = identidad.etiqueta;
+      const nombreAsesor = identidad.nombreCompleto;
+
+      // 1) Persistir la categoría en Zendesk.
+      const result = await actionsService.categorize(id, categoria, subcategoria ?? "", usuario);
+
+      // CustomerMemory: registro en memoria; no es fuente de verdad.
       if (email && subcategoria) {
         CustomerMemory.registrarCategoria(email, categoria, subcategoria);
       }
 
-      // ── Registro operativo COPE: persistir clasificación + auditoría ──
+      // 2) Persistir la clasificación en el snapshot operativo de COPE.
+      //    Si falla, no responder como éxito: la categoría ya está en Zendesk
+      //    y el reintento es idempotente.
       try {
         await atencionOperativaService.registrarClasificacion(String(id), {
           categoria,
           subcategoria: subcategoria ?? null,
-          usuario: autor,
+          usuario,
           origen: "zendesk",
         });
       } catch (err) {
         console.error(`[Operativa] No se pudo registrar clasificación #${id}:`, err);
+        return res.status(500).json({
+          ok: false,
+          error: {
+            code: "ERROR_PERSISTENCIA_ATENCION",
+            message: "La categoría se guardó en Zendesk, pero no se pudo persistir en COPE. Reintente.",
+          },
+          data: {
+            ...result,
+            caso: null,
+            creado: false,
+            reutilizado: false,
+            motivo: "ERROR_PERSISTENCIA_ATENCION",
+            expedientePendiente: true,
+          },
+        });
       }
 
-      // Integración Quejas y Devoluciones: si la categoría es QUEJA o DEVOLUCIÓN,
-      // crear o reutilizar el caso (sin duplicados por ticket+tipo ni por hilo follow_up).
-      const casoCreado = await crearCasoDesdeCategoria(req, String(id), categoria, subcategoria, autor);
-      res.json({ ok: true, data: { ...result, caso: casoCreado?.caso ?? null, casoReutilizado: casoCreado?.reutilizado ?? false } });
+      // 3) Flag de seguridad: la creación automática está deshabilitada por defecto.
+      if (!env.QD_AUTO_CREATE_ENABLED) {
+        return res.json({
+          ok: true,
+          data: {
+            ...result,
+            caso: null,
+            creado: false,
+            reutilizado: false,
+            casoReutilizado: false,
+            motivo: "AUTO_CREATE_DESHABILITADO",
+            expedientePendiente: false,
+            canal: null,
+          },
+        });
+      }
+
+      // 3.1) Autorización adicional para crear expedientes QyD.
+      // La categorización ya quedó guardada; si no hay permiso QyD, no se crea
+      // el expediente y queda pendiente para un usuario autorizado.
+      const auth = (req as AuthedRequest).auth;
+      if (!auth || !authService.hasPermiso(auth, "Quejas y Devoluciones", "crear")) {
+        console.warn(`[QD] categoria ticket_id=${id} usuario=${usuario} resultado=SIN_PERMISO_QYD`);
+        return res.json({
+          ok: true,
+          data: {
+            ...result,
+            caso: null,
+            creado: false,
+            reutilizado: false,
+            casoReutilizado: false,
+            motivo: "SIN_PERMISO_QYD",
+            expedientePendiente: true,
+            canal: null,
+          },
+        });
+      }
+
+      // 4) Integración Quejas y Devoluciones: crear o reutilizar el expediente.
+      let casoCreado: Awaited<ReturnType<typeof crearCasoDesdeCategoria>>;
+      try {
+        casoCreado = await crearCasoDesdeCategoria(String(id), categoria, subcategoria, nombreAsesor, usuario);
+      } catch (err) {
+        console.error(`[QD] Error creando expediente para #${id}:`, err);
+        return res.status(500).json({
+          ok: false,
+          error: {
+            code: "ERROR_CREACION_EXPEDIENTE",
+            message: "La categoría se guardó, pero no se pudo crear el expediente. El intento queda pendiente para reintento.",
+          },
+          data: {
+            ...result,
+            caso: null,
+            creado: false,
+            reutilizado: false,
+            motivo: "ERROR_CREACION_EXPEDIENTE",
+            expedientePendiente: true,
+          },
+        });
+      }
+
+      const motivo = casoCreado.motivoNoCreacion ?? null;
+      const expedientePendiente = !casoCreado.caso && [
+        "PENDIENTE_CANAL",
+        "CANAL_NO_SOPORTADO",
+        "PENDIENTE_DOMINIO",
+        "PENDIENTE_RELACION",
+        "PENDIENTE_ATENCION",
+        "PENDIENTE_FECHA",
+        "SIN_PERMISO_QYD",
+      ].includes(motivo ?? "");
+
+      res.json({
+        ok: true,
+        data: {
+          ...result,
+          caso: casoCreado.caso,
+          creado: casoCreado.creado,
+          reutilizado: casoCreado.reutilizado,
+          // Compatibilidad con el frontend actual.
+          casoReutilizado: casoCreado.reutilizado,
+          motivo,
+          expedientePendiente,
+          canal: casoCreado.canal ?? null,
+        },
+      });
     } catch (err) { next(err); }
   },
 
@@ -189,9 +330,12 @@ export const zendeskTestController = {
   async reply(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { body, autor } = req.body;
-      if (isNaN(id) || !body || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
-      const result = await actionsService.reply(id, body, autor);
+      const { body } = req.body;
+      if (isNaN(id) || !body) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const identidad = identidadDe(req);
+      if (!identidad) return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
+      const result = await actionsService.reply(id, body, identidad.etiqueta);
+      await auditarAtencion(String(id), identidad, "respuesta", "Respuesta enviada", "respuesta");
       res.json({ ok: true, data: result });
     } catch (err) { next(err); }
   },
@@ -200,8 +344,10 @@ export const zendeskTestController = {
   async replyResolve(req: Request, res: Response, next: NextFunction) {
     try {
       const id = Number(req.params.id);
-      const { body, autor, resolver, archivos } = req.body;
-      if (isNaN(id) || !body || !autor) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const { body, resolver, archivos } = req.body;
+      if (isNaN(id) || !body) return res.status(400).json({ ok: false, error: "Faltan datos" });
+      const identidad = identidadDe(req);
+      if (!identidad) return res.status(401).json({ ok: false, error: "No autenticado", code: "UNAUTHENTICATED" });
 
       const files = (archivos ?? []).map((a: any) => ({
         nombre: a.nombre,
@@ -214,7 +360,14 @@ export const zendeskTestController = {
         if (f.buffer.length === 0) throw new Error(`Archivo vacío: ${f.nombre}`);
       }
 
-      const result = await actionsService.responderYResolver(id, body, autor, files, resolver);
+      const result = await actionsService.responderYResolver(id, body, identidad.etiqueta, files, resolver);
+      await auditarAtencion(
+        String(id),
+        identidad,
+        resolver ? "respuesta_resolucion" : "respuesta",
+        resolver ? "Respuesta enviada y ticket resuelto" : "Respuesta enviada",
+        "respuesta",
+      );
       res.json({ ok: true, data: result });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -275,6 +428,12 @@ export const zendeskTestController = {
             tags: result.ticket.tags,
             assigneeId: result.ticket.assigneeId,
             requesterId: result.ticket.requesterId,
+            canal: result.ticket.canal,
+            canalRaw: result.ticket.canalRaw,
+            via: result.ticket.via,
+            followupIds: result.ticket.followupIds,
+            ticketPadreId: result.ticket.ticketPadreId,
+            relacionVerificada: result.ticket.relacionVerificada,
           },
           { usuario: usuarioDe(req) },
         );
@@ -385,96 +544,146 @@ export const zendeskTestController = {
   },
 };
 
+type ResultadoCategoriaQyd = {
+  caso: any | null;
+  creado: boolean;
+  reutilizado: boolean;
+  interaccionAsociada: boolean;
+  motivoNoCreacion: string | null;
+  canal: string | null;
+};
+
 /** Crea (o reutiliza) un caso de Quejas y Devoluciones cuando la categoría del ticket es QUEJA o DEVOLUCIÓN. */
-async function crearCasoDesdeCategoria(req: Request, ticketId: string, categoria: string, subcategoria: string, autor: string) {
+async function crearCasoDesdeCategoria(
+  ticketId: string,
+  categoria: string,
+  subcategoria: string,
+  autor: string,
+  usuarioAudit: string,
+): Promise<ResultadoCategoriaQyd> {
   // FIX QYD realtime: clasificación de las 4 categorías QyD (QUEJA / RECLAMO /
   // SOLICITUD DE DEVOLUCIÓN / QUEJA Y DEVOLUCIÓN + variantes de mayúsculas/tildes/separadores).
   const clasificacionCat = clasificarCategoriaQyd(categoria, subcategoria);
   if (!clasificacionCat) {
-    logQyd(ticketId, categoria, subcategoria, null, null, "NOT_QYD_CATEGORY");
-    return null;
+    logQyd(ticketId, categoria, subcategoria, null, null, null, "NOT_QYD_CATEGORY");
+    return { caso: null, creado: false, reutilizado: false, interaccionAsociada: false, motivoNoCreacion: "NO_ELEGIBLE", canal: null };
   }
   const tipo = clasificacionCat.tipo;
 
   // Derivar clasificación de queja desde la subcategoría cuando sea posible.
-  let clasificacion: string | null = null;
-  if (tipo === "queja") {
-    const sub = normalizarCategoriaQyd(subcategoria);
-    if (sub.includes("servicio")) clasificacion = "Servicio";
-    else if (sub.includes("producto")) clasificacion = "Producto";
-    else if (sub.includes("otro")) clasificacion = "Otro";
-  }
+  const clasificacion = clasificacionQuejaDesdeSubcategoria(tipo, subcategoria);
 
-  // Identificador relacional del hilo: consultamos el ticket real en Zendesk
-  // para obtener via.source.from.ticket_id (rel === "follow_up") y el dominio
-  // del ticket (custom field), fuente confiable para el caso Q/D.
-  let ticketPadreId: string | null = null;
-  let dominioTicket: string | null = null;
-  let paisTicket: string | null = null;
-  let estadoTicket: string | null = null;
-  const numId = Number(ticketId);
-  if (!isNaN(numId)) {
-    try {
-      const detalle = await ticketService.obtenerTicket(numId);
-      ticketPadreId = detalle?.ticketPadreId ?? null;
-      dominioTicket = detalle?.dominio ?? null;
-      paisTicket = detalle?.pais ?? null;
-      estadoTicket = detalle?.ticketOriginalStatus ?? null;
-    } catch (err) {
-      // No ocultar: se registra pero se continúa sin datos del ticket.
-      console.error(`[QD] No se pudo consultar ticket #${ticketId}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  // Fuente de verdad local: PostgreSQL (atención + vista normalizada +
+  // relaciones verificadas). No se consulta la API de Zendesk en este flujo.
+  const contexto = await obtenerContextoQydLocal(ticketId);
+  const canal = contexto?.canal ?? null;
+  const canalRaw = contexto?.canalRaw ?? null;
+  const fechaSolicitud = fechaOrigenExacta(contexto?.fechaOriginalIso ?? null);
 
-  // Estado válido: el ticket debe estar cerrado/resuelto (no crear abiertos/pendientes).
-  if (!estadoZendeskCandidato(estadoTicket)) {
-    logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "INVALID_STATE");
-    return null;
+  const pendiente = (motivo: string): ResultadoCategoriaQyd => {
+    const motivoFinal = motivo === "PENDIENTE_CANAL" && canalRaw && !canal
+      ? "CANAL_NO_SOPORTADO"
+      : motivo;
+    logQyd(
+      ticketId, categoria, subcategoria, contexto?.estado ?? null,
+      contexto?.dominio ?? null, canal ?? null, motivoFinal,
+    );
+    return {
+      caso: null,
+      creado: false,
+      reutilizado: false,
+      interaccionAsociada: false,
+      motivoNoCreacion: motivoFinal,
+      canal: canal ?? null,
+    };
+  };
+
+  if (!contexto) return pendiente("PENDIENTE_ATENCION");
+  if (!fechaSolicitud) return pendiente("PENDIENTE_FECHA");
+  if (!canal) return pendiente("PENDIENTE_CANAL");
+  // Sin dominio no bloquea: se crea/reutiliza el expediente como SIN DOMINIO
+  // y queda CERRADO. La relación solo se exige cuando hay un padre/follow-up
+  // conocido que no se pudo verificar; la ausencia total de relación no impide
+  // crear una raíz independiente (flujo multicanal PostgreSQL).
+  const sinRelacionConocida = !contexto.ticketPadreId
+    && (contexto.followupIds ?? []).length === 0;
+  if (!sinRelacionConocida && !contexto.relacionVerificada) {
+    return pendiente("PENDIENTE_RELACION");
   }
 
   const { qdService } = await import("../../services/quejasDevoluciones.service");
   try {
-    // El dominio se toma del ticket real; solo si el cliente lo envía explícito
-    // en el body se prefiere ese valor (ambos son válidos si no están vacíos).
-    const dominio = (req.body as any)?.dominio?.trim() ? String((req.body as any).dominio).trim() : dominioTicket;
     const resultado = await qdService.crearDesdeCategorizacion({
       ticketId,
-      ticketPadreId,
+      ticketPadreId: contexto.ticketPadreId,
+      followupIds: contexto.followupIds,
+      relacionVerificada: contexto.relacionVerificada,
       tipo,
-      asesor: autor,
-      dominio,
-      pais: (req.body as any)?.pais ?? paisTicket,
-      estado: "Pendiente de conciliación",
-      estadoTicket,
+      asesor: contexto.asesor ?? autor,
+      dominio: contexto.dominio,
+      dominioOriginal: contexto.dominioOriginal,
+      pais: contexto.pais,
+      estado: contexto.dominio ? "Pendiente de conciliación" : undefined,
+      estadoTicket: contexto.estado,
+      canal,
+      fechaSolicitud,
+      permitirZendesk: false,
+      permitirSinRelacionVerificada: sinRelacionConocida,
       ...(clasificacion ? { clasificacion } : {}),
-    }, autor);
+    }, usuarioAudit);
+
+    let motivo = resultado?.motivoNoCreacion ?? null;
+    if (motivo === "PENDIENTE_CANAL" && canalRaw && !canal) motivo = "CANAL_NO_SOPORTADO";
+
     logQyd(
-      ticketId, categoria, subcategoria, estadoTicket, dominio,
-      resultado?.creado ? "CREATED" : (resultado?.reutilizado ? "ALREADY_EXISTS" : "ERROR"),
+      ticketId, categoria, subcategoria, contexto.estado, contexto.dominio, canal,
+      resultado?.creado ? "CREATED" : (resultado?.reutilizado ? "ALREADY_EXISTS" : (motivo ?? "ERROR")),
     );
-    return resultado;
+    return {
+      caso: resultado?.caso ?? null,
+      creado: resultado?.creado ?? false,
+      reutilizado: resultado?.reutilizado ?? false,
+      interaccionAsociada: resultado?.interaccionAsociada ?? false,
+      motivoNoCreacion: motivo,
+      canal,
+    };
   } catch (err: any) {
     // Si ya existe un caso para este ticket+tipo, no fallar la categorización.
-    if (err?.code === "CASO_DUPLICADO") { logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "ALREADY_EXISTS"); return null; }
+    if (err?.code === "CASO_DUPLICADO") {
+      const existente = await qdService.porTicketGeneral(ticketId, tipo);
+      logQyd(ticketId, categoria, subcategoria, contexto.estado, null, canal, "ALREADY_EXISTS");
+      return {
+        caso: existente,
+        creado: false,
+        reutilizado: !!existente,
+        interaccionAsociada: false,
+        motivoNoCreacion: existente ? null : "YA_EXISTE",
+        canal,
+      };
+    }
     // Sin dominio identificado: no crear caso incompleto; registrar el pendiente.
-    if (err?.code === "DOMINIO_REQUERIDO") { logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "INVALID_DOMAIN"); return null; }
-    logQyd(ticketId, categoria, subcategoria, estadoTicket, null, "ERROR");
-    return null;
+    if (err?.code === "DOMINIO_REQUERIDO") {
+      logQyd(ticketId, categoria, subcategoria, contexto.estado, null, canal, "INVALID_DOMAIN");
+      return { caso: null, creado: false, reutilizado: false, interaccionAsociada: false, motivoNoCreacion: "PENDIENTE_DOMINIO", canal };
+    }
+    logQyd(ticketId, categoria, subcategoria, contexto.estado, null, canal, "ERROR");
+    throw err;
   }
 }
 
-/** Log del procesamiento de un ticket candidato QyD (FIX QYD realtime). Sin secretos. */
+/** Log del procesamiento de un ticket candidato QyD. Sin secretos. */
 function logQyd(
   ticketId: string,
   categoriaOriginal: string,
   subcategoria: string,
   estado: string | null,
   dominio: string | null,
+  canal: string | null,
   resultado: string,
 ) {
   // eslint-disable-next-line no-console
   console.warn(
-    `[QD] categoria ticket_id=${ticketId} canal=zendesk estado=${estado ?? "?"} ` +
+    `[QD] categoria ticket_id=${ticketId} canal=${canal ?? "?"} estado=${estado ?? "?"} ` +
     `categoria_original=${categoriaOriginal} subcategoria=${subcategoria ?? ""} ` +
     `categoria_normalizada=${clasificarCategoriaQyd(categoriaOriginal, subcategoria)?.categoria ?? "no_qyd"} ` +
     `dominio=${dominio ?? "?"} resultado=${resultado}`,

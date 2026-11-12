@@ -45,7 +45,7 @@ export function CentroResolucion({ data }: Props) {
       </Card>
 
       {/* 2. Diagnóstico */}
-      <Card title="Diagnóstico" icon={<Search size={13} className="text-[#6366F1]" />}>
+      <Card title="Diagnóstico" icon={<Search size={13} className="text-primary" />}>
         <EmptyDiagnostico />
       </Card>
 
@@ -80,7 +80,7 @@ export function CentroResolucion({ data }: Props) {
         <Card title="Acciones rápidas" icon={<Zap size={13} className="text-primary" />}>
           <div className="flex flex-wrap gap-1.5">
             {data.accionesRapidas.map((a) => (
-              <button key={a.id} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2.5 py-1.5 text-[11px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary">
+              <button key={a.id} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2.5 py-1.5 text-[11px] text-black-45 transition-colors hover:border-primary hover:text-primary">
                 <ExternalLink size={10} /> {a.nombre}
               </button>
             ))}
@@ -90,7 +90,7 @@ export function CentroResolucion({ data }: Props) {
 
       {/* 5. Estado de resolución */}
       {data.etapas.length > 0 && (
-        <Card title="Estado de resolución" icon={<FileText size={13} className="text-[#6366F1]" />}>
+        <Card title="Estado de resolución" icon={<FileText size={13} className="text-primary" />}>
           {/* Barra de progreso */}
           <div className="flex gap-1 mb-3">
             {data.etapas.map((etapa) => (

@@ -1,38 +1,81 @@
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeDomain } from "@/domain/normalizacion";
 
+export type HistoriaDensity = "compact" | "comfortable";
+
+const HistoriaDensityContext = createContext<HistoriaDensity>("compact");
+
+export function HistoriaDensityProvider({
+  value,
+  children,
+}: {
+  value: HistoriaDensity;
+  children: React.ReactNode;
+}) {
+  return (
+    <HistoriaDensityContext.Provider value={value}>
+      {children}
+    </HistoriaDensityContext.Provider>
+  );
+}
+
+export function useHistoriaDensity(): HistoriaDensity {
+  return useContext(HistoriaDensityContext);
+}
+
 interface Props {
   title: string;
+  titleClassName?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
   badge?: React.ReactNode;
 }
 
-export function SeccionColapsable({ title, defaultOpen = false, children, badge }: Props) {
+export function SeccionColapsable({ title, titleClassName, defaultOpen = false, children, badge }: Props) {
   const [open, setOpen] = useState(defaultOpen);
+  const comfortable = useHistoriaDensity() === "comfortable";
   return (
     <div className="border-b border-black-10 last:border-b-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[10px] font-medium text-black-45 hover:bg-light"
+        className={cn(
+          "flex w-full items-center text-left hover:bg-light",
+          comfortable
+            ? "gap-2 px-4 py-3 text-[14px] font-semibold text-black-85"
+            : "gap-1.5 px-2.5 py-1.5 text-[10px] font-medium text-black-45",
+        )}
       >
-        {open ? <ChevronDown size={12} className="shrink-0 text-black-25" /> : <ChevronRight size={12} className="shrink-0 text-black-25" />}
-        <span className="uppercase tracking-wider">{title}</span>
+        {open ? (
+          <ChevronDown size={comfortable ? 16 : 12} className="shrink-0 text-black-45" />
+        ) : (
+          <ChevronRight size={comfortable ? 16 : 12} className="shrink-0 text-black-45" />
+        )}
+        <span className={cn(comfortable ? "" : "uppercase tracking-wider", titleClassName)}>{title}</span>
         {badge && <span className="ml-auto">{badge}</span>}
       </button>
-      {open && <div className="px-2.5 pb-2">{children}</div>}
+      {open && <div className={comfortable ? "px-4 pb-4" : "px-2.5 pb-2"}>{children}</div>}
     </div>
   );
 }
 
 export function Info({ label, children }: { label: string; children: React.ReactNode }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   return (
-    <div className="flex items-center justify-between py-0.5">
-      <span className="shrink-0 text-[9px] text-black-25">{label}</span>
-      <span className="ml-2 max-w-[65%] truncate text-right text-[10px] font-medium text-black-85">{children}</span>
+    <div className={cn("flex items-center justify-between", comfortable ? "py-1.5" : "py-0.5")}>
+      <span className={cn("shrink-0", comfortable ? "text-[12px] text-black-45" : "text-[9px] text-black-25")}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          "ml-2 max-w-[65%] truncate text-right font-medium text-black-85",
+          comfortable ? "text-[13px]" : "text-[10px]",
+        )}
+      >
+        {children}
+      </span>
     </div>
   );
 }
@@ -42,6 +85,7 @@ export function ND() {
 }
 
 export function SegmentoBadge({ segmento }: { segmento: string }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   const s = (segmento ?? "").toUpperCase();
   const map: Record<string, { label: string; className: string }> = {
     "HIGH TOUCH": { label: "High Touch", className: "bg-purple-5 text-purple" },
@@ -49,10 +93,21 @@ export function SegmentoBadge({ segmento }: { segmento: string }) {
     "TECH TOUCH": { label: "Tech Touch", className: "bg-black-5 text-black-65" },
   };
   const cfg = map[s] ?? { label: segmento || "—", className: "bg-black-5 text-black-45" };
-  return <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-medium", cfg.className)}>{cfg.label}</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md font-medium",
+        comfortable ? "px-2 py-1 text-[12px]" : "px-1.5 py-0.5 text-[9px]",
+        cfg.className,
+      )}
+    >
+      {cfg.label}
+    </span>
+  );
 }
 
 export function EstadoLocalBadge({ estado }: { estado: string }) {
+  const comfortable = useHistoriaDensity() === "comfortable";
   const e = (estado ?? "").toUpperCase();
   const map: Record<string, string> = {
     ACTIVO: "bg-success-5 text-success",
@@ -61,7 +116,17 @@ export function EstadoLocalBadge({ estado }: { estado: string }) {
     "SIN IMPLEMENTAR": "bg-warning-5 text-warning-65",
   };
   const cls = map[e] ?? "bg-black-5 text-black-45";
-  return <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-medium", cls)}>{estado || "—"}</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md font-medium",
+        comfortable ? "px-2 py-1 text-[12px]" : "px-1.5 py-0.5 text-[9px]",
+        cls,
+      )}
+    >
+      {estado || "—"}
+    </span>
+  );
 }
 
 export function fmtMoneda(v: number | null | undefined): string {

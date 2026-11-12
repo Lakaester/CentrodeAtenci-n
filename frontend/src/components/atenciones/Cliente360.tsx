@@ -92,7 +92,7 @@ export function Cliente360({ workspace }: Props) {
             </div>
           ) : <p className="text-xs text-black-25">Sin incidencias registradas</p>}
           <div className="flex gap-1.5 pt-1">
-            <button className="inline-flex items-center gap-1 rounded-md border border-black-10 px-2 py-1 text-[9px] text-black-45 hover:border-[#2563EB] hover:text-primary"><ExternalLink size={8} /> Ver Historial</button>
+            <button className="inline-flex items-center gap-1 rounded-md border border-black-10 px-2 py-1 text-[9px] text-black-45 hover:border-primary hover:text-primary"><ExternalLink size={8} /> Ver Historial</button>
           </div>
         </SectionCard>
       )}
@@ -113,7 +113,7 @@ export function Cliente360({ workspace }: Props) {
             </div>
           )}
           <div className="flex gap-1.5 pt-1">
-            <button className="inline-flex items-center gap-1 rounded-md border border-black-10 px-2 py-1 text-[9px] text-black-45 hover:border-[#2563EB] hover:text-primary"><ExternalLink size={8} /> Ver Tickets DEV</button>
+            <button className="inline-flex items-center gap-1 rounded-md border border-black-10 px-2 py-1 text-[9px] text-black-45 hover:border-primary hover:text-primary"><ExternalLink size={8} /> Ver Tickets DEV</button>
           </div>
         </SectionCard>
       )}
@@ -139,17 +139,17 @@ export function Cliente360({ workspace }: Props) {
 
       {/* Herramientas */}
       {tools.length > 0 && (
-        <SectionCard title="Herramientas" icon={<Wrench size={13} className="text-[#6366F1]" />}>
+        <SectionCard title="Herramientas" icon={<Wrench size={13} className="text-primary" />}>
           <div className="flex flex-wrap gap-1">
             {tools.map((h) => (
-              <button key={h} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"><ExternalLink size={8} />{h}</button>
+              <button key={h} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-primary hover:text-primary"><ExternalLink size={8} />{h}</button>
             ))}
           </div>
         </SectionCard>
       )}
 
       {/* Botón Microservice */}
-      <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#2563EB]/30 bg-[#F0F7FF] py-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-white">
+      <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary-5 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-white">
         <ExternalLink size={13} /> Abrir Microservice
       </button>
     </div>

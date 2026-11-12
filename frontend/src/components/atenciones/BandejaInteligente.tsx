@@ -118,12 +118,12 @@ export function BandejaInteligente({ tickets, loading, activa, onSelect, asesorA
           <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-black-25" />
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por cliente, dominio, ticket..."
-            className="w-full rounded-md border border-black-10 bg-light py-1 pl-7 pr-2 text-[11px] text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+            className="w-full rounded-md border border-black-10 bg-light py-1 pl-7 pr-2 text-[11px] text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none"
           />
           {search && <button onClick={() => setSearch("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-black-25"><X size={12} /></button>}
         </div>
         <select value={filtroCanal} onChange={(e) => setFiltroCanal(e.target.value)}
-          className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-[#2563EB] focus:outline-none">
+          className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-primary focus:outline-none">
           <option value="">Canal: Todos</option>
           <option value="whaticket">Whaticket</option>
           <option value="meta">Meta</option>
@@ -131,7 +131,7 @@ export function BandejaInteligente({ tickets, loading, activa, onSelect, asesorA
           <option value="correo">Correo</option>
         </select>
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
-          className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-[#2563EB] focus:outline-none">
+          className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-primary focus:outline-none">
           <option value="">Estado: Todos</option>
           <option value="PENDIENTE">Pendiente</option>
           <option value="EN_PROCESO">En proceso</option>
@@ -140,7 +140,7 @@ export function BandejaInteligente({ tickets, loading, activa, onSelect, asesorA
         </select>
         {categorias.length > 0 && (
           <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-[#2563EB] focus:outline-none">
+            className="rounded-md border border-black-10 bg-light px-2 py-1 text-[11px] text-black-85 focus:border-primary focus:outline-none">
             <option value="">Categoría: Todas</option>
             {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -164,7 +164,7 @@ export function BandejaInteligente({ tickets, loading, activa, onSelect, asesorA
               <button key={t.id} onClick={() => onSelect(t.id)}
                 className={cn(
                   "flex w-full flex-col gap-1 rounded-lg border px-3 py-2 text-left text-xs transition-all",
-                  estaActivo ? "border-[#2563EB] bg-primary-5 " : "border-black-5 hover:border-black-10 hover:bg-light",
+                  estaActivo ? "border-primary bg-primary-5 " : "border-black-5 hover:border-black-10 hover:bg-light",
                   t.slaVencido && !estaActivo && "border-l-rose-400",
                 )}
               >

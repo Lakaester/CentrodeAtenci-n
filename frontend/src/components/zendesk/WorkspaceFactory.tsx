@@ -49,7 +49,7 @@ const WORKSPACES: WorkspaceDef[] = [
   {
     id: "software",
     nombre: "Software",
-    icono: <Wrench size={14} className="text-[#6366F1]" />,
+    icono: <Wrench size={14} className="text-primary" />,
     categorias: ["software", "versión", "actualización", "error sistema"],
     render: () => (
       <div className="space-y-2">

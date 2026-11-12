@@ -54,7 +54,7 @@ export function WorkspaceRenderer({ data }: { data: WorkspaceESPData }) {
       </Card>
 
       {/* 2. Guía de Resolución */}
-      <Card title="Guía de Resolución" icon={<BookOpen size={13} className="text-[#6366F1]" />}>
+      <Card title="Guía de Resolución" icon={<BookOpen size={13} className="text-primary" />}>
         <div className="space-y-3 text-xs">
           <div><p className="font-medium text-black-85 mb-1">Objetivo</p><p className="text-black-45">{data.guia.objetivo}</p></div>
           <div><p className="font-medium text-black-85 mb-1">Proceso recomendado</p>
@@ -110,7 +110,7 @@ export function WorkspaceRenderer({ data }: { data: WorkspaceESPData }) {
       <Card title="Herramientas" icon={<Wrench size={13} className="text-primary" />}>
         <div className="flex flex-wrap gap-1.5">
           {data.herramientas.map((h) => (
-            <button key={h} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2.5 py-1.5 text-[11px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary">
+            <button key={h} className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2.5 py-1.5 text-[11px] text-black-45 transition-colors hover:border-primary hover:text-primary">
               <ExternalLink size={10} /> {h}
             </button>
           ))}

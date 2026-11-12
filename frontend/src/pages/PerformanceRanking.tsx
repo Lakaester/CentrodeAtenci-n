@@ -1,4 +1,5 @@
 import { getAdvisorColor } from "@/lib/advisorColors";
+import { CHART } from "@/lib/chartPalette";
 
 interface FilaRanking {
   asesor: string;
@@ -14,7 +15,7 @@ const fmtNum = (n: number | null | undefined) => n == null ? "—" : n.toLocaleS
 const fmtPct = (n: number | null | undefined) => n == null ? "—" : `${n.toLocaleString("es-PE")}%`;
 
 function ScoreBar({ score }: { score: number }) {
-  const color = score >= 85 ? "#16a34a" : score >= 70 ? "#f59e0b" : "#dc2626";
+  const color = score >= 85 ? CHART.success : score >= 70 ? CHART.warning : CHART.danger;
   return (
     <div className="flex items-center gap-2 min-w-[100px]">
       <div className="flex-1 h-2 rounded-full bg-black-5 overflow-hidden">

@@ -34,7 +34,7 @@ export default function DesignSystem() {
       className="mx-auto max-w-6xl space-y-16 p-8"
     >
       <header className="border-b border-black-10 pb-8">
-        <h1 className="text-3xl font-bold text-black-85">COPE Design System</h1>
+        <h1 className="text-3xl font-bold text-black-85">C.O.S.E Design System</h1>
         <p className="mt-2 text-black-45">
           Centro de Operaciones de Soporte Especializado &mdash; Guía de Estilos
         </p>
@@ -43,7 +43,7 @@ export default function DesignSystem() {
             <a
               key={s.id}
               href={`#${s.id}`}
-              className="rounded-lg border border-black-10 px-3 py-1.5 text-xs font-medium text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"
+              className="rounded-lg border border-black-10 px-3 py-1.5 text-xs font-medium text-black-45 transition-colors hover:border-primary hover:text-primary"
             >
               {s.label}
             </a>

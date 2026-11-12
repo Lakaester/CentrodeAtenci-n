@@ -27,13 +27,17 @@ export function initApiMiddleware() {
   initialized = true;
 
   api.interceptors.request.use(async (config) => {
+    // Las llamadas que el propio mapper hace al backend no deben volver a
+    // entrar al interceptor (evita la recursión categorize → mapper → categorize).
+    if ((config as any).__skipApiMiddleware) return config;
+
     const url = config.url ?? "";
 
     if (!url.includes("/zendesk/tickets/") || config.method !== "post") {
       return config;
     }
 
-    const match = url.match(/\/zendesk\/tickets\/(\d+)\/(\w+)/);
+    const match = url.match(/\/zendesk\/tickets\/(\d+)\/([\w-]+)/);
     if (!match) return config;
 
     const ticketId = match[1];
@@ -47,7 +51,7 @@ export function initApiMiddleware() {
       const replyService = new ReplyService(replyProvider);
       const request: ReplyRequestDTO = {
         ticketId, channel: ticket.channel, subChannel: ticket.subChannel,
-        message: body.body ?? "", attachments: [], quotedMessage: null, raw: body,
+        message: body.body ?? "", attachments: Array.isArray(body.archivos) ? body.archivos : [], quotedMessage: null, raw: body,
       };
       try {
         await replyService.sendReply(ticket, request);

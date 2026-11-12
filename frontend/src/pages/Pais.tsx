@@ -269,13 +269,13 @@ function PaisCanalTable({
                   <tr
                     key={g.pais}
                     onClick={() => onSelectPais(isSelected ? null : g.pais)}
-                    className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${
-                      isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"
+                    className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${
+                      isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
                     }`}
                   >
                     <td className={`border-r border-black-5 px-1.5 py-1 text-[11px] font-medium truncate max-w-[140px] ${isSelected ? "text-primary" : "text-black-85"}`}>{g.pais}</td>
                     <td className="border-r border-black-5 px-1.5 py-1 text-[11px] text-right font-medium text-black-85 whitespace-nowrap">{g.volumen.toLocaleString("es-PE")}</td>
-                    <td className="px-1.5 py-1 text-[11px] text-right text-[#475569] whitespace-nowrap">{g.pct}%</td>
+                    <td className="px-1.5 py-1 text-[11px] text-right text-black-65 whitespace-nowrap">{g.pct}%</td>
                   </tr>
                 );
               })}
@@ -323,8 +323,8 @@ function PaisCanalTable({
                     {canales.map((c) => {
                       const isSelected = selectedCanal === c.nombre;
                       return (<tr key={c.nombre} onClick={() => onSelectCanal(isSelected ? null : c.nombre)}
-                        className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"}`}>
-                        <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-[#475569]"}`}>{c.nombre}</td>
+                        className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"}`}>
+                        <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-black-65"}`}>{c.nombre}</td>
                         <td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{c.total.toLocaleString("es-PE")}</td>
                       </tr>);
                     })}
@@ -342,8 +342,8 @@ function PaisCanalTable({
                     {categorias.map((cat) => {
                       const isSelected = selectedCategoria === cat.nombre;
                       return (<tr key={cat.nombre} onClick={() => onSelectCategoria(isSelected ? null : cat.nombre)}
-                        className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"}`}>
-                        <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-[#475569]"}`}>{cat.nombre}</td>
+                        className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"}`}>
+                        <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-black-65"}`}>{cat.nombre}</td>
                         <td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{cat.total.toLocaleString("es-PE")}</td>
                       </tr>);
                     })}
@@ -358,7 +358,7 @@ function PaisCanalTable({
                 <table className="w-full">
                   <thead className="sticky top-0 z-20 bg-white"><tr><th className="border-r border-black-10 px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-black-45">Subcategoría</th><th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-black-45 w-[1%]">Volumen</th></tr></thead>
                   <tbody>
-                    {subcategorias.map((s) => (<tr key={s.subcategoria} className="border-t border-black-5 hover:bg-[#FFF7ED] transition-colors"><td className="border-r border-black-5 px-2 py-1.5 text-[11px] text-[#475569]"><span className="flex items-center gap-1"><ChevronRight size={10} className="text-primary shrink-0" />{s.subcategoria}</span></td><td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{s.total.toLocaleString("es-PE")}</td></tr>))}
+                    {subcategorias.map((s) => (<tr key={s.subcategoria} className="border-t border-black-5 hover:bg-primary-5 transition-colors"><td className="border-r border-black-5 px-2 py-1.5 text-[11px] text-black-65"><span className="flex items-center gap-1"><ChevronRight size={10} className="text-primary shrink-0" />{s.subcategoria}</span></td><td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{s.total.toLocaleString("es-PE")}</td></tr>))}
                     {subcategorias.length === 0 ? (<tr><td colSpan={2} className="px-2 py-8 text-center text-xs text-black-25">Sin subcategorías.</td></tr>) : null}
                   </tbody>
                 </table>
@@ -440,10 +440,10 @@ function DominiosPaisTable({
           </thead>
           <tbody>
             {matrix.map((row) => (
-              <tr key={row.dominio} className="border-t border-black-5 hover:bg-[#FFF7ED] transition-colors">
+              <tr key={row.dominio} className="border-t border-black-5 hover:bg-primary-5 transition-colors">
                 <td className="border-r border-black-5 px-2 py-1.5 text-[11px] font-medium text-black-85 truncate max-w-[180px]">{row.dominio}</td>
                 {cats.map((c) => (
-                  <td key={c} className="border-r border-black-5 px-2 py-1.5 text-[11px] text-right text-[#475569]">{row.vals[c] ?? 0}</td>
+                  <td key={c} className="border-r border-black-5 px-2 py-1.5 text-[11px] text-right text-black-65">{row.vals[c] ?? 0}</td>
                 ))}
                 <td className="px-2 py-1.5 text-[11px] text-right font-semibold text-black-85">{row.total.toLocaleString("es-PE")}</td>
               </tr>
@@ -623,7 +623,7 @@ export default function Pais() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-black-10 border-t-[#F97316]" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-black-10 border-t-primary" />
         </div>
       )}
 

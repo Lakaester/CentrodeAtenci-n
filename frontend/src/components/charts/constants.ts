@@ -1,4 +1,5 @@
 import type { ChartConfig } from "./types";
+import { CHART, CHART_SERIES } from "@/lib/chartPalette";
 
 export const DEFAULT_CHART_CONFIG: Required<ChartConfig> = {
   height: 300,
@@ -8,13 +9,9 @@ export const DEFAULT_CHART_CONFIG: Required<ChartConfig> = {
   variant: "line",
 };
 
-export const CHART_COLORS = [
-  "#2563EB",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#8B5CF6",
-  "#EC4899",
-  "#06B6D4",
-  "#F97316",
-];
+export const CHART_COLORS = CHART_SERIES;
+
+export const CHART_TEXT = CHART.charcoal;
+export const CHART_AXIS = CHART.axis;
+export const CHART_GRID = CHART.grid;
+export const CHART_SPLIT = CHART.split;

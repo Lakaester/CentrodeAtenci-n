@@ -1,5 +1,30 @@
 # Changelog
 
+## Rediseño visual del módulo Clientes — Localbi
+
+### Frontend
+- `/clientes` rediseñado: título 24 px, subtítulo 14 px, panel de búsqueda de 300 px y buscador de 44 px.
+- Resultados del panel como tarjetas legibles con dominio 15 px, local 13 px y unidad 12 px; selección con fondo azul suave e indicador lateral.
+- Ficha del cliente con nombre comercial 20 px, dominio principal, unidad/local, segmento/Tech Touch, plan, KAM, pago y número de locales.
+- Estado mostrado como resumen de Activos, Inactivos, Churn y Sin implementación; sin inventar un estado único.
+- Resumen con seis KPI existentes en tarjetas de 24 px, etiquetas de 13 px y jerarquía diferenciada para Total y Aporte.
+- Tabla Dominios y locales con encabezado diferenciado, filas de 13 px, badges legibles, dominio en azul y scroll horizontal interno.
+- Tickets de desarrollo y Actividad COPE rediseñados por separado, conservando sus campos reales; no se inventó asesor ni número de ticket donde la fuente no los tiene.
+- Historial transversal, tareas, módulos, soporte y drawers de locales/historia local alineados a la nueva escala.
+- Paginación encapsulada en `pages/cope/Clientes.tsx`; no se modificó `components/ui/Pagination.tsx`.
+
+### Aislamiento
+- Nueva variante visual `comfortable` mediante contexto local de `localbi`.
+- Solo `/clientes` activa la variante. El panel operativo de Atenciones conserva la variante compacta por defecto.
+- No se modificaron backend, consultas, endpoints, filtros, contratos ni cálculos.
+
+### Validación
+- TypeScript frontend limpio.
+- Build frontend correcto.
+- Comparación de las mismas respuestas API antes/después: idénticas.
+- Búsqueda, selección, paginación, colapso, Actualizar y detalle de tickets verificados.
+- Captura final a 1366×768 en `docs/captures/clientes-1366.png` y snapshot HTML en `docs/captures/clientes-1366.html`.
+
 ## Quejas y Devoluciones — rediseño e incorporación de Alex López
 
 ### Datos

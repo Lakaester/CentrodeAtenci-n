@@ -117,6 +117,7 @@ function filterOfficial<T extends { asesor: string }>(items: T[]): T[] {
 }
 
 import { getAdvisorColor } from "@/lib/advisorColors";
+import { CHART } from "@/lib/chartPalette";
 
 /* ─── Matrix data processing ─── */
 const NUMERIC_FIELDS: (keyof AsesorRow)[] = [
@@ -282,14 +283,14 @@ function DistribucionDona({ items }: { items: { asesor: string; total: number }[
   const total = items.reduce((s, i) => s + i.total, 0);
   const option = {
     tooltip: { trigger: "item" as const, formatter: (p: { name: string; value: number; percent: number }) => `${p.name}<br/>${p.value.toLocaleString("es-PE")} (${p.percent}%)` },
-    legend: { bottom: 0, textStyle: { color: "#94A3B8", fontSize: 11 }, type: "scroll" as const },
+    legend: { bottom: 0, textStyle: { color: CHART.muted, fontSize: 11 }, type: "scroll" as const },
     series: [{
       type: "pie" as const, radius: ["48%", "68%"], center: ["50%", "44%"],
       avoidLabelOverlap: true, itemStyle: { borderColor: "#fff", borderWidth: 2 },
-      label: { show: true, formatter: (p: { percent: number }) => `${p.percent}%`, color: "#1E293B", fontWeight: 600, fontSize: 11 },
+      label: { show: true, formatter: (p: { percent: number }) => `${p.percent}%`, color: CHART.charcoal, fontWeight: 600, fontSize: 11 },
       data: items.map((i) => ({ name: i.asesor, value: i.total, itemStyle: { color: getAdvisorColor(i.asesor) } })),
     }],
-    graphic: { type: "text" as const, left: "center", top: "38%", style: { text: total.toLocaleString("es-PE"), fill: "#1E293B", fontSize: 18, fontWeight: 700, textAlign: "center" as const } },
+    graphic: { type: "text" as const, left: "center", top: "38%", style: { text: total.toLocaleString("es-PE"), fill: CHART.charcoal, fontSize: 18, fontWeight: 700, textAlign: "center" as const } },
   };
   return (
     <div className="rounded-xl border border-black-10 bg-white p-5 ">
@@ -348,20 +349,20 @@ function EvolucionChart({
         ).join("<br/>")}`;
       },
     },
-    legend: { bottom: 0, textStyle: { color: "#94A3B8", fontSize: 11 }, type: "scroll" as const },
+    legend: { bottom: 0, textStyle: { color: CHART.muted, fontSize: 11 }, type: "scroll" as const },
     grid: { left: 50, right: 20, top: 15, bottom: 50 },
     xAxis: {
       type: "category" as const, data: periodos, boundaryGap: false,
       axisLabel: {
-        color: "#94A3B8", fontSize: 10, rotate: periodos.length > 20 ? 45 : 0,
+        color: CHART.muted, fontSize: 10, rotate: periodos.length > 20 ? 45 : 0,
         formatter: (v: string) => fmtPeriodo(v, grupo),
       },
       axisLine: { show: false },
     },
     yAxis: {
       type: "value" as const,
-      axisLabel: { color: "#94A3B8", fontSize: 10 },
-      splitLine: { lineStyle: { color: "#F1F5F9", type: "dashed" as const } },
+      axisLabel: { color: CHART.muted, fontSize: 10 },
+      splitLine: { lineStyle: { color: CHART.split, type: "dashed" as const } },
     },
     series,
   };
@@ -399,16 +400,16 @@ function TiempoHorizontal({ items, titulo }: { items: FilaTiempoCanal[]; titulo:
   const opW = {
     tooltip: { trigger: "axis" as const, formatter: (p: { name: string; value: string }[]) => `${p[0].name}<br/>${p[0].value}` },
     grid: { left: 110, right: 60, top: 10, bottom: 10 },
-    xAxis: { type: "value" as const, axisLabel: { color: "#94A3B8", fontSize: 9, formatter: (v: number) => `${v} min` }, splitLine: { lineStyle: { color: "#F1F5F9", type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted.map((i) => i.asesor), axisLabel: { color: "#1E293B", fontSize: 10 }, axisLine: { show: false } },
-    series: [{ type: "bar" as const, data: sorted.map((i) => ({ value: i.whatsapp, itemStyle: barStyle(i.asesor) })), barMaxWidth: 18, label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: "#1E293B", fontSize: 9 } }],
+    xAxis: { type: "value" as const, axisLabel: { color: CHART.muted, fontSize: 9, formatter: (v: number) => `${v} min` }, splitLine: { lineStyle: { color: CHART.split, type: "dashed" as const } } },
+    yAxis: { type: "category" as const, data: sorted.map((i) => i.asesor), axisLabel: { color: CHART.charcoal, fontSize: 10 }, axisLine: { show: false } },
+    series: [{ type: "bar" as const, data: sorted.map((i) => ({ value: i.whatsapp, itemStyle: barStyle(i.asesor) })), barMaxWidth: 18, label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: CHART.charcoal, fontSize: 9 } }],
   };
   const opC = {
     tooltip: { trigger: "axis" as const, formatter: (p: { name: string; value: string }[]) => `${p[0].name}<br/>${p[0].value}` },
     grid: { left: 110, right: 60, top: 10, bottom: 10 },
-    xAxis: { type: "value" as const, axisLabel: { color: "#94A3B8", fontSize: 9, formatter: (v: number) => `${v} min` }, splitLine: { lineStyle: { color: "#F1F5F9", type: "dashed" as const } } },
-    yAxis: { type: "category" as const, data: sorted2.map((i) => i.asesor), axisLabel: { color: "#1E293B", fontSize: 10 }, axisLine: { show: false } },
-    series: [{ type: "bar" as const, data: sorted2.map((i) => ({ value: i.correo, itemStyle: barStyle(i.asesor) })), barMaxWidth: 18, label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: "#1E293B", fontSize: 9 } }],
+    xAxis: { type: "value" as const, axisLabel: { color: CHART.muted, fontSize: 9, formatter: (v: number) => `${v} min` }, splitLine: { lineStyle: { color: CHART.split, type: "dashed" as const } } },
+    yAxis: { type: "category" as const, data: sorted2.map((i) => i.asesor), axisLabel: { color: CHART.charcoal, fontSize: 10 }, axisLine: { show: false } },
+    series: [{ type: "bar" as const, data: sorted2.map((i) => ({ value: i.correo, itemStyle: barStyle(i.asesor) })), barMaxWidth: 18, label: { show: true, position: "right" as const, formatter: (p: { value: number }) => fmtDur(p.value), color: CHART.charcoal, fontSize: 9 } }],
   };
 
   return (
@@ -417,11 +418,11 @@ function TiempoHorizontal({ items, titulo }: { items: FilaTiempoCanal[]; titulo:
       <p className="mt-1 text-xs text-black-25">Menor tiempo = mejor. WhatsApp y Correo NO se mezclan.</p>
       <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
-          <p className="mb-1 text-xs font-medium" style={{ color: "#128C7E" }}>WhatsApp</p>
+          <p className="mb-1 text-xs font-medium" style={{ color: CHART.success }}>WhatsApp</p>
           <ReactECharts option={opW} style={{ height: Math.max(180, items.length * 32) }} notMerge lazyUpdate />
         </div>
         <div>
-          <p className="mb-1 text-xs font-medium" style={{ color: "#F97316" }}>Correo</p>
+          <p className="mb-1 text-xs font-medium" style={{ color: CHART.brand }}>Correo</p>
           <ReactECharts option={opC} style={{ height: Math.max(180, items.length * 32) }} notMerge lazyUpdate />
         </div>
       </div>
@@ -450,10 +451,10 @@ function HeatmapMatriz({ items, titulo, maxH = 320 }: { items: FilaMatriz[]; tit
   const option = {
     tooltip: { formatter: (p: { value: [number, number, number] }) => `${asesores[p.value[0]]} · ${etiquetas[p.value[1]]}<br/>Atenciones: <b>${p.value[2].toLocaleString("es-PE")}</b>` },
     grid: { left: 100, right: 60, top: 10, bottom: 50 },
-    xAxis: { type: "category" as const, data: asesores, splitArea: { show: true }, axisLabel: { color: "#94A3B8", fontSize: 9, rotate: 30 }, axisLine: { show: false } },
-    yAxis: { type: "category" as const, data: etiquetas, splitArea: { show: true }, axisLabel: { color: "#94A3B8", fontSize: 9 }, axisLine: { show: false } },
-    visualMap: { min: 0, max: maxColor, calculable: true, orient: "vertical", right: 0, top: "center", inRange: { color: ["#f0fdf4", "#86efac", "#22c55e", "#16a34a", "#166534"] }, textStyle: { color: "#94A3B8", fontSize: 9 } },
-    series: [{ type: "heatmap" as const, data, label: { show: true, color: "#1f2937", fontSize: 9, formatter: (p: { value: [number, number, number] }) => p.value[2] > 0 ? String(p.value[2]) : "" }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.3)" } } }],
+    xAxis: { type: "category" as const, data: asesores, splitArea: { show: true }, axisLabel: { color: CHART.muted, fontSize: 9, rotate: 30 }, axisLine: { show: false } },
+    yAxis: { type: "category" as const, data: etiquetas, splitArea: { show: true }, axisLabel: { color: CHART.muted, fontSize: 9 }, axisLine: { show: false } },
+    visualMap: { min: 0, max: maxColor, calculable: true, orient: "vertical", right: 0, top: "center", inRange: { color: ["#EAF6F0", "#BFE5D5", "#7FC8A9", CHART.success, "#145A42"] }, textStyle: { color: CHART.muted, fontSize: 9 } },
+    series: [{ type: "heatmap" as const, data, label: { show: true, color: CHART.charcoal, fontSize: 9, formatter: (p: { value: [number, number, number] }) => p.value[2] > 0 ? String(p.value[2]) : "" }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.3)" } } }],
   };
   return (
     <div className="rounded-xl border border-black-10 bg-white p-5 ">
@@ -600,13 +601,13 @@ function AsesorCanalTable({
                   <tr
                     key={g.asesor}
                     onClick={() => onSelectAsesor(isSelected ? null : g.asesor)}
-                    className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${
-                      isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"
+                    className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${
+                      isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
                     }`}
                   >
                     <td className={`border-r border-black-5 px-1.5 py-1 text-[11px] font-medium truncate max-w-[140px] ${isSelected ? "text-primary" : "text-black-85"}`}>{g.asesor}</td>
                     <td className="border-r border-black-5 px-1.5 py-1 text-[11px] text-right font-medium text-black-85 whitespace-nowrap">{g.volumen.toLocaleString("es-PE")}</td>
-                    <td className="px-1.5 py-1 text-[11px] text-right text-[#475569] whitespace-nowrap">{g.pct}%</td>
+                    <td className="px-1.5 py-1 text-[11px] text-right text-black-65 whitespace-nowrap">{g.pct}%</td>
                   </tr>
                 );
               })}
@@ -679,11 +680,11 @@ function AsesorCanalTable({
                         <tr
                           key={c.nombre}
                           onClick={() => onSelectCanal(isSelected ? null : c.nombre)}
-                          className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${
-                            isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"
+                          className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${
+                            isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
                           }`}
                         >
-                          <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-[#475569]"}`}>
+                          <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-black-65"}`}>
                             {c.nombre}
                           </td>
                           <td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{c.total.toLocaleString("es-PE")}</td>
@@ -722,11 +723,11 @@ function AsesorCanalTable({
                         <tr
                           key={cat.nombre}
                           onClick={() => onSelectCategoria(isSelected ? null : cat.nombre)}
-                          className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-[#FFF7ED] ${
-                            isSelected ? "bg-[#FFF7ED] border-l-2 border-l-[#F97316]" : "border-l-2 border-l-transparent"
+                          className={`cursor-pointer border-t border-black-5 transition-all duration-150 hover:bg-primary-5 ${
+                            isSelected ? "bg-primary-5 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
                           }`}
                         >
-                          <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-[#475569]"}`}>
+                          <td className={`border-r border-black-5 px-2 py-1.5 text-[11px] ${isSelected ? "font-semibold text-primary" : "text-black-65"}`}>
                             {cat.nombre}
                           </td>
                           <td className="px-2 py-1.5 text-[11px] text-right font-medium text-black-85">{cat.total.toLocaleString("es-PE")}</td>
@@ -760,8 +761,8 @@ function AsesorCanalTable({
                   </thead>
                   <tbody>
                     {subcategorias.map((s) => (
-                      <tr key={s.subcategoria} className="border-t border-black-5 hover:bg-[#FFF7ED] transition-colors">
-                        <td className="border-r border-black-5 px-2 py-1.5 text-[11px] text-[#475569]">
+                      <tr key={s.subcategoria} className="border-t border-black-5 hover:bg-primary-5 transition-colors">
+                        <td className="border-r border-black-5 px-2 py-1.5 text-[11px] text-black-65">
                           <span className="flex items-center gap-1">
                             <ChevronRight size={10} className="text-primary shrink-0" />
                             {s.subcategoria}

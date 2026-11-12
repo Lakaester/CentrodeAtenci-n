@@ -21,6 +21,7 @@ const envSchema = z.object({
   BOOTSTRAP_ADMIN_EMAIL: z.string().optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),
   ACTA_STORAGE_PATH: z.string().optional(),
+  QD_AUTO_CREATE_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
 });
 
 const parsed = envSchema.safeParse(process.env);

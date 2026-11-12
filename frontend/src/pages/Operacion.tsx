@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
 import { cn } from "@/lib/utils";
+import { CHART } from "@/lib/chartPalette";
 
 interface Kpi {
   valor: number | null;
@@ -93,10 +94,10 @@ const nombreCanal = (c: string) => {
 
 const colorCanal = (c: string) => {
   const v = c.toUpperCase();
-  if (v === "WHATMETA") return "#22C55E";
-  if (v === "WHATICKET") return "#F97316";
-  if (v === "ZENDESK") return "#8B5CF6";
-  return "#64748B";
+  if (v === "WHATMETA") return CHART.success;
+  if (v === "WHATICKET") return CHART.brand;
+  if (v === "ZENDESK") return CHART.purple;
+  return CHART.muted;
 };
 
 function formatFechaLocal(d: Date): string {
@@ -195,7 +196,7 @@ function KpiDemanda({
 }
 
 function Heatmap({ items, diasPorDia }: { items: HeatmapCelda[]; diasPorDia: DiaDato[] }) {
-  const muted = "#64748B";
+  const muted = CHART.muted;
   const mapa = new Map<string, number>();
   for (const c of items) mapa.set(`${c.dia}_${c.hora}`, c.total);
   const diasMap = new Map<number, number>();
@@ -250,8 +251,8 @@ function Heatmap({ items, diasPorDia }: { items: HeatmapCelda[]; diasPorDia: Dia
       orient: "vertical",
       right: 0,
       top: "center",
-      inRange: { color: ["#eff6ff", "#bfdbfe", "#60a5fa", "#2563eb", "#1e3a8a"] },
-      outOfRange: { color: ["#f1f5f9"] },
+      inRange: { color: ["#FFF6EE", "#FDE8D7", "#F5B27A", CHART.brand, CHART.primary] },
+      outOfRange: { color: ["#F2F4F4"] },
       textStyle: { color: muted, fontSize: 10 },
       text: ["Más", "Menos"],
     },
@@ -395,8 +396,8 @@ function EvolucionDemanda({
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#F97316", width: 3 },
-          itemStyle: { color: "#F97316" },
+          lineStyle: { color: CHART.brand, width: 3 },
+          itemStyle: { color: CHART.brand },
           areaStyle: { color: "rgba(249,115,22,0.10)" },
           data: actual.map((p) => p.total),
         },
@@ -405,8 +406,8 @@ function EvolucionDemanda({
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#94A3B8", width: 2, type: "dashed" },
-          itemStyle: { color: "#94A3B8" },
+          lineStyle: { color: CHART.muted, width: 2, type: "dashed" },
+          itemStyle: { color: CHART.muted },
           data: actual.map((_, i) => anterior[i]?.total ?? null),
         },
       ],
@@ -496,7 +497,7 @@ function DistribucionCanal({
       top: "45%",
       style: {
         text: total.toLocaleString("es-PE"),
-        fill: "#111827",
+        fill: CHART.charcoal,
         fontSize: 20,
         fontWeight: 700,
       },

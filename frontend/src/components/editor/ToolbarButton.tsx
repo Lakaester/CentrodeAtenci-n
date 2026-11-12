@@ -49,7 +49,7 @@ export function ToolbarButton({ action, active, onClick }: Props) {
       aria-label={LABELS[action]}
       className={cn(
         "flex h-7 w-7 items-center justify-center rounded-md text-black-45 transition-colors hover:bg-black-5 hover:text-black-85",
-        active && "bg-[#E0F2FE] text-primary",
+        active && "bg-primary-5 text-primary",
       )}
     >
       <Icon size={14} />

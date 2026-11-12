@@ -153,7 +153,7 @@ export function MetricsMatrix({ title, subtitle, filas, totales, canal, getName 
                   {n}
                 </th>
               ))}
-              <th className="border-r border-black-10 px-2 py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-primary bg-orange-50 min-w-[85px]">
+              <th className="border-r border-black-10 px-2 py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-5 min-w-[85px]">
                 TOTAL
               </th>
             </tr>
@@ -203,8 +203,7 @@ export function MetricsMatrix({ title, subtitle, filas, totales, canal, getName 
                         className={`transition-colors hover:bg-light ${even ? "bg-light" : ""}`}
                       >
                         <td
-                          className="sticky left-0 z-10 border-r border-black-5 px-2 py-1 text-[11px] text-[#475569]"
-                          style={{ backgroundColor: even ? "#FAFBFC" : "#FFF" }}
+                          className={`sticky left-0 z-10 border-r border-black-5 px-2 py-1 text-[11px] text-black-65 ${even ? "bg-black-5" : "bg-white"}`}
                         >
                           {row.label}
                           {row.tooltip && (

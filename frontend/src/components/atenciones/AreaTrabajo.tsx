@@ -51,17 +51,17 @@ export function AreaTrabajo({ workspace }: Props) {
   return (
     <div className="space-y-2">
       {/* 1. Diagnóstico */}
-      <SectionCard title="Diagnóstico" icon={<Lightbulb size={13} className="text-[#6366F1]" />}>
+      <SectionCard title="Diagnóstico" icon={<Lightbulb size={13} className="text-primary" />}>
         <Field label="Problema identificado">
-          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-primary focus:bg-white focus:outline-none"
             placeholder="Describa el problema identificado..." />
         </Field>
         <Field label="Causa">
-          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-primary focus:bg-white focus:outline-none"
             placeholder="Indique la causa del problema..." />
         </Field>
         <Field label="Análisis realizado">
-          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[60px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[60px] text-black-85 placeholder:text-black-10 focus:border-primary focus:bg-white focus:outline-none"
             placeholder="Documente el análisis realizado..." />
         </Field>
       </SectionCard>
@@ -74,7 +74,7 @@ export function AreaTrabajo({ workspace }: Props) {
           <div className="flex flex-wrap gap-1">
             {PLANTILLAS.map((p, i) => (
               <button key={i} onClick={() => insertarEnRespuesta(p)}
-                className="rounded-md border border-black-10 bg-light px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary">
+                className="rounded-md border border-black-10 bg-light px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-primary hover:text-primary">
                 Plantilla {i + 1}
               </button>
             ))}
@@ -87,7 +87,7 @@ export function AreaTrabajo({ workspace }: Props) {
           <div className="flex flex-wrap gap-1">
             {MACROS.map((m, i) => (
               <button key={i} onClick={() => insertarEnRespuesta(m.contenido)}
-                className="rounded-md border border-black-10 bg-[#F0F7FF] px-2 py-1 text-[9px] text-primary transition-colors hover:bg-primary hover:text-white">
+                className="rounded-md border border-black-10 bg-primary-5 px-2 py-1 text-[9px] text-primary transition-colors hover:bg-primary hover:text-white">
                 {m.nombre}
               </button>
             ))}
@@ -118,11 +118,11 @@ export function AreaTrabajo({ workspace }: Props) {
       {/* 3. Resultado de la Atención */}
       <SectionCard title="Resultado de la Atención" icon={<CheckCircle size={13} className="text-success" />}>
         <Field label="Acción realizada">
-          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-primary focus:bg-white focus:outline-none"
             placeholder="Registre la acción realizada..." />
         </Field>
         <Field label="Estado final">
-          <select className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs text-black-85 focus:border-[#2563EB] focus:outline-none">
+          <select className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs text-black-85 focus:border-primary focus:outline-none">
             <option value="">Seleccione...</option>
             <option value="resuelto">Resuelto</option>
             <option value="parcial">Parcialmente resuelto</option>
@@ -133,7 +133,7 @@ export function AreaTrabajo({ workspace }: Props) {
           </select>
         </Field>
         <Field label="Observaciones">
-          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:bg-white focus:outline-none"
+          <textarea className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs min-h-[50px] text-black-85 placeholder:text-black-10 focus:border-primary focus:bg-white focus:outline-none"
             placeholder="Observaciones adicionales..." />
         </Field>
       </SectionCard>

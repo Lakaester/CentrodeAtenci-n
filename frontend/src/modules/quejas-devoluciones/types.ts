@@ -21,7 +21,7 @@ export interface QdCaso {
   clasificacion: string | null;
   producto: string | null;
   observacion: string | null;
-  fecha_solicitud: string | null;     // YYYY-MM-DD (fecha en que el cliente solicitó)
+  fecha_solicitud: string | null;     // YYYY-MM-DD o ISO exacto UTC
   origen: string | null;               // MANUAL | CATEGORIZACION | BACKFILL
   eliminado: boolean;
   eliminado_at: string | null;

@@ -44,7 +44,7 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
       className={[
         "fixed lg:sticky lg:top-14",
         "inset-y-0 left-0 z-50",
-        "w-[72px] bg-white border-r border-black-5",
+        "w-[72px] bg-white border-r border-black-10",
         "flex flex-col shrink-0 overflow-y-auto",
         "h-screen lg:h-[calc(100vh-3.5rem)]",
         "transition-transform duration-200",
@@ -52,16 +52,23 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
       ].join(" ")}
     >
       {/* Mobile close button */}
-      <div className="lg:hidden h-14 flex items-center justify-end px-2 border-b border-black-5 shrink-0">
-        <button onClick={onClose} className="p-1.5 rounded text-black-45 hover:bg-light">
+      <div className="lg:hidden h-14 flex items-center justify-end px-2 border-b border-black-10 shrink-0">
+        <button onClick={onClose} aria-label="Cerrar menú" className="rounded p-1.5 text-black-45 hover:bg-light hover:text-black-85">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Logo (escritorio) */}
-      <div className="hidden lg:flex flex-col items-center justify-center border-b border-black-5 py-3 px-1 shrink-0">
-        <img src="/logos/restaurantpe-logo-2024-02.png" alt="Restaurant.pe" className="h-[16px] w-auto" />
-        <span className="mt-1 text-[9px] font-bold text-primary uppercase tracking-widest">COPE</span>
+      {/* Identidad institucional */}
+      <div
+        className="flex shrink-0 flex-col items-center justify-center border-b border-black-10 px-1 py-3"
+        title="RESTAURANT.PE — Centro de Operaciones de Soporte Especializado (C.O.S.E)"
+      >
+        <img
+          src="/logos/restaurantpe-logo-2024-fondo-color-07.png"
+          alt="Restaurant.pe"
+          className="h-10 w-10 object-contain"
+        />
+        <span className="mt-1 text-[8px] font-bold uppercase tracking-[0.12em] text-primary">C.O.S.E</span>
       </div>
 
       {/* Navigation */}
@@ -77,12 +84,12 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
                   "relative flex flex-col items-center gap-1 w-full py-3 px-1 text-center transition-colors",
                   "after:absolute after:left-0 after:top-1.5 after:bottom-1.5 after:w-[3px] after:rounded-r after:transition-colors",
                   active
-                    ? "bg-primary text-white after:bg-white"
+                    ? "bg-primary text-white after:bg-white/70"
                     : "text-black-45 hover:bg-light hover:text-black-85 after:bg-transparent",
                 ].join(" ")}
               >
                 <item.icon className="h-5 w-5" />
-                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                <span className="text-[9px] font-medium leading-tight">{item.label}</span>
               </NavLink>
               <div className="mx-3 border-b border-black-5" />
             </div>
@@ -91,7 +98,7 @@ export function CopeSidebar({ mobileOpen, onClose }: Props) {
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-black-5 shrink-0">
+      <div className="border-t border-black-10 shrink-0">
         <button
           onClick={cerrarSesion}
           className="flex flex-col items-center gap-1 w-full py-3 px-1 text-black-45 hover:bg-danger-5 hover:text-danger transition-colors text-center"

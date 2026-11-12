@@ -83,7 +83,7 @@ export default function EquiposConfig() {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-black-85"><Users2 size={15} className="text-primary" /> Equipos</h2>
-            <p className="mt-0.5 text-xs text-black-45">Estructura de equipos de trabajo de COPE.</p>
+            <p className="mt-0.5 text-xs text-black-45">Estructura de equipos de trabajo de C.O.S.E.</p>
           </div>
           <div className="flex items-center gap-1.5">
             <input value={nuevo} onChange={(e) => setNuevo(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") crear(); }} placeholder="Nuevo equipo…" className="h-7 w-44 rounded border border-black-10 px-2 text-[11px] focus:border-primary focus:outline-none" />

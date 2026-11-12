@@ -21,7 +21,7 @@ export function FilterSearch({ value, onChange, placeholder = "Buscar...", statu
         placeholder={placeholder}
         disabled={status === "disabled"}
         className={cn(
-          "w-full rounded-lg border border-black-10 bg-white py-1.5 pl-8 pr-7 text-xs text-black-85 outline-none placeholder:text-black-25 focus:border-[#0B3B5C] focus:ring-1 focus:ring-[#0B3B5C]/20",
+          "w-full rounded-lg border border-black-10 bg-white py-1.5 pl-8 pr-7 text-xs text-black-85 outline-none placeholder:text-black-25 focus:border-primary",
           status === "disabled" && "cursor-not-allowed bg-black-5 text-black-10",
         )}
       />

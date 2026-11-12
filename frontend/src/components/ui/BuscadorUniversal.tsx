@@ -110,7 +110,7 @@ export function BuscadorUniversal({ open, onClose }: Props) {
               {ACCIONES_RAPIDAS.map((a) => (
                 <button
                   key={a.label}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-black-10 bg-light px-3 py-1.5 text-xs text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-black-10 bg-light px-3 py-1.5 text-xs text-black-45 transition-colors hover:border-primary hover:text-primary"
                 >
                   <span>{a.icon}</span>
                   <span>{a.label}</span>

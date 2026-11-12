@@ -24,7 +24,7 @@ export function InputChat() {
         {["Gracias", "Claro", "Un momento", "Entiendo", "¿Podría confirmar?", "Lo reviso"].map((rta) => (
           <button
             key={rta}
-            className="shrink-0 rounded-full border border-black-10 px-2.5 py-1 text-[10px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"
+            className="shrink-0 rounded-full border border-black-10 px-2.5 py-1 text-[10px] text-black-45 transition-colors hover:border-primary hover:text-primary"
           >
             {rta}
           </button>

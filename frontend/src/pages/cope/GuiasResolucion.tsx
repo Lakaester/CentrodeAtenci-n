@@ -88,7 +88,7 @@ export default function GuiasResolucion() {
         <div className="flex items-center gap-2 border-b border-black-10 p-2">
           <div className="relative flex-1">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-black-25" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar guías..." className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar guías..." className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none" />
           </div>
         </div>
         <div className="flex gap-1 border-b border-black-10 px-2 py-1.5">
@@ -170,7 +170,7 @@ export default function GuiasResolucion() {
               <div className="flex flex-wrap gap-1.5">
                 {HERRAMIENTAS_DISP.map((h) => (
                   <button key={h} onClick={() => updateForm("herramientas", form.herramientas.includes(h) ? form.herramientas.filter((x: string) => x !== h) : [...form.herramientas, h])}
-                    className={cn("rounded-md border px-2.5 py-1.5 text-[11px] transition-colors", form.herramientas.includes(h) ? "border-[#2563EB] bg-primary-5 text-primary" : "border-black-10 text-black-45 hover:border-black-10")}>
+                    className={cn("rounded-md border px-2.5 py-1.5 text-[11px] transition-colors", form.herramientas.includes(h) ? "border-primary bg-primary-5 text-primary" : "border-black-10 text-black-45 hover:border-black-10")}>
                     {h}
                   </button>
                 ))}

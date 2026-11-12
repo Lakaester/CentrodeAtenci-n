@@ -106,7 +106,7 @@ export function WorkspaceCliente({ ticketId }: Props) {
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn("flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2 text-[9px] font-medium transition-colors",
-              tab === t.key ? "border-[#2563EB] text-primary" : "border-transparent text-black-45 hover:text-black-85")}>
+              tab === t.key ? "border-primary text-primary" : "border-transparent text-black-45 hover:text-black-85")}>
             {t.icon}
             {t.label}
           </button>
@@ -156,7 +156,7 @@ export function WorkspaceCliente({ ticketId }: Props) {
             {workspace.areaTrabajo && (
               <div className="rounded-lg border border-black-10 bg-white p-3">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black-45">Estado final</p>
-                <select className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs text-black-85 focus:border-[#2563EB] focus:outline-none">
+                <select className="w-full rounded-lg border border-black-10 bg-light px-3 py-2 text-xs text-black-85 focus:border-primary focus:outline-none">
                   <option value="">Seleccione...</option>
                   <option value="resuelto">Resuelto</option>
                   <option value="parcial">Parcialmente resuelto</option>

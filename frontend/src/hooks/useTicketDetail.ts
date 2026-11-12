@@ -34,6 +34,8 @@ export interface TicketDetail {
   telefono: string | null;
   dominio: string | null;
   pais: string | null;
+  canal?: string | null;
+  canalRaw?: string | null;
   hasPendingReply?: boolean;
   requesterId?: number | null;
   assigneeId?: number | null;

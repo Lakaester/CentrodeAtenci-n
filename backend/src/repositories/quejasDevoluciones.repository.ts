@@ -1,6 +1,12 @@
 import { prisma } from "./prisma";
 import { genId } from "./facturacion.types";
 import { normalizeDomain } from "../domain/contacto/normalizacion";
+import {
+  DOMINIO_SIN_DOMINIO,
+  ESTADO_CERRADO,
+  esDominioSinDominio,
+} from "../domain/contacto/dominioQyd";
+import { fechaLimaHoy } from "../utils/fechaQyd";
 
 /** Ejecutor de SQL (cliente Prisma o cliente de transacción) para atomicidad. */
 export type DbExecutor = Pick<typeof prisma, "$executeRaw" | "$queryRaw" | "$executeRawUnsafe" | "$queryRawUnsafe">;
@@ -26,7 +32,7 @@ export interface QdCasoRow {
   clasificacion: string | null;
   producto: string | null;
   observacion: string | null;
-  fecha_solicitud: string | null;     // YYYY-MM-DD (fecha en que el cliente solicitó)
+  fecha_solicitud: string | null;     // YYYY-MM-DD o ISO exacto YYYY-MM-DDTHH:MM:SSZ
   origen: string | null;               // MANUAL | CATEGORIZACION | BACKFILL
   eliminado: boolean;
   eliminado_at: Date | null;
@@ -81,8 +87,12 @@ export interface CrearCasoInput {
   clasificacion?: string | null;
   producto?: string | null;
   observacion?: string | null;
-  fechaSolicitud?: string | null;  // YYYY-MM-DD
+  /** YYYY-MM-DD o ISO exacto YYYY-MM-DDTHH:MM:SSZ. */
+  fechaSolicitud?: string | null;
   origen?: string | null;    // MANUAL | CATEGORIZACION | BACKFILL
+  /** true solo para expedientes SIN DOMINIO que deben quedar CERRADOS. */
+  casoCerrado?: boolean;
+  cerradoPor?: string | null;
 }
 
 /**
@@ -108,6 +118,16 @@ export interface QdHistorialRow {
 
 /** Resultado de una ejecución de backfill (reconstrucción por evidencia). */
 
+/**
+ * Normaliza el dominio para persistencia, preservando el valor explícito
+ * `SIN DOMINIO` (no debe convertirse a minúsculas ni a null).
+ */
+function dominioPersistible(d: string | null | undefined): string | null {
+  if (d == null || String(d).trim() === "") return null;
+  if (esDominioSinDominio(d)) return DOMINIO_SIN_DOMINIO;
+  return normalizeDomain(d) || null;
+}
+
 export const qdRepository = {
   async listar(tipo: string, limite = 200): Promise<QdCasoRow[]> {
     return prisma.$queryRaw<QdCasoRow[]>`
@@ -116,7 +136,8 @@ export const qdRepository = {
       LEFT JOIN qd_caso_interacciones i ON i.caso_id = c.id
       WHERE c.tipo = ${tipo} AND c.eliminado = FALSE AND c.consolidado_en IS NULL
       GROUP BY c.id
-      ORDER BY c.created_at DESC LIMIT ${limite}
+      ORDER BY COALESCE(c.fecha_solicitud::date, c.created_at::date) DESC, c.created_at DESC
+      LIMIT ${limite}
     `;
   },
 
@@ -139,8 +160,12 @@ export const qdRepository = {
     const conds: string[] = [];
     const vals: unknown[] = [];
     if (f.tipo && f.tipo !== "todas") { conds.push(`tipo = $${vals.length + 1}`); vals.push(f.tipo); }
-    if (f.desde) { conds.push(`created_at >= $${vals.length + 1}::timestamp`); vals.push(`${f.desde}T00:00:00`); }
-    if (f.hasta) { conds.push(`created_at <= $${vals.length + 1}::timestamp`); vals.push(`${f.hasta}T23:59:59`); }
+    // La columna Fecha del módulo es fecha_solicitud (origen del ticket). Si un
+    // registro histórico no la tiene, se usa la fecha de incorporación solo
+    // para poder filtrar; el dato se repara desde Zendesk por separado.
+    const fechaEfectiva = `COALESCE(c.fecha_solicitud, to_char(c.created_at AT TIME ZONE 'America/Lima', 'YYYY-MM-DD'))`;
+    if (f.desde) { conds.push(`${fechaEfectiva} >= $${vals.length + 1}`); vals.push(f.desde); }
+    if (f.hasta) { conds.push(`${fechaEfectiva} <= $${vals.length + 1}`); vals.push(f.hasta); }
     if (f.pais) { conds.push(`pais = $${vals.length + 1}`); vals.push(f.pais); }
     if (f.estado) { conds.push(`estado = $${vals.length + 1}`); vals.push(f.estado); }
     if (f.resultado) { conds.push(`resultado = $${vals.length + 1}`); vals.push(f.resultado); }
@@ -157,7 +182,7 @@ export const qdRepository = {
        LEFT JOIN qd_caso_interacciones i ON i.caso_id = c.id
        ${where}
        GROUP BY c.id
-       ORDER BY c.created_at DESC`,
+       ORDER BY COALESCE(c.fecha_solicitud::date, c.created_at::date) DESC, c.created_at DESC`,
       ...vals,
     );
   },
@@ -176,8 +201,8 @@ export const qdRepository = {
     return rows[0] ?? null;
   },
 
-  async porTicket(ticketId: string, tipo: string): Promise<QdCasoRow | null> {
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`SELECT * FROM qd_casos WHERE ticket_id = ${ticketId} AND tipo = ${tipo} AND eliminado = FALSE LIMIT 1`;
+  async porTicket(ticketId: string, tipo: string, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`SELECT * FROM qd_casos WHERE ticket_id = ${ticketId} AND tipo = ${tipo} AND eliminado = FALSE LIMIT 1`;
     return rows[0] ?? null;
   },
 
@@ -195,16 +220,55 @@ export const qdRepository = {
    * ticket principal (qd_casos.ticket_id), ticket padre (ticket_padre_id),
    * o interacción relacionada (qd_caso_interacciones).
    */
-  async porTicketGeneral(ticketId: string, tipo: string): Promise<QdCasoRow | null> {
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
+  async porTicketGeneral(ticketId: string, tipo: string, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
       SELECT c.* FROM qd_casos c
       WHERE c.tipo = ${tipo} AND c.eliminado = FALSE
         AND (c.ticket_id = ${ticketId}
              OR c.ticket_padre_id = ${ticketId}
              OR EXISTS (SELECT 1 FROM qd_caso_interacciones i WHERE i.caso_id = c.id AND i.ticket_id = ${ticketId}))
+      ORDER BY
+        CASE
+          WHEN c.ticket_id = ${ticketId} THEN 0
+          WHEN c.ticket_padre_id = ${ticketId} THEN 1
+          ELSE 2
+        END,
+        c.created_at ASC,
+        c.id ASC
       LIMIT 1
     `;
     return rows[0] ?? null;
+  },
+
+  /**
+   * Lee la relación verificada cacheada de un ticket. Solo lectura: el
+   * dry-run no debe escribir ni refrescar qd_relaciones_ticket.
+   */
+  async relacionCache(ticketId: string): Promise<{
+    ticket_padre_id: string | null;
+    followup_ids: string[];
+    origen: string;
+    fetched_at: Date;
+  } | null> {
+    const rows = await prisma.$queryRaw<{
+      ticket_padre_id: string | null;
+      followup_ids: unknown;
+      origen: string;
+      fetched_at: Date;
+    }[]>`
+      SELECT ticket_padre_id, followup_ids, origen, fetched_at
+      FROM qd_relaciones_ticket
+      WHERE ticket_id = ${ticketId}
+      LIMIT 1
+    `;
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      ticket_padre_id: r.ticket_padre_id,
+      followup_ids: Array.isArray(r.followup_ids) ? r.followup_ids.map(String) : [],
+      origen: r.origen,
+      fetched_at: r.fetched_at,
+    };
   },
 
   /** Interacciones relacionadas de un caso (sin el ticket principal). */
@@ -227,34 +291,11 @@ export const qdRepository = {
   },
 
   /**
-   * Busca un CASO ABIERTO al que pueda vincularse un ticket de Queja/Devolución.
-   * Regla de negocio: mismo dominio + mismo tipo + caso abierto (no cerrado,
-   * no consolidado, no eliminado). NO se usa ventana temporal rígida.
-   */
-  async buscarCasoAbiertoParaTicket(f: { tipo: string; dominio?: string | null }): Promise<QdCasoRow | null> {
-    if (!f.dominio) return null;
-    const rows = await prisma.$queryRaw<QdCasoRow[]>`
-      SELECT c.*, COUNT(i.id)::int AS total_interacciones
-      FROM qd_casos c
-      LEFT JOIN qd_caso_interacciones i ON i.caso_id = c.id
-      WHERE c.tipo = ${f.tipo}
-        AND c.eliminado = FALSE
-        AND c.consolidado_en IS NULL
-        AND c.caso_cerrado = FALSE
-        AND NULLIF(TRIM(c.dominio), '') = ${f.dominio}
-      GROUP BY c.id
-      ORDER BY c.created_at ASC
-      LIMIT 1
-    `;
-    return rows[0] ?? null;
-  },
-
-  /**
    * Asigna (o actualiza) el dominio de un caso manualmente. Auditable.
    * Asignar dominio NO fusiona casos automáticamente.
    */
   async asignarDominio(casoId: string, dominio: string | null, usuario: string | null, executor: DbExecutor = prisma): Promise<QdCasoRow | null> {
-    const d = dominio ? normalizeDomain(dominio) : null;
+    const d = dominioPersistible(dominio);
     const rows = await executor.$queryRaw<QdCasoRow[]>`
       UPDATE qd_casos SET dominio = ${d}, updated_at = now()
       WHERE id = ${casoId}
@@ -288,34 +329,85 @@ export const qdRepository = {
 
   /**
    * CONSOLIDA varios casos secundarios en un caso principal.
-   * CAS: el principal no debe estar consolidado ni cerrado; los secundarios
-   * se marcan solo si aún no lo estaban. Devuelve cuántos se consolidaron.
+   *
+   * - Bloquea todos los casos con `FOR UPDATE` para que la operación sea atómica
+   *   frente a consolidaciones concurrentes.
+   * - No modifica el estado del principal ni de los secundarios.
+   * - Incorpora al principal:
+   *     a) el ticket principal de cada secundario;
+   *     b) el `ticket_padre_id` de cada secundario, si existe;
+   *     c) todas las interacciones ya vinculadas a los secundarios.
+   *   Todo con `ON CONFLICT (caso_id, ticket_id) DO NOTHING`, por lo que los
+   *   tickets repetidos no generan duplicados.
+   * - Marca los secundarios con `consolidado_en = principalId`.
+   * - Devuelve cuántos secundarios quedaron consolidados; si no fueron todos,
+   *   el llamador debe lanzar error para que la transacción haga rollback.
    */
   async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null, executor: DbExecutor = prisma): Promise<number> {
-    const secs = idsSecundarios.filter((id) => id !== principalId);
+    const secs = [...new Set(idsSecundarios.filter((id) => id !== principalId))];
     if (secs.length === 0) return 0;
-    // CAS sobre el principal: no debe estar ya consolidado ni cerrado.
-    const principal = await executor.$queryRaw<QdCasoRow[]>`
-      UPDATE qd_casos SET updated_at = now()
-      WHERE id = ${principalId} AND consolidado_en IS NULL AND caso_cerrado = FALSE
-      RETURNING *
+    const todos = [principalId, ...secs];
+
+    const bloqueados = await executor.$queryRaw<QdCasoRow[]>`
+      SELECT * FROM qd_casos
+      WHERE id = ANY(${todos}::text[])
+        AND eliminado = FALSE
+      FOR UPDATE
     `;
-    if (principal.length === 0) return 0;
-    // Mover tickets de los secundarios al principal (idempotente por UNIQUE(caso_id,ticket_id)).
-    for (const sec of secs) {
-      await executor.$executeRaw`
-        INSERT INTO qd_caso_interacciones (id, caso_id, ticket_id, tipo_relacion, created_by, canal, fecha)
-        SELECT gen_random_uuid(), ${principalId}, i.ticket_id, 'relacionada', i.created_by, i.canal, i.fecha
+    if (bloqueados.length !== todos.length) return 0;
+
+    const principal = bloqueados.find((c) => c.id === principalId);
+    if (!principal || principal.consolidado_en) return 0;
+    const secundarios = bloqueados.filter((c) => c.id !== principalId);
+    if (secundarios.some((c) => c.consolidado_en)) return 0;
+    if (secundarios.some((c) => c.tipo !== principal.tipo)) return 0;
+
+    // 1) Tickets de los secundarios + interacciones existentes.
+    //    Se excluye el ticket que ya es principal del caso destino.
+    await executor.$executeRaw`
+      INSERT INTO qd_caso_interacciones (id, caso_id, ticket_id, tipo_relacion, created_by, canal, fecha)
+      SELECT gen_random_uuid(), ${principalId}, t.ticket_id, 'relacionada',
+             t.created_by, t.canal, t.fecha
+      FROM (
+        SELECT c.ticket_id AS ticket_id,
+               COALESCE(c.asesor, ${usuario ?? null}) AS created_by,
+               NULL::text AS canal,
+               CASE
+                 WHEN NULLIF(btrim(c.fecha_solicitud), '') IS NOT NULL
+                   THEN c.fecha_solicitud::timestamptz
+                 ELSE NULL::timestamptz
+               END AS fecha
+        FROM qd_casos c
+        JOIN qd_casos p ON p.id = ${principalId}
+        WHERE c.id = ANY(${secs}::text[])
+          AND c.ticket_id IS NOT NULL
+          AND c.ticket_id IS DISTINCT FROM p.ticket_id
+        UNION ALL
+        SELECT c.ticket_padre_id,
+               COALESCE(c.asesor, ${usuario ?? null}),
+               NULL::text,
+               NULL::timestamptz
+        FROM qd_casos c
+        JOIN qd_casos p ON p.id = ${principalId}
+        WHERE c.id = ANY(${secs}::text[])
+          AND c.ticket_padre_id IS NOT NULL
+          AND c.ticket_padre_id IS DISTINCT FROM p.ticket_id
+        UNION ALL
+        SELECT i.ticket_id, i.created_by, i.canal, i.fecha
         FROM qd_caso_interacciones i
-        WHERE i.caso_id = ${sec}
-        ON CONFLICT (caso_id, ticket_id) DO NOTHING
-      `;
-    }
-    // Marcar secundarios como consolidados (CAS: solo los que aún no lo están).
+        WHERE i.caso_id = ANY(${secs}::text[])
+      ) t
+      WHERE t.ticket_id IS NOT NULL
+      ON CONFLICT (caso_id, ticket_id) DO NOTHING
+    `;
+
+    // 2) Marcar secundarios como consolidados. Sin tocar estado ni fecha.
     const res = await executor.$executeRaw`
       UPDATE qd_casos
       SET consolidado_en = ${principalId}, updated_at = now()
-      WHERE id = ANY(${secs}::text[]) AND id <> ${principalId} AND consolidado_en IS NULL
+      WHERE id = ANY(${secs}::text[])
+        AND id <> ${principalId}
+        AND consolidado_en IS NULL
     `;
     return Number(res ?? 0);
   },
@@ -323,17 +415,26 @@ export const qdRepository = {
   async crear(input: CrearCasoInput, executor: DbExecutor = prisma): Promise<QdCasoRow> {
     const id = genId();
     const numero = `${input.tipo === "devolucion" ? "DEV" : "QUE"}-${String(Date.now()).slice(-5)}`;
-    const d = input.dominio ? normalizeDomain(input.dominio) : null;
+    const d = dominioPersistible(input.dominio);
+    // Ningún expediente nuevo puede quedar sin fecha de solicitud. La fecha
+    // histórica del ticket se pasa explícitamente; si el llamador no la tiene,
+    // se usa la fecha de incorporación en Lima (nunca NULL).
+    const fechaSolicitud = input.fechaSolicitud ?? fechaLimaHoy();
+    const casoCerrado = input.casoCerrado === true;
+    const cerradoAt = casoCerrado ? new Date() : null;
+    const cerradoPor = casoCerrado ? input.cerradoPor ?? null : null;
     const rows = await executor.$queryRaw<QdCasoRow[]>`
       INSERT INTO qd_casos
         (id, tipo, numero, ticket_id, ticket_padre_id, dominio, pais, asesor, estado, resultado,
-         moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, fecha_solicitud, origen)
+         moneda, monto_pagado, tipo_monto, area, motivo, porcentaje, monto_devuelto, clasificacion, producto, observacion, fecha_solicitud, origen,
+         caso_cerrado, cerrado_at, cerrado_por)
       VALUES
         (${id}, ${input.tipo}, ${numero}, ${input.ticketId ?? null}, ${input.ticketPadreId ?? null}, ${d}, ${input.pais ?? null},
          ${input.asesor ?? null}, ${input.estado ?? null}, ${input.resultado ?? null},
          ${input.moneda ?? "PEN"}, ${input.montoPagado ?? null}, ${input.tipoMonto ?? null}, ${input.area ?? null}, ${input.motivo ?? null},
          ${input.porcentaje ?? null}, ${input.montoDevuelto ?? null}, ${input.clasificacion ?? null}, ${input.producto ?? null},
-         ${input.observacion ?? null}, ${input.fechaSolicitud ?? null}, ${input.origen ?? "MANUAL"})
+         ${input.observacion ?? null}, ${fechaSolicitud}, ${input.origen ?? "MANUAL"},
+         ${casoCerrado}, ${cerradoAt}, ${cerradoPor})
       RETURNING *
     `;
     return rows[0];
@@ -388,7 +489,7 @@ export const qdRepository = {
     const values: unknown[] = [];
     const map: Record<string, unknown> = {
       ticket_id: patch.ticketId,
-      dominio: patch.dominio != null ? normalizeDomain(patch.dominio) : patch.dominio,
+      dominio: patch.dominio != null ? dominioPersistible(patch.dominio) : patch.dominio,
       pais: patch.pais,
       asesor: patch.asesor,
       estado: patch.estado,
@@ -420,6 +521,87 @@ export const qdRepository = {
 
   async auditoria(casoId: string): Promise<QdAuditoriaRow[]> {
     return prisma.$queryRaw<QdAuditoriaRow[]>`SELECT * FROM qd_auditoria WHERE caso_id = ${casoId} ORDER BY created_at ASC`;
+  },
+
+  /** Casos activos sin fecha_solicitud: candidatos a reparación desde Zendesk. */
+  async casosSinFecha(limite = 500): Promise<{ id: string; ticket_id: string | null; created_at: Date }[]> {
+    return prisma.$queryRaw<{ id: string; ticket_id: string | null; created_at: Date }[]>`
+      SELECT id, ticket_id, created_at FROM qd_casos
+      WHERE fecha_solicitud IS NULL AND eliminado = FALSE
+      ORDER BY created_at ASC
+      LIMIT ${limite}
+    `;
+  },
+
+  /** Repara la fecha de origen solo si sigue vacía (idempotente). */
+  async actualizarFechaSolicitud(
+    casoId: string,
+    fecha: string,
+    executor: DbExecutor = prisma,
+  ): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
+      UPDATE qd_casos SET fecha_solicitud = ${fecha}, updated_at = now()
+      WHERE id = ${casoId} AND fecha_solicitud IS NULL
+      RETURNING *
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
+   * Regulariza un expediente existente sin dominio utilizable:
+   * - persiste `SIN DOMINIO`;
+   * - lo deja cerrado (si ya estaba cerrado, conserva su estado operativo).
+   *
+   * No toca montos, resultado, observaciones ni otros datos operativos.
+   */
+  async regularizarSinDominio(
+    casoId: string,
+    usuario: string | null,
+    executor: DbExecutor = prisma,
+  ): Promise<QdCasoRow | null> {
+    const rows = await executor.$queryRaw<QdCasoRow[]>`
+      UPDATE qd_casos
+      SET dominio = ${DOMINIO_SIN_DOMINIO},
+          estado = CASE
+            WHEN caso_cerrado = TRUE AND NULLIF(TRIM(estado), '') IS NOT NULL THEN estado
+            ELSE ${ESTADO_CERRADO}
+          END,
+          caso_cerrado = TRUE,
+          cerrado_at = COALESCE(cerrado_at, now()),
+          cerrado_por = COALESCE(cerrado_por, ${usuario ?? null}),
+          updated_at = now()
+      WHERE id = ${casoId}
+      RETURNING *
+    `;
+    return rows[0] ?? null;
+  },
+
+  /** Registra una incidencia de datos (por ejemplo, fecha no verificable). */
+  async registrarIncidenciaDato(datos: {
+    casoId: string;
+    ticketId?: string | null;
+    tipo: string;
+    detalle: string;
+  }): Promise<boolean> {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO qd_incidencias_datos (id, caso_id, ticket_id, tipo, detalle)
+      VALUES (${genId()}, ${datos.casoId}, ${datos.ticketId ?? null}, ${datos.tipo}, ${datos.detalle})
+      ON CONFLICT (caso_id, tipo) DO NOTHING
+      RETURNING id
+    `;
+    return rows.length > 0;
+  },
+
+  async listarIncidencias(limite = 200): Promise<{
+    id: string; caso_id: string | null; ticket_id: string | null;
+    tipo: string; detalle: string; created_at: Date;
+  }[]> {
+    return prisma.$queryRaw`
+      SELECT id, caso_id, ticket_id, tipo, detalle, created_at
+      FROM qd_incidencias_datos
+      ORDER BY created_at DESC
+      LIMIT ${limite}
+    `;
   },
 
   async registrarAuditoria(casoId: string, usuario: string | null, accion: string, campo: string | null, anterior: string | null, nuevo: string | null, executor: DbExecutor = prisma): Promise<void> {

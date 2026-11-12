@@ -39,6 +39,14 @@ qdRouter.delete("/casos/:id", requirePermission("Quejas y Devoluciones", "elimin
 // Carga retroactiva (BACKFILL) del histórico real: requiere permiso "administrar"
 qdRouter.post("/backfill", requirePermission("Quejas y Devoluciones", "administrar"), qdController.backfill);
 
+// Backfill desde Zendesk con checkpoints (01/07/2026 → hoy por defecto).
+qdRouter.post("/backfill/zendesk", requirePermission("Quejas y Devoluciones", "administrar"), qdController.backfillZendesk);
+qdRouter.get("/backfill/zendesk/:runId", requirePermission("Quejas y Devoluciones", "administrar"), qdController.estadoBackfillZendesk);
+
+// Reparación de fechas de origen y consulta de incidencias de datos.
+qdRouter.post("/fechas/reparar", requirePermission("Quejas y Devoluciones", "administrar"), qdController.repararFechas);
+qdRouter.get("/incidencias", requirePermission("Quejas y Devoluciones", "ver"), qdController.listarIncidencias);
+
 // Reconciliación automática: detecta tickets válidos sin caso y los crea.
 // NO destruye datos operativos. Requiere permiso "administrar".
 qdRouter.post("/reconciliar", requirePermission("Quejas y Devoluciones", "administrar"), qdController.reconciliar);

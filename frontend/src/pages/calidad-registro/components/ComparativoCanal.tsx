@@ -2,6 +2,7 @@ import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import { Section } from "@/components/dashboard/shared";
 import { C, escenarioPct, fmtNum, fmtPct, fmtPpAbs } from "../format";
+import { CHART } from "@/lib/chartPalette";
 import type { CalidadCanal, CalidadRegistroResponse } from "../types";
 
 function mejor<T>(items: T[], value: (t: T) => number | null): T | null {
@@ -44,7 +45,7 @@ function Insight({
   return (
     <div className="rounded-xl border border-black-10 bg-light/60 p-4">
       <p className="text-[11px] font-medium uppercase tracking-wide text-black-45">{titulo}</p>
-      <p className="mt-1 text-lg font-bold" style={{ color: color ?? "#111827" }}>
+      <p className="mt-1 text-lg font-bold" style={{ color: color ?? CHART.charcoal }}>
         {valor}
       </p>
       <p className="mt-0.5 text-xs text-black-45">{detalle}</p>
@@ -131,7 +132,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
         type: "text",
         left: 8,
         top: 0,
-        style: { text: titulo, fontSize: 12, fontWeight: "bold", fill: "#374151" },
+        style: { text: titulo, fontSize: 12, fontWeight: "bold", fill: CHART.charcoal },
       },
     ],
   });
@@ -261,7 +262,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
                 )} atenciones`
               : "Sin datos"
           }
-          color="#047857"
+          color={CHART.success}
         />
         <Insight
           titulo="Mayor brecha de homologación"
@@ -273,7 +274,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
                 )} registradas no homologadas`
               : "Sin datos"
           }
-          color="#b45309"
+          color={CHART.warning}
         />
         <Insight
           titulo="Mayor brecha de dominio"
@@ -285,7 +286,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
                 )} informados no válidos`
               : "Sin datos"
           }
-          color="#b45309"
+          color={CHART.warning}
         />
         <Insight
           titulo="Más atenciones en 'ninguna'"
@@ -299,7 +300,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
                 )}`
               : "Sin datos"
           }
-          color="#b91c1c"
+          color={CHART.danger}
         />
         <Insight
           titulo="Mayor mejora integral (último periodo)"
@@ -309,7 +310,7 @@ export function ComparativoCanal({ data }: { data: CalidadRegistroResponse }) {
               ? `${mayorMejora.delta > 0 ? "+" : ""}${mayorMejora.delta.toFixed(1)} pp · ${mayorMejora.periodo}`
               : "Sin dos periodos comparables"
           }
-          color="#1d4ed8"
+          color={CHART.primary}
         />
       </div>
     </Section>

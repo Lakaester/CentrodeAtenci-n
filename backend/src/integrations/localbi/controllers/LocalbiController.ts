@@ -17,6 +17,37 @@ const historiaParamsSchema = z.object({
   unidadNegocio: z.string().min(1, "unidad de negocio requerida"),
 });
 
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function fechaValida(v: string): boolean {
+  if (!FECHA_RE.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
+/** Fecha actual en America/Lima como YYYY-MM-DD. */
+function fechaLimaHoy(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** Resta días calendario a un YYYY-MM-DD sin cruces de zona horaria. */
+function restarDias(ymd: string, dias: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - dias);
+  return dt.toISOString().slice(0, 10);
+}
+
 export const localbiController = {
   async search(req: Request, res: Response, next: NextFunction) {
     try {
@@ -119,6 +150,77 @@ export const localbiController = {
       }
       const data = await actividadCopeService.obtenerActividadPorDominios(dominios, 30);
       res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  /** GET /actividad-cose?dominios=a,b,c&desde=YYYY-MM-DD&hasta=YYYY-MM-DD — agregado COSE. */
+  async actividadCose(req: Request, res: Response, next: NextFunction) {
+    try {
+      const raw = req.query.dominios as string | undefined;
+      const dominios = (raw ?? "").split(",").map((d) => d.trim()).filter(Boolean);
+      if (dominios.length === 0) {
+        return res.status(400).json({ ok: false, error: "dominios requerido (lista separada por comas)" });
+      }
+      if (dominios.length > 100) {
+        return res.status(400).json({ ok: false, error: "demasiados dominios (máx 100)" });
+      }
+
+      const desdeRaw = typeof req.query.desde === "string" ? req.query.desde.trim() : undefined;
+      const hastaRaw = typeof req.query.hasta === "string" ? req.query.hasta.trim() : undefined;
+      if (desdeRaw && !fechaValida(desdeRaw)) {
+        return res.status(400).json({ ok: false, error: "desde inválido (formato YYYY-MM-DD)" });
+      }
+      if (hastaRaw && !fechaValida(hastaRaw)) {
+        return res.status(400).json({ ok: false, error: "hasta inválido (formato YYYY-MM-DD)" });
+      }
+
+      const hasta = hastaRaw ?? fechaLimaHoy();
+      const desde = desdeRaw ?? restarDias(hasta, 29);
+      if (desde > hasta) {
+        return res.status(400).json({ ok: false, error: "desde no puede ser mayor que hasta" });
+      }
+
+      const limiteRaw = req.query.limite;
+      const limite = limiteRaw === undefined ? 200 : Number(limiteRaw);
+      if (!Number.isInteger(limite) || limite < 1 || limite > 500) {
+        return res.status(400).json({ ok: false, error: "limite debe ser un entero entre 1 y 500" });
+      }
+
+      const canalRaw = typeof req.query.canal === "string" ? req.query.canal.trim().toUpperCase() : undefined;
+      if (canalRaw && !["WHATSAPP", "CORREO"].includes(canalRaw)) {
+        return res.status(400).json({ ok: false, error: "canal inválido (WHATSAPP o CORREO)" });
+      }
+
+      const estadoRaw = typeof req.query.estado === "string" ? req.query.estado.trim() : undefined;
+      if (estadoRaw && !["cerrado", "resuelto", "abierto", "sin_mapear"].includes(estadoRaw)) {
+        return res.status(400).json({ ok: false, error: "estado inválido (cerrado, resuelto, abierto, sin_mapear)" });
+      }
+
+      const localbi_id = typeof req.query.localbi_id === "string" ? req.query.localbi_id.trim() : undefined;
+      if (localbi_id && localbi_id.length > 200) {
+        return res.status(400).json({ ok: false, error: "localbi_id demasiado largo" });
+      }
+      const asesor = typeof req.query.asesor === "string" ? req.query.asesor.trim() : undefined;
+      if (asesor && asesor.length > 100) {
+        return res.status(400).json({ ok: false, error: "asesor demasiado largo" });
+      }
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
+      if (q && q.length > 100) {
+        return res.status(400).json({ ok: false, error: "q demasiado largo (máx 100)" });
+      }
+
+      const data = await actividadCopeService.obtenerActividadCose(dominios, {
+        desde,
+        hasta,
+        limite,
+        localbi_id: localbi_id || undefined,
+        canal: canalRaw,
+        asesor: asesor || undefined,
+        estado: estadoRaw,
+        q: q || undefined,
+      });
+
+      res.json({ ok: true, status: "success", data, warnings: [] });
     } catch (err) { next(err); }
   },
 

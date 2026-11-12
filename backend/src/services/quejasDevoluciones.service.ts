@@ -1,6 +1,17 @@
 import { qdRepository, type CrearCasoInput, type QdCasoRow, type QdInteraccionRow, type DbExecutor } from "../repositories/quejasDevoluciones.repository";
 import { prisma } from "../repositories/prisma";
-import { reconstruirCasosBackfill, reconciliarCasosQD, normalizarDominio, dominioValido, canalValido, estadoZendeskCandidato, type ReconstruccionResultado } from "./quejasCasos.service";
+import {
+  reconstruirCasosBackfill,
+  reconciliarCasosQD,
+  normalizarDominio,
+  normalizarCanal,
+  resolverDominioQyd,
+  DOMINIO_SIN_DOMINIO,
+  ESTADO_CERRADO,
+  esDominioSinDominio,
+  type ReconstruccionResultado,
+} from "./quejasCasos.service";
+import { resolverCadenaTicket, validarCadenaEnTx, bloquearRaizTipo, esViolacionUnica } from "./qdCaseResolution.service";
 import { DomainError } from "../core/errors/types";
 
 function calcularMontoDevuelto(montoPagado: number | null | undefined, porcentaje: number | null | undefined): number | null {
@@ -71,7 +82,7 @@ async function createQydCasoConTx(tx: DbExecutor, input: CrearCasoInput, usuario
   if (!parcial) validarCaso(input);
   const montoDevuelto = input.montoDevuelto ?? calcularMontoDevuelto(input.montoPagado, input.porcentaje);
   if (input.ticketId) {
-    const existente = await qdRepository.porTicket(input.ticketId, input.tipo);
+    const existente = await qdRepository.porTicket(input.ticketId, input.tipo, tx);
     if (existente) {
       throw new DomainError(`Este ticket ya tiene un caso de ${input.tipo} asociado.`, "CASO_DUPLICADO");
     }
@@ -134,33 +145,58 @@ export const qdService = {
   /**
    * Crea (o reutiliza) un caso desde la categorización del asesor.
    *
-   * REGLA DE NEGOCIO: un caso representa el proceso completo de gestión de un
-   * problema, no un correo individual. Esta operación:
+   * REGLA DE NEGOCIO (H-04/H-05): un caso representa el proceso completo de
+   * gestión de un problema, no un correo individual. La agrupación se basa
+   * EXCLUSIVAMENTE en relaciones Zendesk verificadas (follow_up):
    *
-   * 1. Identifica el ticket y su ticket padre de hilo (via.source.from.ticket_id
-   *    con rel === "follow_up"), que es el identificador relacional real de Zendesk.
-   * 2. Busca un caso existente relacionado con el ticket (por ticket principal,
-   *    ticket padre o interacción relacionada) → lo REUTILIZA.
-   * 3. Si existe un caso del ticket padre de hilo → REUTILIZA y asocia esta
-   *    interacción como relacionada.
-   * 4. Si no existe → crea un caso nuevo con ticket principal + ticket_padre_id.
+   * 1. Resuelve la cadena completa hasta la raíz ANTES de la transacción.
+   * 2. Dentro de una transacción breve toma un advisory lock determinista
+   *    (raíz + tipo) y revalida que la cadena no cambió.
+   * 3. Busca un caso existente para la raíz o cualquier ticket de la cadena.
+   * 4. Si no existe, crea el caso con ticket_id = raíz e inserta la cadena de
+   *    interacciones (raíz principal, resto relacionadas).
+   * 5. Caso, interacciones y auditoría se confirman o revierten juntos.
    *
-   * NUNCA crea primero y pregunta después. Es idempotente y resistente a
-   * concurrencia gracias a UNIQUE(caso_id, ticket_id) y UNIQUE(ticket_id, tipo).
+   * No se usa dominio + tipo para fusionar tickets sin relación. Tampoco se
+   * modifica qd_casos de casos existentes ni se completa el principal faltante
+   * de casos históricos.
    */
   async crearDesdeCategorizacion(input: {
     ticketId: string;
     ticketPadreId?: string | null;
+    /** Tickets hijos ya observados en la consulta fresca a Zendesk. */
+    followupIds?: string[];
+    /** true solo si la lectura del ticket fue completa y confiable. */
+    relacionVerificada?: boolean;
     tipo: "devolucion" | "queja";
     asesor: string | null;
     dominio?: string | null;
+    /** Valor crudo del dominio, conservado para auditoría si queda SIN DOMINIO. */
+    dominioOriginal?: string | null;
     pais?: string | null;
     estado?: string | null;
     clasificacion?: string | null;
     resultado?: string | null;
     canal?: string | null;
-    /** Estado real del ticket Zendesk (closed/solved) usado para el gate; separado del estado inicial del caso. */
+    /** Estado real del ticket Zendesk; se conserva para trazabilidad, NO bloquea la creación. */
     estadoTicket?: string | null;
+    /** Fecha de origen exacta del ticket (YYYY-MM-DD o ISO YYYY-MM-DDTHH:MM:SSZ). */
+    fechaSolicitud?: string | null;
+    /** false = resolución de relaciones solo desde PostgreSQL, sin API Zendesk. */
+    permitirZendesk?: boolean;
+    /**
+     * Permite crear la raíz cuando no hay relación verificada y el ticket no
+     * tiene dominio. Solo aplica a tickets QyD sin dominio, que por regla deben
+     * crear/reutilizar expediente y quedar CERRADOS. Por defecto true cuando el
+     * dominio resuelto es SIN DOMINIO.
+     */
+    permitirSinRelacionVerificada?: boolean;
+    /**
+     * false = usa las relaciones existentes sin escribir/refrescar
+     * `qd_relaciones_ticket`. La carga histórica no debe modificar relaciones
+     * ya registradas.
+     */
+    persistirRelacion?: boolean;
   }, usuario: string | null): Promise<{
     caso: QdCasoRow | null;
     reutilizado: boolean;
@@ -170,78 +206,220 @@ export const qdService = {
   }> {
     const tipo = input.tipo;
     const ticketId = input.ticketId;
+    const usuarioCaso = usuario ?? input.asesor ?? null;
 
     // ── VALIDACIONES OBLIGATORIAS ANTES DE CREAR ──
-    // 1. Canal debe ser CORREO o CHAT.
-    if (!canalValido(input.canal)) {
-      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_CANAL_INVALIDO" };
+    // 1. Canal real debe ser CORREO, CHAT o WHATSAPP. Nunca se asume CORREO.
+    const canal = normalizarCanal(input.canal);
+    if (!canal) {
+      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "PENDIENTE_CANAL" };
     }
-    // 2. Estado Zendesk debe ser closed o solved (se evalúa el estado real del ticket).
-    if (!estadoZendeskCandidato(input.estadoTicket ?? input.estado)) {
-      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "NO_CREA_ESTADO_NO_CERRADO" };
-    }
-    // 3. Dominio válido.
-    if (!dominioValido(input.dominio)) {
-      return { caso: null, reutilizado: false, interaccionAsociada: false, creado: false, motivoNoCreacion: "SIN_DOMINIO" };
-    }
+    // 2. El estado del ticket NO bloquea la creación: el expediente representa
+    //    el proceso de gestión y es independiente del estado de la conversación.
+    // 3. Dominio: si no es válido (vacío, correo o placeholder), se persiste
+    //    SIN DOMINIO y el expediente queda CERRADO. No bloquea la creación.
+    const dominioEntrada = input.dominioOriginal !== undefined
+      ? input.dominioOriginal
+      : input.dominio;
+    const dominioResuelto = resolverDominioQyd(dominioEntrada);
+    const sinDominio = dominioResuelto.sinDominio;
+    const dominioCaso = dominioResuelto.dominio;
+    // Conserva el valor crudo recibido (incluido null/vacío). No reemplaza el
+    // original por el marcador SIN DOMINIO.
+    const dominioOriginal = input.dominioOriginal !== undefined
+      ? input.dominioOriginal
+      : dominioResuelto.original;
 
-    // 1) Idempotencia / duplicado directo: este ticket ya es el principal de un caso.
-    let existente = await qdRepository.porTicketGeneral(ticketId, tipo);
-    if (existente) {
+    /**
+     * Reutiliza un expediente existente SIN modificarlo.
+     *
+     * Regla de esta carga: los expedientes existentes conservan exactamente
+     * su estado, dominio, fecha y datos operativos. La regla SIN DOMINIO /
+     * CERRADO solo se aplica a expedientes nuevos.
+     */
+    const reutilizarExistente = async (existente: QdCasoRow): Promise<{
+      caso: QdCasoRow;
+      reutilizado: true;
+      interaccionAsociada: false;
+      creado: false;
+    }> => {
       return { caso: existente, reutilizado: true, interaccionAsociada: false, creado: false };
-    }
+    };
 
-    // 2) Hilo: si este ticket es follow_up de un ticket padre que ya tiene caso,
-    //    reutilizarlo y registrar esta interacción como relacionada.
-    if (input.ticketPadreId) {
-      const casoPadre = await qdRepository.porTicketGeneral(input.ticketPadreId, tipo);
-      if (casoPadre) {
-        const interaccion = await prisma.$transaction(async (tx) => {
-          const i = await qdRepository.asociarInteraccion(casoPadre.id, ticketId, usuario ?? input.asesor, "relacionada", null, null, tx);
+    // Si el ticket ya está representado por un expediente del mismo tipo
+    // (principal, padre o interacción), se reutiliza sin exigir una cadena
+    // adicional. No se inventa ninguna relación: el vínculo ya existe en BD.
+    const existenteDirecto = await qdRepository.porTicketGeneral(ticketId, tipo);
+    if (existenteDirecto) return reutilizarExistente(existenteDirecto);
+
+    // H-04: resolver la raíz/cadena fuera de la transacción, para no mantener
+    // el advisory lock durante llamadas de red a Zendesk.
+    const resolucion = await resolverCadenaTicket(ticketId, {
+      ...(input.relacionVerificada && input.ticketPadreId !== undefined
+        ? { padreConocido: input.ticketPadreId }
+        : {}),
+      ...(input.relacionVerificada && input.followupIds !== undefined
+        ? { followupIds: input.followupIds }
+        : {}),
+      ...(input.permitirZendesk === false ? { permitirZendesk: false } : {}),
+      ...(input.persistirRelacion === false ? { noPersistir: true } : {}),
+    });
+
+    // Raíz independiente cuando no hay ninguna relación conocida (ni padre ni
+    // follow-ups). Se habilita para SIN DOMINIO por regla de negocio y para la
+    // carga multicanal explícita, donde la ausencia de relación no es un error.
+    // Si hay un padre conocido, la cadena sigue siendo obligatoria.
+    const permitirRaizSinRelacion = (sinDominio || input.permitirSinRelacionVerificada === true)
+      && !input.ticketPadreId
+      && (!input.followupIds || input.followupIds.length === 0);
+    const resolucionOk = resolucion.ok
+      ? resolucion
+      : permitirRaizSinRelacion
+        ? { ok: true as const, rootTicketId: ticketId, cadena: [ticketId], eslabones: [] }
+        : null;
+    if (!resolucionOk) {
+      return {
+        caso: null,
+        reutilizado: false,
+        interaccionAsociada: false,
+        creado: false,
+        motivoNoCreacion: "PENDIENTE_RELACION",
+      };
+    }
+    const validarCadena = resolucion.ok;
+
+    // Orden de búsqueda: raíz primero (clave canónica), luego el resto de la
+    // cadena desde el ticket actual hacia arriba.
+    const ticketsBusqueda = [
+      resolucionOk.rootTicketId,
+      ...resolucionOk.cadena.filter((t) => t !== resolucionOk.rootTicketId),
+    ];
+
+    try {
+      const resultado = await prisma.$transaction(async (tx) => {
+        await bloquearRaizTipo(tx, resolucionOk.rootTicketId, tipo);
+
+        // La relación usada para resolver la raíz debe seguir siendo la misma.
+        // En la excepción SIN DOMINIO sin relación conocida no hay eslabones que
+        // validar: el ticket es su propia raíz y no se inventó un vínculo.
+        if (validarCadena && resolucionOk.eslabones.length > 0) {
+          const validacion = await validarCadenaEnTx(tx, resolucionOk);
+          if (!validacion.ok) {
+            return { ok: false as const, detalle: validacion.detalle };
+          }
+        }
+
+        let existente: QdCasoRow | null = null;
+        for (const t of ticketsBusqueda) {
+          existente = await qdRepository.porTicketGeneral(t, tipo, tx);
+          if (existente) break;
+        }
+
+        if (existente) {
+          // El expediente existente NO se modifica: ni estado, ni dominio, ni
+          // fecha, ni datos operativos. Solo se agrega la interacción del
+          // ticket actual si aún no está representado por el caso.
+          let interaccionAsociada = false;
+          if (existente.ticket_id !== ticketId && existente.ticket_padre_id !== ticketId) {
+            const interaccion = await qdRepository.asociarInteraccion(
+              existente.id, ticketId, usuarioCaso, "relacionada", null, null, tx,
+            );
+            interaccionAsociada = !!interaccion;
+            if (interaccion) {
+              await qdRepository.registrarAuditoria(
+                existente.id, usuarioCaso, "interaccion_asociada", "ticket",
+                null, `Ticket #${ticketId} asociado al caso ${existente.numero} (raíz #${resolucionOk.rootTicketId})`, tx,
+              );
+            }
+          }
+          return { ok: true as const, caso: existente, reutilizado: true, interaccionAsociada, creado: false };
+        }
+
+        const caso = await createQydCasoConTx(tx, {
+          tipo,
+          ticketId: resolucionOk.rootTicketId,
+          ticketPadreId: null,
+          asesor: input.asesor,
+          dominio: dominioCaso,
+          pais: input.pais ?? null,
+          estado: sinDominio ? ESTADO_CERRADO : input.estado ?? "Pendiente de conciliación",
+          resultado: input.resultado ?? null,
+          clasificacion: input.clasificacion ?? null,
+          fechaSolicitud: input.fechaSolicitud ?? null,
+          origen: "CATEGORIZACION",
+          casoCerrado: sinDominio,
+          cerradoPor: sinDominio ? usuarioCaso : null,
+        }, usuarioCaso, true);
+
+        if (sinDominio) {
           await qdRepository.registrarAuditoria(
-            casoPadre.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
-            null, `Ticket #${ticketId} asociado al caso ${casoPadre.numero} (hilo follow_up de #${input.ticketPadreId})`, tx,
+            caso.id, usuarioCaso, "dominio_sin_dominio", "dominio",
+            dominioOriginal, DOMINIO_SIN_DOMINIO, tx,
           );
-          return i;
-        });
-        return { caso: casoPadre, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
-      }
-    }
-
-    // 2.5) Caso ABIERTO relacionado: si el ticket tiene dominio y existe un caso
-    //      abierto del mismo dominio + tipo, vincular el ticket a ese caso.
-    //      NO se usa ventana temporal rígida: el caso permanece abierto hasta
-    //      que el asesor lo cierre manualmente.
-    if (input.dominio && !input.ticketPadreId) {
-      const casoAbierto = await qdRepository.buscarCasoAbiertoParaTicket({ tipo, dominio: input.dominio });
-      if (casoAbierto) {
-        const interaccion = await prisma.$transaction(async (tx) => {
-          const i = await qdRepository.asociarInteraccion(casoAbierto.id, ticketId, usuario ?? input.asesor, "relacionada", null, new Date(), tx);
           await qdRepository.registrarAuditoria(
-            casoAbierto.id, usuario ?? input.asesor, "interaccion_asociada", "ticket",
-            null, `Ticket #${ticketId} vinculado al caso abierto ${casoAbierto.numero} (mismo dominio ${input.dominio})`, tx,
+            caso.id, usuarioCaso, "estado_sin_dominio", "estado",
+            null, ESTADO_CERRADO, tx,
           );
-          return i;
-        });
-        return { caso: casoAbierto, reutilizado: true, interaccionAsociada: !!interaccion, creado: false };
-      }
-    }
+        }
 
-    // 3) Crear caso nuevo. La creación automática desde categorización no exige
-    //    datos completos (el asesor los completa después). origen = CATEGORIZACION.
-    const caso = await this.crear({
-      tipo,
-      ticketId,
-      ticketPadreId: input.ticketPadreId ?? null,
-      asesor: input.asesor,
-      dominio: input.dominio ?? null,
-      pais: input.pais ?? null,
-      estado: input.estado ?? "Pendiente de conciliación",
-      resultado: input.resultado ?? null,
-      clasificacion: input.clasificacion ?? null,
-      origen: "CATEGORIZACION",
-    }, usuario ?? input.asesor, true);
-    return { caso, reutilizado: false, interaccionAsociada: false, creado: true };
+        let interaccionAsociada = false;
+        for (const t of resolucionOk.cadena) {
+          const tipoRelacion = t === resolucionOk.rootTicketId ? "principal" : "relacionada";
+          const interaccion = await qdRepository.asociarInteraccion(
+            caso.id,
+            t,
+            usuarioCaso,
+            tipoRelacion,
+            t === ticketId ? canal : null,
+            t === ticketId ? new Date() : null,
+            tx,
+          );
+          if (interaccion) {
+            interaccionAsociada = true;
+            const detalle = t === resolucionOk.rootTicketId
+              ? `Ticket #${t} registrado como principal del caso ${caso.numero}`
+              : `Ticket #${t} asociado al caso ${caso.numero} (cadena de #${ticketId})`;
+            await qdRepository.registrarAuditoria(
+              caso.id, usuarioCaso, "interaccion_asociada", "ticket", null, detalle, tx,
+            );
+          }
+        }
+
+        return { ok: true as const, caso, reutilizado: false, interaccionAsociada, creado: true };
+      });
+
+      if (!resultado.ok) {
+        return {
+          caso: null,
+          reutilizado: false,
+          interaccionAsociada: false,
+          creado: false,
+          motivoNoCreacion: "PENDIENTE_RELACION",
+        };
+      }
+      return resultado;
+    } catch (err) {
+      // Protección adicional ante una carrera que haya violado
+      // UNIQUE(ticket_id, tipo): reconsultar y devolver el caso existente.
+      if (esViolacionUnica(err)) {
+        for (const t of ticketsBusqueda) {
+          const existente = await qdRepository.porTicketGeneral(t, tipo);
+          if (existente) {
+            return reutilizarExistente(existente);
+          }
+        }
+        // El conflicto era del expediente, pero el ganador ya no es visible.
+        // No devolver un éxito falso: propagar un error de concurrencia trazable.
+        console.warn(
+          `[QD] Conflicto UNIQUE sin expediente visible ticket=${ticketId} tipo=${tipo} root=${resolucionOk.rootTicketId}`,
+        );
+        throw new DomainError(
+          "Conflicto de concurrencia al crear el expediente. Reintente la operación.",
+          "CONFLICTO_CONCURRENCIA",
+        );
+      }
+      throw err;
+    }
   },
 
   /**
@@ -318,14 +496,19 @@ export const qdService = {
 
   /**
    * CONSOLIDA varios casos secundarios en un caso principal.
-   * Transacción + CAS: el principal no debe estar consolidado/cerrado; los
-   * secundarios solo se marcan si aún no lo estaban. Sin auditoría si no consolidó.
+   *
+   * La operación NO cambia el estado del principal ni de los secundarios.
+   * El estado `CERRADO` es válido y no impide consolidar: los casos cerrados
+   * conservan exactamente su estado y solo se marca `consolidado_en` en los
+   * secundarios. El estado se valida contra `qd_estados` en PostgreSQL.
+   *
+   * Transacción atómica: si no se consolidan todos los secundarios, se lanza
+   * error y se revierte todo (interacciones, marcas y auditoría).
    */
   async consolidarCasos(principalId: string, idsSecundarios: string[], usuario: string | null, motivo?: string | null): Promise<{ principal: QdCasoRow; consolidados: number }> {
     const principal = await qdRepository.porId(principalId);
     if (!principal) throw new DomainError("Caso principal no encontrado", "NO_ENCONTRADO");
     if (principal.consolidado_en) throw new DomainError("El caso principal no puede ser un caso ya consolidado", "CONSOLIDACION_INVALIDA");
-    if (principal.caso_cerrado) throw new DomainError("No se puede consolidar sobre un caso cerrado", "CONSOLIDACION_INVALIDA");
 
     const secs = new Set(idsSecundarios);
     secs.delete(principalId);
@@ -333,17 +516,20 @@ export const qdService = {
     if (ids.length === 0) throw new DomainError("Selecciona al menos un caso secundario", "CONSOLIDACION_INVALIDA");
 
     // Validar que todos los secundarios sean del mismo tipo y no estén consolidados.
+    // No se rechazan casos cerrados: se conserva su estado sin modificarlo.
     for (const id of ids) {
       const c = await qdRepository.porId(id);
       if (!c) throw new DomainError("Un caso secundario no existe", "CONSOLIDACION_INVALIDA");
       if (c.tipo !== principal.tipo) throw new DomainError("No se pueden consolidar casos de distinto tipo (Queja ≠ Devolución)", "CONSOLIDACION_TIPO_DISTINTO");
       if (c.consolidado_en) throw new DomainError(`El caso ${c.numero} ya fue consolidado`, "CONSOLIDACION_INVALIDA");
-      if (c.caso_cerrado) throw new DomainError(`El caso ${c.numero} está cerrado`, "CONSOLIDACION_INVALIDA");
     }
 
     return prisma.$transaction(async (tx) => {
       const consolidados = await qdRepository.consolidarCasos(principalId, ids, usuario, tx);
-      if (consolidados === 0) throw new DomainError("No se pudo consolidar (conflicto de estado)", "CONSOLIDACION_INVALIDA"); // CAS pierde → rollback, sin auditoría
+      // Debe consolidarse la totalidad; si otro proceso tomó alguno, rollback.
+      if (consolidados !== ids.length) {
+        throw new DomainError("No se pudo consolidar todos los casos (conflicto de estado)", "CONSOLIDACION_INVALIDA");
+      }
       await qdRepository.registrarAuditoria(
         principalId, usuario, "consolidacion_casos", "caso",
         null, `Consolidados ${consolidados} caso(s) en ${principal.numero}${motivo ? ` — Motivo: ${motivo}` : ""}`, tx,
@@ -516,7 +702,8 @@ async crear(input: CrearCasoInput, usuario: string | null, parcial = false) {
     const set = new Set<string>();
     for (const d of raw) {
       const n = normalizarDominio(d);
-      if (n) set.add(n);
+      // `SIN DOMINIO` es un valor de expediente, no una opción del catálogo.
+      if (n && !esDominioSinDominio(n)) set.add(n);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   },

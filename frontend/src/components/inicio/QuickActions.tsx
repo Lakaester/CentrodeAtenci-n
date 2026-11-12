@@ -15,7 +15,7 @@ export function QuickActions() {
         <a
           key={label}
           href={href}
-          className="flex flex-col items-center gap-1.5 rounded-xl border border-black-10 bg-white p-4 text-center  transition-all hover:-translate-y-0.5 hover:border-[#F97316]/30"
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-black-10 bg-white p-4 text-center  transition-all hover:-translate-y-0.5 hover:border-primary/30"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-10 text-primary">
             <Icon size={20} />

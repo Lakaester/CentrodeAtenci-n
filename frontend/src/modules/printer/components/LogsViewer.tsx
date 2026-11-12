@@ -52,7 +52,7 @@ export function LogsViewer({ logs, loading, dominio, onConsultar }: Props) {
               <Copy size={12} /> Copiar
             </button>
           </div>
-          <pre className="max-h-96 overflow-y-auto rounded-md bg-dark p-4 text-[11px] leading-relaxed text-[#E2E8F0] font-mono whitespace-pre-wrap">
+          <pre className="max-h-96 overflow-y-auto rounded-md bg-dark p-4 text-[11px] leading-relaxed text-black-10 font-mono whitespace-pre-wrap">
             {logs.contenido || "(sin contenido)"}
           </pre>
         </div>

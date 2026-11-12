@@ -33,6 +33,19 @@ import { prisma } from "../repositories/prisma";
 import { qdRepository, type QdHistorialRow } from "../repositories/quejasDevoluciones.repository";
 import { ZendeskClient } from "../modules/zendesk/infrastructure/ZendeskClient";
 import { normalizeDomain } from "../domain/contacto/normalizacion";
+import {
+  DOMINIO_SIN_DOMINIO,
+  ESTADO_CERRADO,
+  esDominioSinDominio,
+  resolverDominioQyd,
+} from "../domain/contacto/dominioQyd";
+
+export {
+  DOMINIO_SIN_DOMINIO,
+  ESTADO_CERRADO,
+  esDominioSinDominio,
+  resolverDominioQyd,
+};
 
 export const CATCH_ALL_EMAIL = "notificaciones@mail.restaurant.pe";
 
@@ -98,6 +111,7 @@ const zendesk = new ZendeskClient();
  * Elimina www. como comportamiento específico de este servicio.
  */
 export function normalizarDominio(d: string | null | undefined): string | null {
+  if (esDominioSinDominio(d)) return DOMINIO_SIN_DOMINIO;
   let v = normalizeDomain(d);
   v = v.replace(/^www\./, "");
   return v || null;
@@ -136,20 +150,62 @@ function relKey(id: string): string {
   return id;
 }
 
-/** Valida si un dominio es aceptable para crear un caso QyD. */
+/**
+ * Valida si un valor es un dominio real (no correo, no placeholder, no vacío).
+ *
+ * `SIN DOMINIO` no es un dominio válido: es el valor explícito que se persiste
+ * cuando un ticket QyD no tiene dominio utilizable. La creación/reutilización
+ * de esos expedientes se decide con `resolverDominioQyd`, no con esta función.
+ */
 export function dominioValido(dominio: string | null | undefined): boolean {
-  if (!dominio) return false;
-  const d = dominio.trim().toLowerCase();
-  if (!d) return false;
-  if (d === "sin dominio" || d === "s/d" || d === "n/a" || d === "null") return false;
-  return true;
+  return !resolverDominioQyd(dominio).sinDominio;
 }
 
-/** Valida si un canal es aceptable (CORREO o CHAT). */
+const CATEGORIAS_SIN_CATEGORIZAR = new Set([
+  "",
+  "sin homologar",
+  "sin categoria",
+  "sin categorizar",
+  "no categorizado",
+  "no categorizada",
+  "sin definir",
+  "n a",
+  "null",
+]);
+
+/**
+ * Distingue un ticket sin categorizar de uno categorizado que no es QyD.
+ * `SIN HOMOLOGAR` se trata como sin categorizar: no hay una categoría
+ * homologada que permita decidir.
+ */
+export function esCategoriaSinCategorizar(
+  categoria: string | null | undefined,
+  subcategoria?: string | null,
+): boolean {
+  const cat = normalizarCategoriaQyd(categoria);
+  const sub = normalizarCategoriaQyd(subcategoria);
+  if (!cat && !sub) return true;
+  return CATEGORIAS_SIN_CATEGORIZAR.has(cat);
+}
+
+/** Valida si un canal es aceptable (CORREO, CHAT o WHATSAPP). */
 export function canalValido(canal: string | null | undefined): boolean {
-  if (!canal) return false;
+  return normalizarCanal(canal) !== null;
+}
+
+export type CanalQyd = "CORREO" | "CHAT" | "WHATSAPP";
+
+/**
+ * Normaliza el canal real de la atención a los valores que usa QyD.
+ * No asume CORREO: un valor ausente o desconocido devuelve null.
+ */
+export function normalizarCanal(canal: string | null | undefined): CanalQyd | null {
+  if (!canal) return null;
   const c = canal.trim().toLowerCase();
-  return c === "correo" || c === "chat" || c === "email" || c === "whatsapp";
+  if (c === "correo" || c === "email") return "CORREO";
+  if (c === "chat") return "CHAT";
+  if (c === "whatsapp") return "WHATSAPP";
+  return null;
 }
 
 /** Valida si un estado de Zendesk es candidato a caso (closed o solved). */
@@ -184,17 +240,95 @@ export function clasificarCategoriaQyd(
   const sub = normalizarCategoriaQyd(subcategoria);
   if (!cat) return null;
 
+  // Prioridad exacta: DEVOLUCIÓN + Solicitud de devolución.
+  // Se evalúa antes de las reglas genéricas para que la combinación operativa
+  // canónica no dependa de coincidencias parciales de texto.
+  if (
+    (cat === "devolucion" || cat === "devoluciones") &&
+    (sub === "solicitud de devolucion" || sub === "solicitud de devoluciones")
+  ) {
+    return { tipo: "devolucion", categoria: "SOLICITUD_DEVOLUCION" };
+  }
+
   // QUEJA y DEVOLUCION (incluye variantes): queja-dominante → tipo queja.
   if (cat.includes("queja") && cat.includes("devolucion")) {
     return { tipo: "queja", categoria: "QUEJA_Y_DEVOLUCION" };
   }
   if (cat === "reclamo") return { tipo: "queja", categoria: "RECLAMO" };
-  if (cat === "queja" || (cat === "gestion" && sub.includes("queja"))) {
+  if (cat === "queja" || cat === "queja formal" || cat.includes("queja formal") || (cat === "gestion" && sub.includes("queja"))) {
     return { tipo: "queja", categoria: "QUEJA" };
   }
-  if (cat.includes("devolucion") || cat.includes("devoluciones") || (cat === "gestion" && sub.includes("devolucion")) || sub.includes("devolucion")) {
+  // SOLO la categoría de devolución o GESTIÓN + subcategoría de devolución.
+  // No se convierte una categoría arbitraria en devolución por una subcategoría
+  // que contenga parcialmente "devolución".
+  if (cat.includes("devolucion") || cat.includes("devoluciones") || (cat === "gestion" && sub.includes("devolucion"))) {
     return { tipo: "devolucion", categoria: "SOLICITUD_DEVOLUCION" };
   }
+  return null;
+}
+
+/**
+ * Traduce el valor de la subcategoría de Zendesk (campo 38744095836311) a la
+ * categoría padre que usa `clasificarCategoriaQyd`. Es un adaptador de catálogo,
+ * no un segundo clasificador: la decisión final siempre pasa por
+ * `clasificarCategoriaQyd`.
+ *
+ * Solo reconoce valores exactos del catálogo QyD. No convierte categorías
+ * arbitrarias por coincidencias parciales de texto.
+ */
+export function categoriaDesdeSubcategoriaZendesk(
+  valor: string | null | undefined,
+): { categoria: string; subcategoria: string } | null {
+  const raw = (valor ?? "").trim();
+  const sub = normalizarCategoriaQyd(raw);
+  if (!sub) return null;
+
+  if (sub === "solicitud de devolucion" || sub === "solicitud de devoluciones") {
+    return { categoria: "DEVOLUCIÓN", subcategoria: raw };
+  }
+  if (sub === "queja servicio" || sub === "queja producto" || sub === "queja otro") {
+    return { categoria: "QUEJA", subcategoria: raw };
+  }
+  if (sub === "reclamo" || sub.startsWith("reclamo ")) {
+    return { categoria: "RECLAMO", subcategoria: raw };
+  }
+  if (sub === "queja y devolucion" || sub === "queja y devoluciones") {
+    return { categoria: "QUEJA Y DEVOLUCIÓN", subcategoria: raw };
+  }
+  // Algunas configuraciones guardan la categoría completa en el mismo campo.
+  if (
+    sub === "queja" || sub === "queja formal" ||
+    sub === "devolucion" || sub === "devoluciones" ||
+    sub === "gestion"
+  ) {
+    return { categoria: raw, subcategoria: raw };
+  }
+  return null;
+}
+
+/** Clasifica un ticket de Zendesk usando únicamente su valor de subcategoría. */
+export function clasificarTicketZendeskQyd(
+  valorSubcategoria: string | null | undefined,
+): { tipo: "queja" | "devolucion"; categoria: CategoriaQyd } | null {
+  const adaptado = categoriaDesdeSubcategoriaZendesk(valorSubcategoria);
+  if (!adaptado) return null;
+  return clasificarCategoriaQyd(adaptado.categoria, adaptado.subcategoria);
+}
+
+/**
+ * Deriva la clasificación de una queja (Servicio/Producto/Otro) desde la
+ * subcategoría. Se comparte entre la categorización en tiempo real y el
+ * backfill para no duplicar reglas.
+ */
+export function clasificacionQuejaDesdeSubcategoria(
+  tipo: "queja" | "devolucion",
+  subcategoria: string | null | undefined,
+): string | null {
+  if (tipo !== "queja") return null;
+  const sub = normalizarCategoriaQyd(subcategoria);
+  if (sub.includes("servicio")) return "Servicio";
+  if (sub.includes("producto")) return "Producto";
+  if (sub.includes("otro")) return "Otro";
   return null;
 }
 
@@ -332,7 +466,7 @@ export function agruparTicketsEnCasos(
   const claveIdentidad = new Map<string, number[]>();
   tickets.forEach((t, i) => {
     const id = identidadReal(t);
-    if (t.domNorm && id) {
+    if (t.domNorm && id && !esDominioSinDominio(t.domNorm)) {
       const key = `${t.domNorm}::${t.tipo}::${id}`;
       const arr = claveIdentidad.get(key) ?? [];
       arr.push(i);
@@ -484,11 +618,11 @@ export async function reconstruirCasosBackfill(desde: string, hasta: string): Pr
       duplicados++;
       continue;
     }
-    // 3. Dominio válido.
-    if (!dominioValido(g.dominio)) {
-      duplicados++;
-      continue;
-    }
+    // 3. Dominio: si no es válido, el expediente se crea/reutiliza como
+    //    SIN DOMINIO y CERRADO. El ticket no se descarta.
+    const dominioResuelto = resolverDominioQyd(g.dominio);
+    const dominioCaso = dominioResuelto.dominio;
+    const sinDominio = dominioResuelto.sinDominio;
 
     // CASO A: Ticket tiene caso MANUAL/CATEGORIZACION → NO tocar.
     if (ticketsManuales.has(ticketKey)) {
@@ -507,7 +641,11 @@ export async function reconstruirCasosBackfill(desde: string, hasta: string): Pr
         // B2: Sin datos operativos → actualizar solo campos de origen (dominio, pais, asesor).
         await prisma.$executeRaw`
           UPDATE qd_casos
-          SET dominio = ${g.dominio ?? null},
+          SET dominio = CASE
+                WHEN ${sinDominio}::boolean AND NULLIF(TRIM(dominio), '') IS NOT NULL
+                  THEN dominio
+                ELSE ${dominioCaso}
+              END,
               pais = ${g.principal.pais ?? null},
               asesor = ${g.principal.asesor ?? null},
               updated_at = now()
@@ -537,9 +675,10 @@ export async function reconstruirCasosBackfill(desde: string, hasta: string): Pr
            observacion, origen, created_at, updated_at, caso_cerrado)
         VALUES
           (gen_random_uuid(), ${tipo}, ${numero}, ${g.principal.ticketId}, ${g.ticketPadreId},
-           ${g.dominio ?? null}, ${g.principal.pais ?? null}, ${g.principal.asesor ?? null},
-           'Pendiente de conciliación', NULL, ${g.principal.subcategoria ?? null}, 'BACKFILL',
-           ${fechaApertura}, ${fechaApertura}, FALSE)
+           ${dominioCaso}, ${g.principal.pais ?? null}, ${g.principal.asesor ?? null},
+           ${sinDominio ? ESTADO_CERRADO : "Pendiente de conciliación"}, NULL,
+           ${g.principal.subcategoria ?? null}, 'BACKFILL',
+           ${fechaApertura}, ${fechaApertura}, ${sinDominio})
         RETURNING id
       `;
       const casoId = creado[0].id;
@@ -560,6 +699,13 @@ export async function reconstruirCasosBackfill(desde: string, hasta: string): Pr
         VALUES (gen_random_uuid(), ${casoId}, 'system', 'creacion_backfill', 'caso', NULL,
                 ${`Caso ${numero} creado por carga retroactiva (${g.tickets.length} ticket(s), evidencia ${g.evidencia})`})
       `;
+      if (sinDominio) {
+        await prisma.$executeRaw`
+          INSERT INTO qd_auditoria (id, caso_id, usuario, accion, campo, valor_anterior, valor_nuevo)
+          VALUES (gen_random_uuid(), ${casoId}, 'system', 'dominio_sin_dominio', 'dominio',
+                  ${dominioResuelto.original}, ${DOMINIO_SIN_DOMINIO})
+        `;
+      }
     }
 
     for (const t of g.tickets) {
@@ -653,17 +799,11 @@ export async function reconciliarCasosQD(desde: string, hasta: string): Promise<
       continue;
     }
 
-    // 3. Validar dominio.
-    if (!dominioValido(h.dominio)) {
-      resultados.push({
-        ticketId,
-        tipo,
-        resultado: "SIN_DOMINIO",
-        dominio: h.dominio ?? null,
-        detalle: "Dominio ausente o no válido",
-      });
-      continue;
-    }
+    // 3. Resolver dominio: si no es válido, se persiste SIN DOMINIO y el
+    //    expediente queda CERRADO. El ticket no se descarta.
+    const dominioResuelto = resolverDominioQyd(h.dominio);
+    const dominio = dominioResuelto.dominio;
+    const sinDominio = dominioResuelto.sinDominio;
 
     // 4. Verificar si ya existe caso (cualquier origen).
     const existente = await qdRepository.porTicket(ticketId, tipo);
@@ -680,7 +820,6 @@ export async function reconciliarCasosQD(desde: string, hasta: string): Promise<
     }
 
     // 5. Crear caso.
-const dominio = normalizarDominio(h.dominio);
     try {
       // Frontera transaccional por unidad (O4-D, F03): caso + auditoría atómicos.
       const caso = await prisma.$transaction(async (tx) => {
@@ -690,16 +829,24 @@ const dominio = normalizarDominio(h.dominio);
           dominio,
           pais: h.pais ?? null,
           asesor: h.asesor ?? null,
-          estado: "Pendiente de conciliaci��n",
+          estado: sinDominio ? ESTADO_CERRADO : "Pendiente de conciliación",
           observacion: h.subcategoria ?? null,
           origen: "BACKFILL",
+          casoCerrado: sinDominio,
+          cerradoPor: sinDominio ? "system" : null,
         }, tx);
 
         await qdRepository.registrarAuditoria(
           c.id, "system", "creacion_reconciliacion", "caso", null,
-          `Caso ${c.numero} creado por reconciliaci��n automǭtica (ticket #${ticketId})`,
+          `Caso ${c.numero} creado por reconciliación automática (ticket #${ticketId})`,
           tx,
         );
+        if (sinDominio) {
+          await qdRepository.registrarAuditoria(
+            c.id, "system", "dominio_sin_dominio", "dominio",
+            dominioResuelto.original, DOMINIO_SIN_DOMINIO, tx,
+          );
+        }
         return c;
       });
 

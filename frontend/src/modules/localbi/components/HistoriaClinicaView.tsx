@@ -1,7 +1,16 @@
-import { SeccionColapsable, Info, ND, fmtNps } from "./HistoriaClinicaUI";
+import {
+  SeccionColapsable,
+  Info,
+  ND,
+  fmtNps,
+  HistoriaDensityProvider,
+  useHistoriaDensity,
+  type HistoriaDensity,
+} from "./HistoriaClinicaUI";
 import { useHistoriaClinicaData } from "../hooks/useHistoriaClinicaData";
 import { HistorialFacturacion } from "@/modules/facturacion/components/HistorialFacturacion";
 import { QdClienteHistorial } from "@/modules/quejas-devoluciones/components/QdClienteHistorial";
+import { QdClienteHistorialCose } from "@/modules/quejas-devoluciones/components/QdClienteHistorialCose";
 import { ResumenUnidad } from "./secciones/ResumenUnidad";
 import { ActividadUnidad } from "./secciones/ActividadUnidad";
 import { HistorialTransversalSeccion } from "./secciones/HistorialTransversalSeccion";
@@ -14,8 +23,41 @@ import { HistorialTransversalSeccion } from "./secciones/HistorialTransversalSec
  * que solo pertenecen a esta vista integral (NPS, Addons, Integraciones
  * placeholder). La carga de datos está centralizada en useHistoriaClinicaData.
  */
-export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }) {
+interface HistoriaClinicaViewProps {
+  unidadNegocio: string;
+  variant?: HistoriaDensity;
+  dominioSeleccionado?: string;
+  localSeleccionado?: string;
+  unidadNombre?: string;
+}
+
+export function HistoriaClinicaView({
+  unidadNegocio,
+  variant = "compact",
+  dominioSeleccionado,
+  localSeleccionado,
+  unidadNombre,
+}: HistoriaClinicaViewProps) {
+  return (
+    <HistoriaDensityProvider value={variant}>
+      <HistoriaClinicaContent
+        unidadNegocio={unidadNegocio}
+        dominioSeleccionado={dominioSeleccionado}
+        localSeleccionado={localSeleccionado}
+        unidadNombre={unidadNombre}
+      />
+    </HistoriaDensityProvider>
+  );
+}
+
+function HistoriaClinicaContent({
+  unidadNegocio,
+  dominioSeleccionado,
+  localSeleccionado,
+  unidadNombre,
+}: Omit<HistoriaClinicaViewProps, "variant">) {
   const data = useHistoriaClinicaData(unidadNegocio);
+  const comfortable = useHistoriaDensity() === "comfortable";
 
   if (data.status.kind === "loading") {
     return (
@@ -59,7 +101,12 @@ export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }
         )}
 
         {/* Cabecera + Resumen KPIs + Dominios y locales */}
-        <ResumenUnidad data={data} />
+        <ResumenUnidad
+          data={data}
+          dominioSeleccionado={dominioSeleccionado}
+          localSeleccionado={localSeleccionado}
+          unidadNombre={unidadNombre}
+        />
 
         {/* Módulos (parte de Actividad, pero se mantiene en la vista completa) */}
         <ActividadUnidad data={data} />
@@ -90,7 +137,11 @@ export function HistoriaClinicaView({ unidadNegocio }: { unidadNegocio: string }
         </SeccionColapsable>
 
         <SeccionColapsable title="Quejas y devoluciones">
-          <QdClienteHistorial dominios={ficha.dominios.map((d) => d.dominio)} />
+          {comfortable ? (
+            <QdClienteHistorialCose dominios={ficha.dominios.map((d) => d.dominio)} />
+          ) : (
+            <QdClienteHistorial dominios={ficha.dominios.map((d) => d.dominio)} />
+          )}
         </SeccionColapsable>
 
         {/* Historial Transversal */}

@@ -42,7 +42,7 @@ export function IntegracionesWorkspace() {
         {MOCK.map((int, i) => <IntCard key={i} {...int} />)}
       </div>
 
-      <div className="rounded-lg border border-black-10 bg-[#FFF7ED] p-2.5">
+      <div className="rounded-lg border border-black-10 bg-primary-5 p-2.5">
         <p className="text-[10px] font-medium text-primary">Errores recientes</p>
         <p className="text-[10px] text-danger">• Uber Eats — timeout en sincronización de menú</p>
         <p className="text-[10px] text-danger">• Didi Food — token de acceso expirado</p>

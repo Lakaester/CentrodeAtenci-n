@@ -39,7 +39,7 @@ export default function ConfigDashboard() {
     <div className="p-6">
       <div className="mx-auto max-w-2xl">
         <h2 className="text-sm font-semibold text-black-85">Configuración</h2>
-        <p className="mt-0.5 text-xs text-black-45">Administra usuarios, acceso y parámetros operativos de COPE.</p>
+        <p className="mt-0.5 text-xs text-black-45">Administra usuarios, acceso y parámetros operativos de C.O.S.E.</p>
 
         <div className="mt-4 divide-y divide-black-5 rounded-lg border border-black-10 bg-white">
           {DOMINIOS.map((d) => (

@@ -47,7 +47,7 @@ function generateTickets(count: number): MetaTicketDTO[] {
 function generateConversation(ticketId: number): MetaMessageDTO[] {
   const msgs: MetaMessageDTO[] = [];
   const contactName = "Cliente";
-  const agentName = "Asesor COPE";
+  const agentName = "Asesor C.O.S.E";
   const count = 5 + (ticketId % 8);
 
   for (let i = 0; i < count; i++) {

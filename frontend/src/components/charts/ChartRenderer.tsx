@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import type { ChartConfig, ChartData, DonutData, LineData } from "./types";
-import { DEFAULT_CHART_CONFIG, CHART_COLORS } from "./constants";
+import { DEFAULT_CHART_CONFIG, CHART_COLORS, CHART_TEXT, CHART_AXIS, CHART_GRID, CHART_SPLIT } from "./constants";
 
 function isCategoriesData(d: ChartData): d is LineData {
   return "categories" in d && "series" in d;
@@ -15,10 +15,10 @@ function isDonutData(d: ChartData): d is DonutData[] {
 function buildLineOption(data: LineData, config: ChartConfig): EChartsOption {
   return {
     tooltip: config.showTooltip !== false ? { trigger: "axis" } : undefined,
-    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: "#64748B" } } : undefined,
+    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: CHART_TEXT } } : undefined,
     grid: config.showGrid !== false ? { left: 40, right: 16, top: 16, bottom: config.showLegend !== false ? 40 : 24 } : undefined,
-    xAxis: { type: "category", data: data.categories, axisLine: { lineStyle: { color: "#E2E8F0" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } },
-    yAxis: { type: "value", splitLine: { lineStyle: { color: "#F1F5F9" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } },
+    xAxis: { type: "category", data: data.categories, axisLine: { lineStyle: { color: CHART_GRID } }, axisLabel: { fontSize: 11, color: CHART_AXIS } },
+    yAxis: { type: "value", splitLine: { lineStyle: { color: CHART_SPLIT } }, axisLabel: { fontSize: 11, color: CHART_AXIS } },
     series: data.series.map((s, i) => ({
       type: config.variant === "area" ? "line" : "line",
       name: s.name,
@@ -37,14 +37,14 @@ function buildBarOption(data: LineData, config: ChartConfig): EChartsOption {
   const isHorizontal = config.variant === "hbar";
   return {
     tooltip: config.showTooltip !== false ? { trigger: "axis" } : undefined,
-    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: "#64748B" } } : undefined,
+    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: CHART_TEXT } } : undefined,
     grid: { left: isHorizontal ? 80 : 40, right: 16, top: 16, bottom: config.showLegend !== false ? 40 : 24 },
     xAxis: isHorizontal
-      ? { type: "value", splitLine: { lineStyle: { color: "#F1F5F9" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } }
-      : { type: "category", data: data.categories, axisLine: { lineStyle: { color: "#E2E8F0" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } },
+      ? { type: "value", splitLine: { lineStyle: { color: CHART_SPLIT } }, axisLabel: { fontSize: 11, color: CHART_AXIS } }
+      : { type: "category", data: data.categories, axisLine: { lineStyle: { color: CHART_GRID } }, axisLabel: { fontSize: 11, color: CHART_AXIS } },
     yAxis: isHorizontal
-      ? { type: "category", data: data.categories, axisLine: { lineStyle: { color: "#E2E8F0" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } }
-      : { type: "value", splitLine: { lineStyle: { color: "#F1F5F9" } }, axisLabel: { fontSize: 11, color: "#94A3B8" } },
+      ? { type: "category", data: data.categories, axisLine: { lineStyle: { color: CHART_GRID } }, axisLabel: { fontSize: 11, color: CHART_AXIS } }
+      : { type: "value", splitLine: { lineStyle: { color: CHART_SPLIT } }, axisLabel: { fontSize: 11, color: CHART_AXIS } },
     series: data.series.map((s, i) => ({
       type: "bar",
       name: s.name,
@@ -58,7 +58,7 @@ function buildBarOption(data: LineData, config: ChartConfig): EChartsOption {
 function buildDonutOption(data: DonutData[], config: ChartConfig): EChartsOption {
   return {
     tooltip: config.showTooltip !== false ? { trigger: "item", formatter: "{b}: {c} ({d}%)" } : undefined,
-    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: "#64748B" } } : undefined,
+    legend: config.showLegend !== false ? { bottom: 0, textStyle: { fontSize: 11, color: CHART_TEXT } } : undefined,
     series: [
       {
         type: "pie",

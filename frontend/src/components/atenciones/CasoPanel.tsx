@@ -78,13 +78,13 @@ export function CasoPanel({ data }: Props) {
       <div className="space-y-2 p-4">
         {/* Objetivo */}
         <CollapsibleSection title="Objetivo del Caso" icon={<Target size={12} />}>
-          <div className="rounded-lg border border-black-10 bg-[#F0F7FF] p-2.5 text-xs text-black-85">
+          <div className="rounded-lg border border-black-10 bg-primary-5 p-2.5 text-xs text-black-85">
             {data.objetivo}
           </div>
         </CollapsibleSection>
 
         {/* Próximo Paso */}
-        <div className="rounded-lg border border-[#2563EB]/30 bg-[#F0F7FF] p-3">
+        <div className="rounded-lg border border-primary/30 bg-primary-5 p-3">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Próximo Paso</p>
           <p className="mt-0.5 text-xs text-black-85">{data.proximoPaso}</p>
         </div>
@@ -115,7 +115,7 @@ export function CasoPanel({ data }: Props) {
                       <span className="text-[10px] text-black-25">{step.fecha} {step.hora}</span>
                     </div>
                     <p className="text-[10px] text-black-45">por {step.usuario}</p>
-                    <p className="mt-0.5 text-[11px] text-[#475569]">{step.comentario}</p>
+                    <p className="mt-0.5 text-[11px] text-black-65">{step.comentario}</p>
                   </div>
                 </div>
               );
@@ -155,7 +155,7 @@ export function CasoPanel({ data }: Props) {
             value={resumen}
             onChange={(e) => setResumen(e.target.value)}
             placeholder="Escriba un resumen del caso para uso de IA..."
-            className="w-full rounded-lg border border-black-10 bg-light p-2.5 text-xs text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:outline-none resize-none min-h-[60px]"
+            className="w-full rounded-lg border border-black-10 bg-light p-2.5 text-xs text-black-85 placeholder:text-black-25 focus:border-primary focus:outline-none resize-none min-h-[60px]"
           />
         </CollapsibleSection>
 

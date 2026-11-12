@@ -10,6 +10,7 @@ import {
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import { api } from "@/lib/api";
+import { CHART } from "@/lib/chartPalette";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
 import { fmtNum, KpiCard, Section } from "@/components/dashboard/shared";
@@ -200,7 +201,7 @@ function Estados({ items, total }: { items: WhatsAppEstado[]; total: number }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
         {items.map((e) => (
-          <div key={e.estado} className="rounded-lg bg-[#F8F9FA] px-3 py-2">
+          <div key={e.estado} className="rounded-lg bg-black-5 px-3 py-2">
             <p className="text-[10px] uppercase tracking-wide text-black-45">{e.etiqueta}</p>
             <p className="mt-1 text-lg font-semibold text-black-85">{fmtNum(e.total)}</p>
             <p className="text-[10px] text-black-25">{fmtPct1(e.pct)}</p>
@@ -316,8 +317,8 @@ function Evolucion({ data }: { data: ResWhatsApp["evolucion"] }) {
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#F97316", width: 3 },
-          itemStyle: { color: "#F97316" },
+          lineStyle: { color: CHART.brand, width: 3 },
+          itemStyle: { color: CHART.brand },
           areaStyle: { color: "rgba(249,115,22,0.10)" },
           data: actual.map((p) => p.total),
         },
@@ -326,8 +327,8 @@ function Evolucion({ data }: { data: ResWhatsApp["evolucion"] }) {
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { color: "#94A3B8", width: 2, type: "dashed" },
-          itemStyle: { color: "#94A3B8" },
+          lineStyle: { color: CHART.muted, width: 2, type: "dashed" },
+          itemStyle: { color: CHART.muted },
           data: actual.map((_, i) => anterior[i]?.total ?? null),
         },
       ],
@@ -362,7 +363,7 @@ function Evolucion({ data }: { data: ResWhatsApp["evolucion"] }) {
             </>
           )}
         </div>
-        <div className="flex gap-1 rounded-lg border border-black-10 bg-[#F8F9FA] p-1">
+        <div className="flex gap-1 rounded-lg border border-black-10 bg-black-5 p-1">
           {(["diaria", "semanal", "mensual"] as Granularidad[]).map((g) => (
             <button
               key={g}
@@ -443,7 +444,7 @@ function ChartBase({
         barMaxWidth: 22,
         data: values.map((v, i) => ({
           value: v,
-          itemStyle: { color: i === peakIndex ? "#F97316" : "#FDBA74", borderRadius: [3, 3, 0, 0] },
+          itemStyle: { color: i === peakIndex ? CHART.brand : CHART.soft, borderRadius: [3, 3, 0, 0] },
         })),
       },
     ],
@@ -715,7 +716,7 @@ export default function WhatsApp() {
             {data.insights.map((s, idx) => (
               <li
                 key={idx}
-                className="flex items-start gap-2.5 rounded-xl bg-[#F8F9FA] p-3 text-sm text-black-85"
+                className="flex items-start gap-2.5 rounded-xl bg-black-5 p-3 text-sm text-black-85"
               >
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
                   {idx + 1}

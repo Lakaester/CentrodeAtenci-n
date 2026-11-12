@@ -39,9 +39,9 @@ export function CopilotoPanel({ data = MOCK_COPILOTO, onInsertar }: Props) {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="flex items-center gap-2 border-b border-black-10 bg-gradient-to-r from-[#F0F7FF] to-white px-4 py-2.5">
+      <div className="flex items-center gap-2 border-b border-black-10 bg-gradient-to-r from-primary-5 to-white px-4 py-2.5">
         <Sparkles size={16} className="text-primary" />
-        <p className="text-sm font-semibold text-black-85">Copiloto COPE</p>
+        <p className="text-sm font-semibold text-black-85">Copiloto C.O.S.E</p>
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
@@ -107,7 +107,7 @@ export function CopilotoPanel({ data = MOCK_COPILOTO, onInsertar }: Props) {
 
         {/* 6 - NotebookLM */}
         <Section title="NotebookLM" icon={<BookOpen size={12} />}>
-          <div className="rounded-lg border border-black-10 bg-[#FFF7ED] p-2.5 text-xs text-black-85">{data.notebookLM}</div>
+          <div className="rounded-lg border border-black-10 bg-primary-5 p-2.5 text-xs text-black-85">{data.notebookLM}</div>
           <Button size="sm" variant="secondary" className="w-full text-[10px] h-7 gap-1.5">
             <BookOpen size={11} /> Abrir Notebook
           </Button>

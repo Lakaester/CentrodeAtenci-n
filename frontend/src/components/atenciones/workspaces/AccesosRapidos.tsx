@@ -17,7 +17,7 @@ export function AccesosRapidos({ categoria }: { categoria: string }) {
       {items.map((a) => (
         <button
           key={a}
-          className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-[#2563EB] hover:text-primary"
+          className="inline-flex items-center gap-1 rounded-md border border-black-10 bg-white px-2 py-1 text-[9px] text-black-45 transition-colors hover:border-primary hover:text-primary"
         >
           <ExternalLink size={8} />
           {a}

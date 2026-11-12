@@ -50,10 +50,10 @@ export default function Inicio() {
           </h1>
           <p className="mt-1 flex items-center gap-2 text-sm text-black-45">
             <span>{time.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
-            <span className="h-1 w-1 rounded-full bg-[#CBD5E1]" />
+            <span className="h-1 w-1 rounded-full bg-black-10" />
             <Clock size={14} />
             <span>{time.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</span>
-            <span className="h-1 w-1 rounded-full bg-[#CBD5E1]" />
+            <span className="h-1 w-1 rounded-full bg-black-10" />
             <span className="rounded-md bg-black-5 px-2 py-0.5 text-xs font-medium text-black-45">{turno}</span>
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function Inicio() {
           </div>
 
           {/* Resumen IA */}
-          <div className="rounded-xl border border-[#2563EB]/20 bg-gradient-to-r from-[#F0F7FF] to-white p-5 ">
+          <div className="rounded-xl border border-primary/20 bg-gradient-to-r from-primary-5 to-white p-5 ">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-10 text-primary">
                 <Sparkles size={18} />
@@ -133,7 +133,7 @@ export default function Inicio() {
         <Button
           size="lg"
           variant="primary"
-          className="gap-3 px-10 text-base  shadow-[#2563EB]/20"
+          className="gap-3 px-10 text-base  shadow-primary/20"
           onClick={() => navigate("/atenciones")}
         >
           Comenzar Jornada

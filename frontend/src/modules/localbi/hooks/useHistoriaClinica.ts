@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { localbiService, type LocalbiApiResult } from "../services/LocalbiService";
-import type { LocalbiHistoriaClinica, ActividadDominio, SoporteOnlineResult, HistoriaLocal } from "../types/localbi";
+import type { LocalbiHistoriaClinica, ActividadDominio, SoporteOnlineResult, HistoriaLocal, CoseAgregada } from "../types/localbi";
+import type { CoseQueryParams } from "../services/LocalbiService";
 
 export function useHistoriaClinica(unidadNegocio: string | null) {
   const query = useQuery({
@@ -49,6 +50,38 @@ export function useActividadCliente(dominios: string[]) {
     queryFn: async (): Promise<ActividadDominio[]> => {
       return localbiService.actividad(claves);
     },
+    enabled: claves.length > 0,
+    staleTime: 2 * 60 * 1000,
+    retry: 0,
+  });
+
+  return {
+    data: query.data,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+/** COSE: agregado deduplicado por cliente, con período y filtros. */
+export function useActividadCose(dominios: string[], params: CoseQueryParams) {
+  const claves = [...new Set(dominios.map((d) => d.trim().toLowerCase()).filter(Boolean))].sort();
+  const query = useQuery({
+    queryKey: [
+      "localbi",
+      "actividad-cose",
+      claves,
+      params.desde ?? "",
+      params.hasta ?? "",
+      params.limite ?? 200,
+      params.localbi_id ?? "",
+      params.canal ?? "",
+      params.asesor ?? "",
+      params.estado ?? "",
+      params.q ?? "",
+    ],
+    queryFn: async (): Promise<CoseAgregada> => localbiService.actividadCose(claves, params),
     enabled: claves.length > 0,
     staleTime: 2 * 60 * 1000,
     retry: 0,

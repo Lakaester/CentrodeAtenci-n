@@ -6,7 +6,7 @@ export default function Ayuda() {
     <EmptyState
       icon={HelpCircle}
       title="Centro de Ayuda"
-      description="Encuentre guías, documentación y soporte para aprovechar COPE al máximo."
+      description="Encuentre guías, documentación y soporte para aprovechar C.O.S.E al máximo."
       actionLabel="Ver guías"
       onAction={() => {}}
     />

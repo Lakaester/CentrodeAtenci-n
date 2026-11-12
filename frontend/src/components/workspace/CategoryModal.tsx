@@ -6,17 +6,19 @@ import { CATEGORY_HIERARCHY, categoriaDesdeSubcategoria, getZendeskValue } from 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSave: (categoria: string, subcategoria: string) => void;
+  onSave: (categoria: string, subcategoria: string) => Promise<boolean | void> | boolean | void;
   currentSubcategory?: string;
+  errorMessage?: string | null;
 }
 
 type Step = "categoria" | "subcategoria";
 
-export function CategoryModal({ open, onClose, onSave, currentSubcategory }: Props) {
+export function CategoryModal({ open, onClose, onSave, currentSubcategory, errorMessage }: Props) {
   const [step, setStep] = useState<Step>("categoria");
   const [categoria, setCategoria] = useState("");
   const [subcategoria, setSubcategoria] = useState("");
   const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -27,6 +29,17 @@ export function CategoryModal({ open, onClose, onSave, currentSubcategory }: Pro
       setSearch("");
     }
   }, [open, currentSubcategory]);
+
+  const handleGuardar = async () => {
+    if (saving || !subcategoria) return;
+    setSaving(true);
+    try {
+      const result = await onSave(categoria, getZendeskValue(subcategoria));
+      if (result !== false) onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -96,14 +109,20 @@ export function CategoryModal({ open, onClose, onSave, currentSubcategory }: Pro
           )}
         </div>
 
+        {errorMessage && (
+          <div className="border-t border-danger-25 bg-danger-5 px-3 py-2 text-[11px] text-danger">
+            {errorMessage}
+          </div>
+        )}
+
         <div className="flex gap-2 border-t border-black-10 px-3 py-2.5">
-          <button type="button" onClick={() => { onSave(categoria, getZendeskValue(subcategoria)); onClose(); }}
-            disabled={!subcategoria}
+          <button type="button" onClick={handleGuardar}
+            disabled={!subcategoria || saving}
             className="flex-1 rounded bg-primary py-1.5 text-[11px] font-medium text-white hover:bg-primary-85 disabled:opacity-40">
-            Guardar
+            {saving ? "Guardando..." : "Guardar"}
           </button>
-          <button type="button" onClick={onClose}
-            className="rounded border border-black-10 px-3 py-1.5 text-[11px] text-black-45 hover:bg-light">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="rounded border border-black-10 px-3 py-1.5 text-[11px] text-black-45 hover:bg-light disabled:opacity-40">
             Cancelar
           </button>
         </div>

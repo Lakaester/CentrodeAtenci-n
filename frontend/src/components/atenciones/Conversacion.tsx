@@ -99,7 +99,7 @@ export function Conversacion({ ticket, workspace }: Props) {
                 return (
                   <div key={paso} className="flex flex-1 items-center gap-1">
                     <div className="flex items-center gap-1 min-w-0">
-                      {completado ? <CheckCircle2 size={11} className="shrink-0 text-success" /> : actual ? <Circle size={11} className="shrink-0 fill-[#2563EB] text-primary" /> : <Circle size={11} className="shrink-0 text-black-10" />}
+                      {completado ? <CheckCircle2 size={11} className="shrink-0 text-success" /> : actual ? <Circle size={11} className="shrink-0 fill-primary text-primary" /> : <Circle size={11} className="shrink-0 text-black-10" />}
                       <span className={cn("truncate text-[10px]", completado ? "text-success font-medium" : actual ? "text-primary font-medium" : "text-black-25")}>
                         {FLUJO_LABELS[paso]}
                       </span>
@@ -139,7 +139,7 @@ export function Conversacion({ ticket, workspace }: Props) {
             <div className="space-y-2 pt-2 border-t border-black-10">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-black-25">Historial del caso</p>
               {workspace.historial.slice(0, 5).map((h) => (
-                <div key={h.id} className="flex items-start gap-3 rounded-lg border border-black-10 border-l-4 border-l-[#2563EB] bg-[#F0F7FF] p-3 text-xs">
+                <div key={h.id} className="flex items-start gap-3 rounded-lg border border-black-10 border-l-4 border-l-primary bg-primary-5 p-3 text-xs">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-black-85">{h.canal}</p>
@@ -160,7 +160,7 @@ export function Conversacion({ ticket, workspace }: Props) {
         <div className="absolute right-0 top-0 z-20 flex h-full w-[320px] flex-col border-l border-black-10 bg-white ">
           <div className="flex items-center justify-between border-b border-black-10 px-3 py-2">
             <span className="flex items-center gap-1.5 text-xs font-semibold text-black-85">
-              <Sparkles size={14} className="text-primary" /> Copiloto COPE
+              <Sparkles size={14} className="text-primary" /> Copiloto C.O.S.E
             </span>
             <button onClick={() => setCopilotoOpen(false)} className="text-black-25 hover:text-black-85">
               <PanelRightClose size={16} />

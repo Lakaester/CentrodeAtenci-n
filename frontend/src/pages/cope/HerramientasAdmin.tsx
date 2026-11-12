@@ -3,6 +3,7 @@ import { Search, Plus, Edit3, Trash2, X, Save, Wrench } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { CHART } from "@/lib/chartPalette";
 
 interface Herramienta {
   id: string; nombre: string; descripcion: string; icono: string; color: string;
@@ -14,7 +15,7 @@ const TIPOS = ["pagina_web", "dashboard", "sistema_interno", "api", "plugin", "a
 const TIPOS_ATENCION = ["Facturación Electrónica", "Integraciones", "Software", "Logística", "Administrativo", "Capacitaciones"];
 
 function vacia(): Herramienta {
-  return { id: "", nombre: "", descripcion: "", icono: "Wrench", color: "#64748B", categoria: "", urlBase: "", parametros: [], tipo: "pagina_web", estado: "activo", orden: 0, visible: true, tiposAtencion: [], responsable: "", updatedAt: "" };
+  return { id: "", nombre: "", descripcion: "", icono: "Wrench", color: CHART.muted, categoria: "", urlBase: "", parametros: [], tipo: "pagina_web", estado: "activo", orden: 0, visible: true, tiposAtencion: [], responsable: "", updatedAt: "" };
 }
 
 export default function HerramientasAdmin() {
@@ -63,7 +64,7 @@ export default function HerramientasAdmin() {
         <div className="border-b border-black-10 p-2">
           <div className="relative">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-black-25" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar herramientas..." className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-[#2563EB] focus:bg-white focus:outline-none" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar herramientas..." className="w-full rounded-lg border border-black-10 bg-light py-1.5 pl-8 pr-3 text-xs text-black-85 placeholder:text-black-25 focus:border-primary focus:bg-white focus:outline-none" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -135,7 +136,7 @@ export default function HerramientasAdmin() {
               <div className="flex flex-wrap gap-1.5">
                 {TIPOS_ATENCION.map((ta) => (
                   <button key={ta} onClick={() => toggleTipoAtencion(ta)}
-                    className={cn("rounded-md border px-2.5 py-1.5 text-[11px] transition-colors", form.tiposAtencion.includes(ta) ? "border-[#2563EB] bg-primary-5 text-primary" : "border-black-10 text-black-45 hover:border-black-10")}>
+                    className={cn("rounded-md border px-2.5 py-1.5 text-[11px] transition-colors", form.tiposAtencion.includes(ta) ? "border-primary bg-primary-5 text-primary" : "border-black-10 text-black-45 hover:border-black-10")}>
                     {ta}
                   </button>
                 ))}

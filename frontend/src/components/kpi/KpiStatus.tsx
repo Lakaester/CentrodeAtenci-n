@@ -11,7 +11,7 @@ const DOT_COLORS: Record<KpiStatusVariant, string> = {
   success: "bg-success-50",
   warning: "bg-warning-50",
   danger: "bg-danger-50",
-  neutral: "bg-[#94A3B8]",
+  neutral: "bg-black-25",
 };
 
 export function KpiStatus({ variant, label, className }: Props) {

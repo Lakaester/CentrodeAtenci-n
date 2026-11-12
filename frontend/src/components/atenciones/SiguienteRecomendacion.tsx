@@ -26,7 +26,7 @@ export function SiguienteRecomendacion({ workspace }: Props) {
   return (
     <div className={cn(
       "rounded-lg border p-3",
-      rec.tipo === "alerta" ? "border-amber-200 bg-warning-5" : rec.tipo === "accion" ? "border-[#2563EB]/30 bg-[#F0F7FF]" : "border-black-10 bg-white",
+      rec.tipo === "alerta" ? "border-amber-200 bg-warning-5" : rec.tipo === "accion" ? "border-primary/30 bg-primary-5" : "border-black-10 bg-white",
     )}>
       <div className="flex items-start gap-2">
         <Lightbulb size={14} className={cn(

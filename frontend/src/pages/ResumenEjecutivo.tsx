@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
 import { DetalleTable } from "@/components/dashboard/detalle/DetalleTable";
+import { CHART } from "@/lib/chartPalette";
 
 interface Kpi {
   valor: number | null;
@@ -91,13 +92,6 @@ const nombreCanal = (c: string) => {
   if (v === "CORREO") return "Correo";
   return c;
 };
-
-/** Lee una variable de color del tema (ej. "--primary") como "rgb(r g b)". */
-function cssVar(nombre: string): string {
-  if (typeof window === "undefined") return "#2563eb";
-  const v = getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
-  return v ? `rgb(${v})` : "#2563eb";
-}
 
 function Delta({
   kpi,
@@ -199,16 +193,16 @@ function TiemposPorCanal({ items }: { items: TiempoCanal[] }) {
 
 function colorCanal(canal: string): string {
   const v = canal.toUpperCase();
-  if (v === "WHATMETA") return "#22C55E";
-  if (v === "WHATICKET") return "#F97316";
-  if (v === "ZENDESK") return "#8B5CF6";
-  return "#64748B";
+  if (v === "WHATMETA") return CHART.success;
+  if (v === "WHATICKET") return CHART.brand;
+  if (v === "ZENDESK") return CHART.purple;
+  return CHART.muted;
 }
 
 /** Distribución por canal operativo (subcanal): dona + conteo y porcentaje. */
 function DistribucionCanal({ items }: { items: Desglose[] }) {
-  const textColor = cssVar("--text");
-  const mutedColor = cssVar("--muted");
+  const textColor = CHART.charcoal;
+  const mutedColor = CHART.muted;
   const total = items.reduce((s, i) => s + i.total, 0);
 
   const option = {
@@ -224,7 +218,7 @@ function DistribucionCanal({ items }: { items: Desglose[] }) {
         radius: ["52%", "72%"],
         center: ["50%", "50%"],
         avoidLabelOverlap: true,
-        itemStyle: { borderColor: cssVar("--surface"), borderWidth: 2 },
+        itemStyle: { borderColor: "#FFFFFF", borderWidth: 2 },
         label: {
           show: true,
           formatter: (p: { percent: number }) => `${p.percent}%`,

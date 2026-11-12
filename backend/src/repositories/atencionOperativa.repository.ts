@@ -83,6 +83,38 @@ export interface DatosZendeskSnapshot {
   tags?: string[];
   assigneeId?: number | null;
   requesterId?: number | null;
+  /** Canal normalizado y crudo del ticket (persistido para QyD sin API). */
+  canal?: string | null;
+  canalRaw?: string | null;
+  /** Relación Zendesk observada al cargar la atención. */
+  via?: {
+    channel?: string | null;
+    source?: {
+      rel?: string | null;
+      from?: {
+        ticket_id?: number | string | null;
+        subject?: string | null;
+      } | null;
+    } | null;
+  } | null;
+  followupIds?: string[];
+  ticketPadreId?: string | null;
+  relacionVerificada?: boolean;
+}
+
+/**
+ * Solo persiste datos observados no nulos. No borra una relación verificada
+ * previa si un refresco posterior llega sin `via`/`followup_ids`.
+ */
+function snapshotParcial(datos: DatosZendeskSnapshot): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [clave, valor] of Object.entries(datos)) {
+    if (valor === undefined || valor === null) continue;
+    if (Array.isArray(valor) && valor.length === 0) continue;
+    if (clave === "relacionVerificada" && valor !== true) continue;
+    out[clave] = valor;
+  }
+  return out;
 }
 
 function rowToSnapshot(row: any): AtencionSnapshot {
@@ -128,7 +160,20 @@ export const atencionOperativaRepository = {
     const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT * FROM atencion WHERE zendesk_ticket_id = ${zendeskTicketId} LIMIT 1
     `);
-    if (rows.length > 0) return rowToSnapshot(rows[0]);
+    if (rows.length > 0) {
+      const actual = rowToSnapshot(rows[0]);
+      if (datosZendesk) {
+        await this.actualizarSnapshotZendesk(actual.id, datosZendesk);
+        return {
+          ...actual,
+          zendesk_snapshot: {
+            ...((actual.zendesk_snapshot as Record<string, unknown> | null) ?? {}),
+            ...snapshotParcial(datosZendesk),
+          },
+        };
+      }
+      return actual;
+    }
 
     const id = genId();
     const snapshot = datosZendesk ? JSON.stringify(datosZendesk) : null;
@@ -303,6 +348,30 @@ export const atencionOperativaRepository = {
         updated_at = now()
       WHERE id = ${atencionId}
     `;
+  },
+
+  /** Fusiona campos observados en el snapshot sin borrar datos previos. */
+  async actualizarSnapshotZendesk(
+    atencionId: string,
+    datos: DatosZendeskSnapshot,
+  ): Promise<void> {
+    const parcial = snapshotParcial(datos);
+    if (Object.keys(parcial).length === 0) return;
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE atencion
+      SET zendesk_snapshot = COALESCE(zendesk_snapshot, '{}'::jsonb)
+        || CAST(${JSON.stringify(parcial)} AS jsonb),
+        updated_at = now()
+      WHERE id = ${atencionId}
+    `);
+  },
+
+  /** Lectura pura por ticket Zendesk. No crea ni modifica la atención. */
+  async obtenerPorTicket(zendeskTicketId: string): Promise<AtencionSnapshot | null> {
+    const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
+      SELECT * FROM atencion WHERE zendesk_ticket_id = ${zendeskTicketId} LIMIT 1
+    `);
+    return rows[0] ? rowToSnapshot(rows[0]) : null;
   },
 
   async obtenerPorId(id: string): Promise<AtencionSnapshot | null> {

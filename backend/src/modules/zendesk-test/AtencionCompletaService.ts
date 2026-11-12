@@ -2,6 +2,7 @@ import { ZendeskClient } from "../zendesk/infrastructure/ZendeskClient";
 import { parseComment, type ContentBlock } from "./ContentParser";
 import { PerfLogger } from "./PerfLogger";
 import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
+import { normalizarCanal } from "../../services/quejasCasos.service";
 
 interface InlineAttachment {
   id: string;
@@ -34,12 +35,27 @@ export interface AtencionCompleta {
     telefono: string | null;
     dominio: string | null;
     pais: string | null;
+    canal: string | null;
+    canalRaw: string | null;
     hasPendingReply: boolean;
     requesterId: number | null;
     assigneeId: number | null;
     createdAt: string;
     updatedAt: string;
     tags: string[];
+    via: {
+      channel?: string | null;
+      source?: {
+        rel?: string | null;
+        from?: {
+          ticket_id?: number | string | null;
+          subject?: string | null;
+        } | null;
+      } | null;
+    } | null;
+    followupIds: string[];
+    ticketPadreId: string | null;
+    relacionVerificada: boolean;
   };
   comentarios: ComentarioNormalizado[];
   total: number;
@@ -145,6 +161,12 @@ export class AtencionCompletaService {
     const dominio = dominioCrudo && isValidDomainFormat(dominioCrudo) ? normalizeDomain(dominioCrudo) : null;
     const pais = paisVal && String(paisVal).trim() ? String(paisVal).trim() : null;
 
+    const via = ticketResult.via ?? null;
+    const esFollowUp = via?.source?.rel === "follow_up";
+    const ticketPadreId = esFollowUp && via?.source?.from?.ticket_id != null
+      ? String(via.source.from.ticket_id)
+      : null;
+
     const result: AtencionCompleta = {
       ticket: {
         id: String(ticketResult.id),
@@ -159,12 +181,18 @@ export class AtencionCompletaService {
         telefono,
         dominio,
         pais,
+        canal: normalizarCanal(ticketResult.via?.channel ?? null),
+        canalRaw: ticketResult.via?.channel ?? null,
         hasPendingReply,
         createdAt: ticketResult.created_at,
         updatedAt: ticketResult.updated_at,
         tags: ticketResult.tags,
         requesterId: ticketResult.requester_id,
         assigneeId: ticketResult.assignee_id,
+        via,
+        followupIds: (ticketResult.followup_ids ?? []).map(String),
+        ticketPadreId,
+        relacionVerificada: !!via?.source,
       },
       comentarios,
       total: comentarios.length,

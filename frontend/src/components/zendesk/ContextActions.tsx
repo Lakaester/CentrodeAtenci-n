@@ -14,7 +14,6 @@ export function ContextActions({ ticketId }: Props) {
   const [accionActiva, setAccionActiva] = useState<AccionId | null>(null);
   const [inputValue, setInputValue] = useState("");
   const actions = useZendeskActions(ticketId);
-  const ASESOR = "Asesor COPE";
 
   const ACCIONES: { id: AccionId; label: string; icon: typeof Reply; inputLabel: string; placeholder: string }[] = [
     { id: "reply",     label: "Responder",      icon: Reply,        inputLabel: "Respuesta al cliente", placeholder: "Escriba su respuesta..." },
@@ -28,22 +27,22 @@ export function ContextActions({ ticketId }: Props) {
     if (!inputValue.trim()) return;
     switch (accionActiva) {
       case "reply":
-        actions.reply(inputValue, ASESOR);
+        actions.reply(inputValue);
         break;
       case "note":
-        actions.internalNote(inputValue, ASESOR);
+        actions.internalNote(inputValue);
         break;
       case "status":
-        actions.changeStatus(inputValue, ASESOR);
+        actions.changeStatus(inputValue);
         break;
       case "categorize": {
         const [cat, subcat = ""] = inputValue.split("/").map((s) => s.trim());
-        actions.categorize(cat, subcat, ASESOR);
+        actions.categorize(cat, subcat);
         break;
       }
       case "assign": {
         const id = Number(inputValue);
-        if (!isNaN(id)) actions.assign(id, ASESOR);
+        if (!isNaN(id)) actions.assign(id);
         break;
       }
     }
@@ -102,7 +101,7 @@ export function ContextActions({ ticketId }: Props) {
               ) : (
                 <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
                   placeholder={ACCIONES.find((a) => a.id === accionActiva)?.placeholder ?? ""}
-                  className="w-full rounded border border-black-10 px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-[#2563EB] focus:outline-none"
+                  className="w-full rounded border border-black-10 px-1.5 py-1 text-[11px] text-black-85 placeholder:text-black-10 focus:border-primary focus:outline-none"
                 />
               )}
               <div className="flex justify-between items-center">

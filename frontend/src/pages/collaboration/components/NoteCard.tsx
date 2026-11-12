@@ -8,7 +8,7 @@ interface Props {
 
 export const NoteCard = memo(function NoteCard({ item }: Props) {
   return (
-    <div className={cn("flex gap-3 rounded-lg border p-3 text-xs transition-colors", item.isPinned ? "border-[#2563EB]/30 bg-primary-5/30" : "border-black-10 bg-white")} role="listitem">
+    <div className={cn("flex gap-3 rounded-lg border p-3 text-xs transition-colors", item.isPinned ? "border-primary/30 bg-primary-5/30" : "border-black-10 bg-white")} role="listitem">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {item.isPinned && <span className="text-[10px] text-primary">📌</span>}

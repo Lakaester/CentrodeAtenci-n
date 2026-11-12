@@ -288,11 +288,13 @@ export class LocalbiService {
       }
 
       // ─── MERGE y DEDUPLICACIÓN por dominio ───
+      const normalizarClave = (dominio: string) =>
+        normalizeDomain(dominio) ?? dominio.trim().toLowerCase();
       const dominiosVistos = new Set<string>();
       const mergeados: ResultadoBusquedaCliente[] = [];
 
       for (const r of [...resultadosPorUnidad, ...resultadosPorDominio]) {
-        const key = r.dominio.toLowerCase();
+        const key = normalizarClave(r.dominio);
         if (!dominiosVistos.has(key)) {
           dominiosVistos.add(key);
           mergeados.push(r);
@@ -306,9 +308,20 @@ export class LocalbiService {
         return { status: "error", mensajes: resp.mensajes ?? ["Error en Localbi"] };
       }
 
+      // La paginación de Localbi cuenta los resultados directos; los dominios
+      // descubiertos por SQL son adicionales y deben reflejarse en el total.
+      const directos = new Set(resultadosPorUnidad.map((r) => normalizarClave(r.dominio)));
+      const sqlExtra = resultadosPorDominio.filter(
+        (r) => !directos.has(normalizarClave(r.dominio)),
+      ).length;
+      const totalRegistros =
+        totalDirecto > 0
+          ? totalDirecto + sqlExtra
+          : Math.max(mergeados.length, sqlExtra);
+
       const salida: BusquedaClienteSalida = {
         resultados: mergeados,
-        totalRegistros: totalDirecto,
+        totalRegistros,
         pagina,
         limite,
       };

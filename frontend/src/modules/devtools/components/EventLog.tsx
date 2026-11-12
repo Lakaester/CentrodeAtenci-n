@@ -22,7 +22,7 @@ export function EventLog({ events }: Props) {
         <Search size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-black-25" />
         <input type="text" value={filter} onChange={(e) => setFilter(e.target.value)}
           placeholder="Filtrar por tipo o provider..."
-          className="w-full rounded-md border border-black-10 py-1 pl-7 pr-2 text-[11px] focus:border-[#2563EB] focus:outline-none"
+          className="w-full rounded-md border border-black-10 py-1 pl-7 pr-2 text-[11px] focus:border-primary focus:outline-none"
         />
       </div>
       <div className="max-h-[70vh] overflow-y-auto space-y-1">

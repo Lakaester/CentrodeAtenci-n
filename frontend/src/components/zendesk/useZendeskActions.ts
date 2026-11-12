@@ -19,11 +19,11 @@ export function useZendeskActions(ticketId: string | null) {
     }
   };
 
-  const internalNote = (body: string, autor: string) => ejecutar("internal-note", { body, autor });
-  const assign = (assigneeId: number, autor: string) => ejecutar("assign", { assigneeId, autor });
-  const changeStatus = (status: string, autor: string) => ejecutar("status", { status, autor });
-  const categorize = (categoria: string, subcategoria: string, autor: string) => ejecutar("categorize", { categoria, subcategoria, autor });
-  const reply = (body: string, autor: string) => ejecutar("reply", { body, autor });
+  const internalNote = (body: string) => ejecutar("internal-note", { body });
+  const assign = (assigneeId: number) => ejecutar("assign", { assigneeId });
+  const changeStatus = (status: string) => ejecutar("status", { status });
+  const categorize = (categoria: string, subcategoria: string) => ejecutar("categorize", { categoria, subcategoria });
+  const reply = (body: string) => ejecutar("reply", { body });
 
   return { internalNote, assign, changeStatus, categorize, reply, loading, result };
 }

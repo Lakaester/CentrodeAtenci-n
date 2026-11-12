@@ -5,6 +5,7 @@ import ReactECharts from "echarts-for-react";
 import { api } from "@/lib/api";
 import { useFilters } from "@/contexts/FilterContext";
 import { filtersToParams } from "@/lib/filters";
+import { CHART } from "@/lib/chartPalette";
 
 function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -112,12 +113,12 @@ function colorBarra(pct: number | null): string {
 
 function DonaSlaCanal({ items }: { items: SlaFila[] }) {
   const COLORES_CANAL: Record<string, string> = {
-    whatsapp: "#10b981",
+    whatsapp: CHART.success,
     correo: cssVar("--primary"),
-    otro: "#f59e0b",
+    otro: CHART.warning,
   };
-  const textColor = cssVar("--text");
-  const mutedColor = cssVar("--muted");
+  const textColor = CHART.charcoal;
+  const mutedColor = CHART.muted;
   const total = items.reduce((s, i) => s + i.total, 0);
 
   const option = {
@@ -137,7 +138,7 @@ function DonaSlaCanal({ items }: { items: SlaFila[] }) {
         radius: ["52%", "72%"],
         center: ["50%", "44%"],
         avoidLabelOverlap: true,
-        itemStyle: { borderColor: cssVar("--surface"), borderWidth: 2 },
+        itemStyle: { borderColor: "#FFFFFF", borderWidth: 2 },
         label: {
           show: true,
           formatter: (p: { percent: number }) => `${p.percent}%`,
@@ -147,7 +148,7 @@ function DonaSlaCanal({ items }: { items: SlaFila[] }) {
         data: items.map((i) => ({
           name: i.etiqueta,
           value: i.total,
-          itemStyle: { color: COLORES_CANAL[i.etiqueta] ?? "#8b5cf6" },
+          itemStyle: { color: COLORES_CANAL[i.etiqueta] ?? CHART.purple },
         })),
       },
     ],

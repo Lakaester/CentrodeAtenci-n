@@ -1,6 +1,7 @@
 import { ZendeskClient } from "../zendesk/infrastructure/ZendeskClient";
 import { ZendeskMapper } from "../zendesk/application/mapper/ZendeskMapper";
-import { normalizeDomain } from "../../domain/contacto/normalizacion";
+import { normalizeDomain, isValidDomainFormat } from "../../domain/contacto/normalizacion";
+import { normalizarCanal } from "../../services/quejasCasos.service";
 
 export class ZendeskTicketService {
   private client: ZendeskClient;
@@ -29,6 +30,9 @@ export class ZendeskTicketService {
 
     // Identificador relacional de hilo: via.source.rel === "follow_up" indica
     // que este ticket responde a un ticket previo (via.source.from.ticket_id).
+    // Sin `via.source` la respuesta es incompleta y no debe fijar la relación.
+    const relacionVerificada = !!ticket.via?.source;
+    const followupsVerificados = Array.isArray(ticket.followup_ids);
     const esFollowUp = ticket.via?.source?.rel === "follow_up";
     const ticketPadreId = esFollowUp ? ticket.via?.source?.from?.ticket_id : null;
 
@@ -36,8 +40,15 @@ export class ZendeskTicketService {
     const cfMap = new Map((ticket.custom_fields ?? []).map((cf: any) => [cf.id, cf.value]));
     const dominioVal = cfMap.get(40769061038615);
     const paisVal = cfMap.get(1500005211481);
-    const dominio = dominioVal && String(dominioVal).trim() ? normalizeDomain(String(dominioVal).trim()) : null;
+    const categoriaVal = cfMap.get(38744095836311);
+    const dominioCrudo = dominioVal && String(dominioVal).trim() ? String(dominioVal).trim() : null;
+    // Fuente de verdad del cliente: hostname válido del ticket. Un correo, una
+    // URL inválida o un valor centinela no se aceptan como dominio.
+    const dominio = dominioCrudo && isValidDomainFormat(dominioCrudo) ? normalizeDomain(dominioCrudo) : null;
     const pais = paisVal && String(paisVal).trim() ? String(paisVal).trim() : null;
+    const categoriaZendesk = categoriaVal && String(categoriaVal).trim() ? String(categoriaVal).trim() : null;
+    const canalRaw = ticket.via?.channel ?? null;
+    const canal = normalizarCanal(canalRaw);
 
     return {
       id: String(ticket.id),
@@ -54,9 +65,15 @@ export class ZendeskTicketService {
       updatedAt: ticket.updated_at,
       tags: ticket.tags,
       esFollowUp,
+      relacionVerificada,
+      followupsVerificados,
       ticketPadreId: ticketPadreId != null ? String(ticketPadreId) : null,
+      followupIds: (ticket.followup_ids ?? []).map(String),
       dominio,
       pais,
+      canal,
+      canalRaw,
+      categoriaZendesk,
       url: `https://${process.env.ZENDESK_SUBDOMAIN}.zendesk.com/agent/tickets/${ticket.id}`,
     };
   }

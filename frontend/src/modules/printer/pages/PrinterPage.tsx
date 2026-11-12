@@ -26,7 +26,7 @@ export default function PrinterPage() {
         {TABS.map((t) => (
           <button key={t.key} type="button" onClick={() => setTab(t.key)}
             className={`px-3 py-2 text-[11px] font-medium transition-colors ${
-              tab === t.key ? "border-b-2 border-[#2563EB] text-primary" : "text-black-45 hover:text-black-85"
+              tab === t.key ? "border-b-2 border-primary text-primary" : "text-black-45 hover:text-black-85"
             }`}>
             {t.label}
           </button>

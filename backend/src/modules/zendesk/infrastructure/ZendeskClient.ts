@@ -119,6 +119,33 @@ export class ZendeskClient {
     return { tickets, total: data.count ?? tickets.length };
   }
 
+  /**
+   * Búsqueda paginada para procesos masivos (backfill). Devuelve la página
+   * solicitada y si Zendesk informó una página siguiente. El llamador debe
+   * particionar por rangos de fecha para respetar el límite de resultados.
+   */
+  async searchTicketsPage(
+    query_str: string,
+    page = 1,
+    perPage = 100,
+  ): Promise<{ tickets: ZendeskTicket[]; total: number; hasMore: boolean }> {
+    this.verificarConfig();
+    const query = new URLSearchParams({
+      query: query_str,
+      sort_by: "created_at",
+      sort_order: "asc",
+      page: String(Math.max(1, page)),
+      per_page: String(Math.min(Math.max(1, perPage), 100)),
+    });
+    const data = await this.get<any>(`/search.json?${query}`);
+    const tickets = (data.results ?? []).map((t: any) => toTicket(t));
+    return {
+      tickets,
+      total: typeof data.count === "number" ? data.count : tickets.length,
+      hasMore: !!data.next_page,
+    };
+  }
+
   async obtenerTicket(id: number): Promise<ZendeskTicket | null> {
     this.verificarConfig();
     try {

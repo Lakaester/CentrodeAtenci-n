@@ -126,7 +126,11 @@ export class TareabiService {
       const logsTicket = envelope.data?.logsTicket ?? [];
       const logsTarea = envelope.data?.logsTarea ?? [];
       const ticketUltimo = logsTicket[logsTicket.length - 1];
-      const ticketEstado = this.estadoActualDeLog(ticketUltimo, "ticketbi_estado");
+      // Las tareas independientes no tienen logs de ticket: el estado del
+      // ticket es null y solo se devuelve el historial de la tarea.
+      const ticketEstado = ticketUltimo
+        ? this.estadoActualDeLog(ticketUltimo, "ticketbi_estado")
+        : null;
       return {
         status: "success",
         data: {

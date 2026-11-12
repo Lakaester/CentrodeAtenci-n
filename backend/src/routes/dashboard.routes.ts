@@ -5,6 +5,7 @@ import { calidadRegistroController } from "../controllers/calidadRegistro.contro
 
 export const dashboardRouter = Router();
 
+dashboardRouter.get("/gerencial", validateFilters, dashboardController.gerencial);
 dashboardRouter.get("/resumen", validateFilters, dashboardController.resumen);
 dashboardRouter.get("/calidad-registro", validateFilters, calidadRegistroController.obtener);
 dashboardRouter.get("/sla", validateFilters, dashboardController.sla);
