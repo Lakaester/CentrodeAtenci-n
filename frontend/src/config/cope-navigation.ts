@@ -7,6 +7,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/clientes": "Clientes",
   "/gestion": "Gestión",
   "/gestion/quejas-devoluciones": "Quejas y Devoluciones",
+  "/gestion/seguimiento": "Seguimiento proactivo",
   "/gestion/apoyos": "Apoyos",
   "/gestion/agendas": "Agendas",
   "/quejas-devoluciones": "Quejas y Devoluciones",

@@ -34,6 +34,7 @@ import { integracionesRouter } from "../integrations/integraciones/routes/integr
 import { contactoRouter } from "./contacto.routes";
 import { atencionOperativaRouter } from "../integrations/atenciones/routes/atencionOperativa.routes";
 import { gestionRouter } from "./gestion.routes";
+import { seguimientoProactivoRouter } from "./seguimientoProactivo.routes";
 
 export const apiRouter = Router();
 
@@ -77,3 +78,4 @@ apiRouter.use("/config", requireAuth, requirePermission("Configuracion", "admini
 apiRouter.use("/health", coreHealthRouter);
 apiRouter.use("/operations", operationsRouter);
 apiRouter.use("/gestion", gestionRouter);
+apiRouter.use("/clientes/seguimiento", requireAuth, seguimientoProactivoRouter);

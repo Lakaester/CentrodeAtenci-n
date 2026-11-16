@@ -23,6 +23,7 @@ import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import Atenciones from "@/pages/cope/Atenciones";
 import ControlFacturacion from "@/pages/cope/ControlFacturacion";
 import ClientesCope from "@/pages/cope/Clientes";
+import SeguimientoProactivoPage from "@/pages/gestion/seguimiento/SeguimientoProactivoPage";
 import { ConfigLayout } from "@/pages/config/ConfigLayout";
 import ConfigDashboard from "@/pages/config/ConfigDashboard";
 import UsuariosConfig from "@/pages/config/UsuariosConfig";
@@ -66,10 +67,11 @@ export const router = createBrowserRouter([
           { path: "quejas-devoluciones", element: <Navigate to="/gestion/quejas-devoluciones" replace /> },
           {
             path: "gestion",
-            element: <ProtectedRoute modulo="Gestión" submodulos={["Quejas y Devoluciones", "Apoyos", "Agendas"]}><GestionLayout /></ProtectedRoute>,
+            element: <ProtectedRoute modulo="Gestión" submodulos={["Quejas y Devoluciones", "Apoyos", "Agendas", "Clientes"]}><GestionLayout /></ProtectedRoute>,
             children: [
               { index: true, element: <Navigate to="quejas-devoluciones" replace /> },
               { path: "quejas-devoluciones", element: <QuejasDevolucionesPage /> },
+              { path: "seguimiento", element: <ProtectedRoute modulo="Clientes"><SeguimientoProactivoPage /></ProtectedRoute> },
               { path: "apoyos", element: <ApoyosPage /> },
               { path: "agendas", element: <AgendasPage /> },
             ],

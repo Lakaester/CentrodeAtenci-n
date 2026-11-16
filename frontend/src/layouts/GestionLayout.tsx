@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { ClipboardList, HandHelping, CalendarClock } from "lucide-react";
+import { ClipboardList, HandHelping, CalendarClock, Radar } from "lucide-react";
 import { useAuth, authService } from "@/modules/auth";
 
 const GESTION_TABS = [
   { path: "/gestion/quejas-devoluciones", label: "Quejas y Devoluciones", icon: ClipboardList, modulo: "Quejas y Devoluciones" },
+  { path: "/gestion/seguimiento", label: "Seguimiento proactivo", icon: Radar, modulo: "Clientes" },
   { path: "/gestion/apoyos", label: "Apoyos", icon: HandHelping, modulo: "Apoyos" },
   { path: "/gestion/agendas", label: "Agendas", icon: CalendarClock, modulo: "Agendas" },
 ];
